@@ -29,6 +29,18 @@ function dbgLog(hypothesisId, location, message, data = {}) {
 }
 
 const stageEl = document.querySelector(".stage");
+const isTouchDevice =
+  "ontouchstart" in window || matchMedia("(pointer: coarse)").matches;
+
+function serveHint() {
+  return isTouchDevice ? "Tap to serve" : "Click to serve";
+}
+
+function controlHint() {
+  return isTouchDevice
+    ? "Drag finger on court to move paddle. Tap to serve."
+    : "Move mouse up/down to control paddle. Click to serve.";
+}
 
 const ui = {
   hint: document.getElementById("hint"),
@@ -135,6 +147,12 @@ function normalizedMouseY() {
   return clamp((s.mouseY - table.y) / table.h, 0, 1);
 }
 
+function setStagePlaying(on) {
+  if (!stageEl) return;
+  stageEl.classList.toggle("playing", on);
+  stageEl.classList.toggle("menu-open", !on && s.mode === "menu");
+}
+
 function resetBall(servingToRight = true) {
   s.ball.x = table.x + table.w / 2;
   s.ball.y = table.y + table.h / 2;
@@ -144,7 +162,7 @@ function resetBall(servingToRight = true) {
   s.ball.vx = Math.cos(angle) * sp * dir;
   s.ball.vy = Math.sin(angle) * sp;
   s.running = false;
-  if (!s.gameOver) ui.status.textContent = "Click to serve";
+  if (!s.gameOver) ui.status.textContent = serveHint();
 }
 
 function scoreFx(who) {
@@ -195,7 +213,8 @@ function resetLocalMatch() {
   ui.p2.textContent = "0";
   hideOverlay(ui.gameOver);
   resetBall(true);
-  ui.status.textContent = "Click to serve";
+  ui.status.textContent = serveHint();
+  setStagePlaying(true);
 }
 
 function serve() {
@@ -374,7 +393,7 @@ function applyServerState(state, serverT, forceSnap = false) {
   } else if (s.running) {
     ui.status.textContent = "Playing";
   } else if (!state.gameOver) {
-    ui.status.textContent = "Click to serve";
+    ui.status.textContent = serveHint();
   }
 }
 
@@ -445,6 +464,15 @@ function draw() {
   ctx.beginPath();
   ctx.arc(s.ball.x, s.ball.y, ballCfg.r, 0, Math.PI * 2);
   ctx.fill();
+
+  if (!s.running && (s.mode === "local" || s.mode === "online") && !s.gameOver) {
+    ctx.font = `${isTouchDevice ? 14 : 16}px system-ui, -apple-system, Segoe UI, Arial`;
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.globalAlpha = 0.85;
+    ctx.fillText(serveHint().toUpperCase(), table.x + table.w / 2, table.y + table.h / 2);
+    ctx.globalAlpha = 1;
+  }
 
   if (s.fx.scoreT > 0) {
     const t = 1 - s.fx.scoreT / 0.65;
@@ -567,8 +595,9 @@ function handleWsMessage(msg) {
     hideOverlay(ui.lobbyOverlay);
     s.gameOver = false;
     hideOverlay(ui.gameOver);
-    ui.hint.textContent = "Online 1v1. Move mouse to control your paddle. First to 5 wins.";
-    ui.status.textContent = "Click to serve";
+    ui.hint.textContent = "Online 1v1. " + controlHint().replace("paddle. ", "your paddle. ");
+    ui.status.textContent = serveHint();
+    setStagePlaying(true);
     return;
   }
 
@@ -614,7 +643,7 @@ function startLocalMode() {
   hideOverlay(ui.lobbyOverlay);
   hideOverlay(ui.gameOver);
   setScoreboardLabels("YOU", "BOT");
-  ui.hint.textContent = "Move mouse up/down to control left paddle. First to 5 wins.";
+  ui.hint.textContent = controlHint() + " First to 5 wins.";
   resetLocalMatch();
 }
 
@@ -622,6 +651,7 @@ function openLobby() {
   s.mode = "online";
   hideOverlay(ui.menuOverlay);
   showOverlay(ui.lobbyOverlay);
+  setStagePlaying(false);
   ui.lobbyStatus.textContent = "Create or join a room.";
   ui.hint.textContent = "Online 1v1 — share your room code with a friend.";
 }
@@ -634,6 +664,7 @@ function backToMenu() {
   hideOverlay(ui.gameOver);
   hideOverlay(ui.lobbyOverlay);
   showOverlay(ui.menuOverlay);
+  setStagePlaying(false);
   setScoreboardLabels("LEFT", "RIGHT");
   ui.p1.textContent = "0";
   ui.p2.textContent = "0";
@@ -674,7 +705,7 @@ function bindUi() {
       sendWs({ type: "rematch" });
       hideOverlay(ui.gameOver);
       s.gameOver = false;
-      ui.status.textContent = "Click to serve";
+      ui.status.textContent = serveHint();
       return;
     }
     resetLocalMatch();
@@ -683,17 +714,57 @@ function bindUi() {
   dbgLog("H4", "game.js:bindUi", "ui bindings complete", { bound: true });
 }
 
-canvas.addEventListener("mousemove", (e) => {
+function setPaddleFromClientY(clientY) {
   const r = canvas.getBoundingClientRect();
-  const y = ((e.clientY - r.top) / r.height) * H;
+  const y = ((clientY - r.top) / r.height) * H;
   s.mouseY = clamp(y, table.y, table.y + table.h);
-});
-canvas.addEventListener("mousedown", () => serve());
+}
+
+function bindCanvasInput() {
+  canvas.style.touchAction = "none";
+
+  canvas.addEventListener("mousemove", (e) => setPaddleFromClientY(e.clientY));
+
+  canvas.addEventListener("pointerdown", (e) => {
+    if (e.pointerType === "mouse" && e.button !== 0) return;
+    setPaddleFromClientY(e.clientY);
+    if (s.mode === "local" || s.mode === "online") serve();
+  });
+
+  canvas.addEventListener("pointermove", (e) => {
+    if (e.pointerType === "mouse" && e.buttons === 0) return;
+    setPaddleFromClientY(e.clientY);
+  });
+
+  canvas.addEventListener(
+    "touchstart",
+    (e) => {
+      if (e.touches[0]) setPaddleFromClientY(e.touches[0].clientY);
+    },
+    { passive: true }
+  );
+
+  canvas.addEventListener(
+    "touchmove",
+    (e) => {
+      if (e.touches[0]) {
+        e.preventDefault();
+        setPaddleFromClientY(e.touches[0].clientY);
+      }
+    },
+    { passive: false }
+  );
+}
+
+bindCanvasInput();
 
 function boot() {
   try {
     if (stageEl) stageEl.classList.add("menu-open");
     bindUi();
+    ui.hint.textContent = isTouchDevice
+      ? "Choose a mode. Works on iPhone, Android, and PC."
+      : "Choose a mode to start.";
     dbgLog("H1", "game.js:boot", "game booted", {
       href: location.href,
       host: location.host,
