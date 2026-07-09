@@ -95,10 +95,7 @@ function reflectFromPaddle(state, side) {
   return true;
 }
 
-function tickRoom(room, dt) {
-  const state = room.state;
-  if (state.gameOver || !state.running) return { hit: false, scored: null };
-
+function tickBall(state, dt) {
   const { table, paddle, ball } = GAME;
   let hit = false;
   let scored = null;
@@ -118,13 +115,23 @@ function tickRoom(room, dt) {
 
   const p1x = paddleX(1);
   const p2x = paddleX(2);
+  const pad = 3;
   const bLeft = state.ball.x - ball.r;
   const bTop = state.ball.y - ball.r;
   const bSize = ball.r * 2;
 
   if (
     state.ball.vx < 0 &&
-    rectsOverlap(bLeft, bTop, bSize, bSize, p1x, state.p1y, paddle.w, paddle.h)
+    rectsOverlap(
+      bLeft,
+      bTop,
+      bSize,
+      bSize,
+      p1x - pad,
+      state.p1y - pad,
+      paddle.w + pad * 2,
+      paddle.h + pad * 2
+    )
   ) {
     state.ball.x = p1x + paddle.w + ball.r;
     hit = reflectFromPaddle(state, 1);
@@ -132,22 +139,54 @@ function tickRoom(room, dt) {
 
   if (
     state.ball.vx > 0 &&
-    rectsOverlap(bLeft, bTop, bSize, bSize, p2x, state.p2y, paddle.w, paddle.h)
+    rectsOverlap(
+      bLeft,
+      bTop,
+      bSize,
+      bSize,
+      p2x - pad,
+      state.p2y - pad,
+      paddle.w + pad * 2,
+      paddle.h + pad * 2
+    )
   ) {
     state.ball.x = p2x - ball.r;
     hit = reflectFromPaddle(state, 2);
   }
 
   if (state.ball.x < table.x - 40) {
-    state.p2Score += 1;
     scored = "p2";
   } else if (state.ball.x > table.x + table.w + 40) {
-    state.p1Score += 1;
     scored = "p1";
   }
 
+  return { hit, scored };
+}
+
+function tickRoom(room, dt) {
+  const state = room.state;
+  if (state.gameOver || !state.running) return { hit: false, scored: null };
+
+  const steps = 4;
+  const subDt = dt / steps;
+  let hit = false;
+  let scored = null;
+
+  for (let i = 0; i < steps; i++) {
+    const result = tickBall(state, subDt);
+    if (result.hit) hit = true;
+    if (result.scored) {
+      scored = result.scored;
+      break;
+    }
+  }
+
   if (scored) {
-    if (state[scored === "p1" ? "p1Score" : "p2Score"] >= SCORE_LIMIT) {
+    if (scored === "p1") state.p1Score += 1;
+    else state.p2Score += 1;
+
+    const score = scored === "p1" ? state.p1Score : state.p2Score;
+    if (score >= SCORE_LIMIT) {
       state.gameOver = true;
       state.winner = scored;
       state.running = false;

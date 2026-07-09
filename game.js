@@ -304,7 +304,39 @@ function myPaddleY() {
   return clamp(s.mouseY - paddle.h / 2, table.y + 6, table.y + table.h - paddle.h - 6);
 }
 
-function applyServerState(state, serverT) {
+function nearPaddleZone(ballX) {
+  return ballX < table.x + 130 || ballX > table.x + table.w - 130;
+}
+
+function predictBallOnline(ball, age) {
+  if (age <= 0) return { x: ball.x, y: ball.y, vx: ball.vx, vy: ball.vy };
+
+  const steps = Math.max(1, Math.min(6, Math.ceil(age * 60)));
+  const stepDt = age / steps;
+  let x = ball.x;
+  let y = ball.y;
+  let vx = ball.vx;
+  let vy = ball.vy;
+  const top = table.y;
+  const bottom = table.y + table.h;
+
+  for (let i = 0; i < steps; i++) {
+    x += vx * stepDt;
+    y += vy * stepDt;
+    if (y - ballCfg.r <= top) {
+      y = top + ballCfg.r;
+      vy = Math.abs(vy);
+    } else if (y + ballCfg.r >= bottom) {
+      y = bottom - ballCfg.r;
+      vy = -Math.abs(vy);
+    }
+  }
+
+  return { x, y, vx, vy };
+}
+
+function applyServerState(state, serverT, forceSnap = false) {
+  const prevVy = net.snap?.ball?.vy;
   net.snap = state;
   net.snapAt = serverT || state.t || Date.now();
 
@@ -317,20 +349,22 @@ function applyServerState(state, serverT) {
   ui.p1.textContent = String(state.p1Score);
   ui.p2.textContent = String(state.p2Score);
 
-  if (state.running && state.ball) {
+  if (state.ball) {
     const err = Math.hypot(s.ball.x - state.ball.x, s.ball.y - state.ball.y);
-    if (!net.snap || err > 80) {
+    const wallBounce =
+      prevVy != null &&
+      state.running &&
+      Math.sign(prevVy) !== Math.sign(state.ball.vy) &&
+      Math.abs(state.ball.vy) > 40;
+    const paddleZone = nearPaddleZone(state.ball.x);
+
+    if (forceSnap || err > 55 || wallBounce || paddleZone) {
       s.ball.x = state.ball.x;
       s.ball.y = state.ball.y;
-    } else if (err > 8) {
-      s.ball.x += (state.ball.x - s.ball.x) * 0.45;
-      s.ball.y += (state.ball.y - s.ball.y) * 0.45;
+    } else if (err > 5) {
+      s.ball.x += (state.ball.x - s.ball.x) * 0.7;
+      s.ball.y += (state.ball.y - s.ball.y) * 0.7;
     }
-    s.ball.vx = state.ball.vx;
-    s.ball.vy = state.ball.vy;
-  } else if (state.ball) {
-    s.ball.x = state.ball.x;
-    s.ball.y = state.ball.y;
     s.ball.vx = state.ball.vx;
     s.ball.vy = state.ball.vy;
   }
@@ -356,10 +390,19 @@ function updateOnline(dt) {
     remote.y += (net.remotePaddleY - remote.y) * Math.min(1, dt * 20);
   }
 
-  if (s.running && net.snap && net.snap.ball) {
-    const age = Math.min(0.12, (Date.now() - net.snapAt) / 1000);
-    s.ball.x = net.snap.ball.x + net.snap.ball.vx * age;
-    s.ball.y = net.snap.ball.y + net.snap.ball.vy * age;
+  if (s.running && net.snap?.ball) {
+    const age = Math.min(0.05, (Date.now() - net.snapAt) / 1000);
+    const predicted = predictBallOnline(net.snap.ball, age);
+    const paddleZone = nearPaddleZone(net.snap.ball.x);
+
+    s.ball.y = predicted.y;
+    s.ball.vy = predicted.vy;
+    if (paddleZone) {
+      s.ball.x = net.snap.ball.x + net.snap.ball.vx * Math.min(age, 0.018);
+    } else {
+      s.ball.x = predicted.x;
+    }
+    s.ball.vx = net.snap.ball.vx;
   }
 
   const normY = normalizedMouseY();
@@ -536,7 +579,7 @@ function handleWsMessage(msg) {
   }
 
   if (msg.type === "state") {
-    applyServerState(msg.state, msg.state.t);
+    applyServerState(msg.state, msg.state.t, !!msg.hit);
     if (msg.hit) playPaddleHit();
     if (msg.scored) scoreFx(msg.scored);
     return;
