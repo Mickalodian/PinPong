@@ -16,7 +16,7 @@ const GAME = {
   H: 520,
   table: { x: 38, y: 26, w: 900 - 76, h: 520 - 52 },
   paddle: { w: 14, h: 110, inset: 18 },
-  ball: { r: 8, speed0: 430, speedMax: 1000 },
+  ball: { r: 8, speed0: 430, speedMax: 1180 },
 };
 
 const MIME = {
@@ -53,6 +53,7 @@ function defaultProfile() {
   return {
     name: "",
     points: 0,
+    maxBotCleared: 0,
     owned: { paddle: ["white"], table: ["classic"] },
     equipped: { paddle: "white", table: "classic" },
   };
@@ -69,10 +70,12 @@ function sanitizeName(name) {
 const VALID_PADDLE = new Set([
   "white", "blue", "pink", "orange", "red", "green", "yellow", "purple", "cyan",
   "galaxy", "moon", "sunset", "neon", "lava", "ice", "rainbow", "aurora",
+  "nebula", "interstellar", "voidpulse", "solarflare", "plasma", "quantum", "darkmatter", "hypernova",
 ]);
 const VALID_TABLE = new Set([
   "classic", "blue", "pink", "orange", "red", "green", "yellow", "purple", "cyan",
   "galaxy", "moon", "sunset", "neon", "lava", "ice", "rainbow", "aurora",
+  "nebula", "interstellar", "voidpulse", "solarflare", "plasma", "quantum", "darkmatter", "hypernova",
 ]);
 
 function sanitizeCosmetics(cos) {
@@ -90,6 +93,7 @@ function relayCosmetics(room, ws) {
       paddle: ws.cosmetics?.paddle || "white",
       table: ws.cosmetics?.table || "classic",
       name: ws.displayName || "Opponent",
+      level: ws.playerLevel || 0,
     }));
   }
 }
@@ -103,6 +107,7 @@ function exchangeCosmetics(room) {
       paddle: p1.cosmetics?.paddle || "white",
       table: p1.cosmetics?.table || "classic",
       name: p1.displayName || "Opponent",
+      level: p1.playerLevel || 0,
     }));
   }
   if (p1?.readyState === 1 && p0) {
@@ -111,6 +116,7 @@ function exchangeCosmetics(room) {
       paddle: p0.cosmetics?.paddle || "white",
       table: p0.cosmetics?.table || "classic",
       name: p0.displayName || "Opponent",
+      level: p0.playerLevel || 0,
     }));
   }
 }
@@ -185,6 +191,10 @@ async function handleApi(req, res, urlPath) {
       db[playerId] = {
         name: sanitizeName(p.name || db[playerId]?.name || ""),
         points: Math.max(0, Number(p.points) || 0),
+        maxBotCleared: Math.max(
+          0,
+          Math.min(100, Math.floor(Number(p.maxBotCleared) || db[playerId]?.maxBotCleared || 0))
+        ),
         owned: {
           paddle: Array.isArray(p.owned?.paddle) ? p.owned.paddle : ["white"],
           table: Array.isArray(p.owned?.table) ? p.owned.table : ["classic"],
@@ -266,7 +276,7 @@ function reflectFromPaddle(state, side) {
   const mid = y + paddle.h / 2;
   const t = clamp((state.ball.y - mid) / (paddle.h / 2), -1, 1);
   const speed = clamp(
-    Math.hypot(state.ball.vx, state.ball.vy) * 1.05,
+    Math.hypot(state.ball.vx, state.ball.vy) * 1.065,
     ball.speed0,
     ball.speedMax
   );
@@ -728,6 +738,10 @@ wss.on("connection", (ws) => {
       db[msg.playerId] = {
         name: sanitizeName(p.name || db[msg.playerId]?.name || ""),
         points: Math.max(0, Number(p.points) || 0),
+        maxBotCleared: Math.max(
+          0,
+          Math.min(100, Math.floor(Number(p.maxBotCleared) || db[msg.playerId]?.maxBotCleared || 0))
+        ),
         owned: {
           paddle: Array.isArray(p.owned?.paddle) ? p.owned.paddle : ["white"],
           table: Array.isArray(p.owned?.table) ? p.owned.table : ["classic"],
@@ -748,6 +762,9 @@ wss.on("connection", (ws) => {
     if (msg.type === "cosmetics" && msg.paddle && msg.table) {
       ws.cosmetics = sanitizeCosmetics({ paddle: String(msg.paddle), table: String(msg.table) });
       if (msg.name) ws.displayName = sanitizeName(msg.name);
+      if (typeof msg.level === "number") {
+        ws.playerLevel = Math.max(0, Math.min(100, Math.floor(msg.level)));
+      }
       if (room) relayCosmetics(room, ws);
       return;
     }

@@ -8,7 +8,7 @@ const SCORE_LIMIT = 5;
 
 const table = { x: 38, y: 26, w: W - 76, h: H - 52 };
 const paddle = { w: 14, h: 110, inset: 18, aiSpeed: 560 };
-const ballCfg = { r: 8, speed0: 430, speedMax: 1000 };
+const ballCfg = { r: 8, speed0: 430, speedMax: 1180 };
 
 const SAVE_CACHE_KEY = "pong-bw-save";
 const PLAYER_ID_KEY = "pong-player-id";
@@ -17,6 +17,9 @@ const ADMIN_SESSION_KEY = "pong-admin-until";
 const ADMIN_PASSKEY = "4536";
 const ABILITIES_KEY = "pong-bw-abilities";
 const POINTS_PER_WIN = 2;
+const POINTS_PER_BOT_CLEAR = 5;
+const PARRY_CHARGE_NEED = 10;
+const FIRE_SMASH_SPEED = 1650;
 
 const SHOP = {
   paddle: [
@@ -37,6 +40,14 @@ const SHOP = {
     { id: "ice", name: "Ice", price: 22, style: "ice" },
     { id: "rainbow", name: "Rainbow", price: 28, style: "rainbow" },
     { id: "aurora", name: "Aurora", price: 26, style: "aurora" },
+    { id: "nebula", name: "Nebula Flow", price: 50, style: "nebula", epic: true },
+    { id: "interstellar", name: "Interstellar", price: 55, style: "interstellar", epic: true },
+    { id: "voidpulse", name: "Void Pulse", price: 58, style: "voidpulse", epic: true },
+    { id: "solarflare", name: "Solar Flare", price: 60, style: "solarflare", epic: true },
+    { id: "plasma", name: "Plasma Core", price: 62, style: "plasma", epic: true },
+    { id: "quantum", name: "Quantum Drift", price: 65, style: "quantum", epic: true },
+    { id: "darkmatter", name: "Dark Matter", price: 70, style: "darkmatter", epic: true },
+    { id: "hypernova", name: "Hypernova", price: 75, style: "hypernova", epic: true },
   ],
   table: [
     { id: "classic", name: "Classic", price: 0, style: "solid", color: "#000000" },
@@ -56,12 +67,21 @@ const SHOP = {
     { id: "ice", name: "Ice", price: 22, style: "ice" },
     { id: "rainbow", name: "Rainbow", price: 28, style: "rainbow" },
     { id: "aurora", name: "Aurora", price: 26, style: "aurora" },
+    { id: "nebula", name: "Nebula Flow", price: 50, style: "nebula", epic: true },
+    { id: "interstellar", name: "Interstellar", price: 55, style: "interstellar", epic: true },
+    { id: "voidpulse", name: "Void Pulse", price: 58, style: "voidpulse", epic: true },
+    { id: "solarflare", name: "Solar Flare", price: 60, style: "solarflare", epic: true },
+    { id: "plasma", name: "Plasma Core", price: 62, style: "plasma", epic: true },
+    { id: "quantum", name: "Quantum Drift", price: 65, style: "quantum", epic: true },
+    { id: "darkmatter", name: "Dark Matter", price: 70, style: "darkmatter", epic: true },
+    { id: "hypernova", name: "Hypernova", price: 75, style: "hypernova", epic: true },
   ],
 };
 
 const save = {
   name: "",
   points: 0,
+  maxBotCleared: 0,
   owned: { paddle: ["white"], table: ["classic"] },
   equipped: { paddle: "white", table: "classic" },
   shopTab: "paddle",
@@ -115,12 +135,107 @@ function getPlayerId() {
 function applyProfile(data) {
   if (typeof data.name === "string" && sanitizeName(data.name)) save.name = sanitizeName(data.name);
   if (typeof data.points === "number") save.points = data.points;
+  if (typeof data.maxBotCleared === "number") {
+    save.maxBotCleared = Math.max(0, Math.min(100, Math.floor(data.maxBotCleared)));
+  }
   if (data.owned?.paddle) save.owned.paddle = data.owned.paddle;
   if (data.owned?.table) save.owned.table = data.owned.table;
   if (data.equipped?.paddle) save.equipped.paddle = data.equipped.paddle;
   if (data.equipped?.table) save.equipped.table = data.equipped.table;
   if (!save.owned.paddle.includes("white")) save.owned.paddle.unshift("white");
   if (!save.owned.table.includes("classic")) save.owned.table.unshift("classic");
+}
+
+function getPlayerLevel() {
+  return Math.max(0, Math.min(100, save.maxBotCleared || 0));
+}
+
+function isBotLevelUnlocked(level) {
+  return level === 1 || level <= (save.maxBotCleared || 0) + 1;
+}
+
+function playerLevelStyle(level) {
+  const lv = Math.max(0, Math.min(100, level || 0));
+  if (lv <= 0) return { color: "#9ca3af", animated: false, className: "lvl-0" };
+  if (lv < 5) return { color: "#d1d5db", animated: false, className: "lvl-1" };
+  if (lv < 10) return { color: "#86efac", animated: false, className: "lvl-5" };
+  if (lv < 15) return { color: "#67e8f9", animated: false, className: "lvl-10" };
+  if (lv < 20) return { color: "#c084fc", animated: false, className: "lvl-15" };
+  if (lv < 40) return { color: null, animated: true, className: "lvl-20" };
+  if (lv < 60) return { color: null, animated: true, className: "lvl-40" };
+  if (lv < 80) return { color: null, animated: true, className: "lvl-60" };
+  if (lv < 100) return { color: null, animated: true, className: "lvl-80" };
+  return { color: null, animated: true, className: "lvl-100" };
+}
+
+function canvasLevelColor(level) {
+  if (level == null) return "#ffffff";
+  const lv = Math.max(0, Math.min(100, level || 0));
+  const t = performance.now() * 0.001;
+  if (lv <= 0) return "#9ca3af";
+  if (lv < 5) return "#d1d5db";
+  if (lv < 10) return "#86efac";
+  if (lv < 15) return "#67e8f9";
+  if (lv < 20) return "#c084fc";
+  if (lv < 40) {
+    const a = (Math.sin(t * 2) * 0.5 + 0.5);
+    return a > 0.5 ? "#f472b6" : "#a78bfa";
+  }
+  if (lv < 60) {
+    const a = (Math.sin(t * 2.4) * 0.5 + 0.5);
+    return a > 0.5 ? "#22d3ee" : "#fbbf24";
+  }
+  if (lv < 80) {
+    const a = (Math.sin(t * 3) * 0.5 + 0.5);
+    return a > 0.5 ? "#fb7185" : "#34d399";
+  }
+  if (lv < 100) {
+    const hues = ["#ef4444", "#f59e0b", "#22c55e", "#3b82f6", "#a855f7"];
+    return hues[Math.floor(t * 4) % hues.length];
+  }
+  const hues = ["#ff4d6d", "#ff9f1c", "#ffd166", "#06d6a0", "#4cc9f0", "#7b2cbf"];
+  return hues[Math.floor(t * 6) % hues.length];
+}
+
+function formatNameWithLevel(name, level) {
+  const n = String(name || "Player");
+  const lv = Math.max(0, Math.min(100, level || 0));
+  return `${n} · L${lv}`;
+}
+
+function applyLevelClass(el, level) {
+  if (!el) return;
+  el.classList.remove(
+    "lvl-0", "lvl-1", "lvl-5", "lvl-10", "lvl-15",
+    "lvl-20", "lvl-40", "lvl-60", "lvl-80", "lvl-100", "player-level"
+  );
+  el.style.color = "";
+  if (level == null) return;
+  const style = playerLevelStyle(level);
+  el.classList.add("player-level", style.className);
+  if (style.color) el.style.color = style.color;
+}
+
+function awardBotClear(level) {
+  if (s.mode !== "local") return 0;
+  const lv = Math.max(1, Math.min(100, level || s.botLevel));
+  if (lv <= save.maxBotCleared) return 0;
+  save.maxBotCleared = lv;
+  save.points += POINTS_PER_BOT_CLEAR;
+  persistSave();
+  updatePointsUI();
+  updateNameUI();
+  return POINTS_PER_BOT_CLEAR;
+}
+
+function profilePayload() {
+  return {
+    name: save.name,
+    points: save.points,
+    maxBotCleared: save.maxBotCleared,
+    owned: save.owned,
+    equipped: save.equipped,
+  };
 }
 
 function loadAbilities() {
@@ -154,10 +269,7 @@ async function syncProfileFromServer() {
     const data = await res.json();
     if (data.profile) {
       applyProfile(data.profile);
-      localStorage.setItem(
-        SAVE_CACHE_KEY,
-        JSON.stringify({ name: save.name, points: save.points, owned: save.owned, equipped: save.equipped })
-      );
+      localStorage.setItem(SAVE_CACHE_KEY, JSON.stringify(profilePayload()));
     }
   } catch {
     /* offline */
@@ -174,12 +286,7 @@ async function syncProfileToServer() {
       body: JSON.stringify({
         action: "save",
         playerId: getPlayerId(),
-        profile: {
-          name: getPlayerName(),
-          points: save.points,
-          owned: save.owned,
-          equipped: save.equipped,
-        },
+        profile: profilePayload(),
       }),
     });
   } catch {
@@ -217,8 +324,7 @@ async function loadSave() {
 
 function persistSave() {
   try {
-    const payload = { name: save.name, points: save.points, owned: save.owned, equipped: save.equipped };
-    localStorage.setItem(SAVE_CACHE_KEY, JSON.stringify(payload));
+    localStorage.setItem(SAVE_CACHE_KEY, JSON.stringify(profilePayload()));
     if (save.name) localStorage.setItem(PLAYER_NAME_KEY, save.name);
     persistAbilities();
     clearTimeout(profileSyncTimer);
@@ -242,11 +348,12 @@ function awardWinPoints(winner) {
     s.mode === "local"
       ? winner === "p1"
       : (winner === "p1" && net.player === 1) || (winner === "p2" && net.player === 2);
-  if (!won) return;
+  if (!won) return 0;
   const gain = isAdmin() && save.abilities.bonusPts ? 10 : POINTS_PER_WIN;
   save.points += gain;
   persistSave();
   updatePointsUI();
+  return gain;
 }
 
 function effectivePaddleH(side) {
@@ -315,6 +422,73 @@ function applyFillStyle(c, item, x, y, w, h, alpha) {
     g.addColorStop(0.4 + Math.sin(t) * 0.06, "#10b981");
     g.addColorStop(0.75, "#6366f1");
     g.addColorStop(1, "#312e81");
+  } else if (item.style === "nebula") {
+    const ox = Math.sin(t * 0.7) * w * 0.35;
+    const oy = Math.cos(t * 0.55) * h * 0.25;
+    g = c.createLinearGradient(x + ox, y + oy, x + w - ox, y + h - oy);
+    g.addColorStop(0, "#12002b");
+    g.addColorStop(0.25 + Math.sin(t) * 0.05, "#7c3aed");
+    g.addColorStop(0.55, "#ec4899");
+    g.addColorStop(0.8, "#38bdf8");
+    g.addColorStop(1, "#0b0320");
+  } else if (item.style === "interstellar") {
+    const shift = ((t * 0.18) % 1);
+    g = c.createLinearGradient(x - w * shift, y, x + w * (1.4 - shift), y + h);
+    g.addColorStop(0, "#020617");
+    g.addColorStop(0.2, "#1e3a8a");
+    g.addColorStop(0.45, "#67e8f9");
+    g.addColorStop(0.65, "#c084fc");
+    g.addColorStop(0.85, "#f472b6");
+    g.addColorStop(1, "#020617");
+  } else if (item.style === "voidpulse") {
+    const pulse = 0.35 + Math.sin(t * 2.2) * 0.2;
+    g = c.createRadialGradient(x + w * 0.5, y + h * 0.5, 1, x + w * 0.5, y + h * 0.5, Math.max(w, h) * 0.9);
+    g.addColorStop(0, "#f0abfc");
+    g.addColorStop(pulse * 0.45, "#7c3aed");
+    g.addColorStop(0.7, "#1e1b4b");
+    g.addColorStop(1, "#02010a");
+  } else if (item.style === "solarflare") {
+    const ox = Math.sin(t * 1.4) * w * 0.4;
+    g = c.createLinearGradient(x + ox, y, x + w - ox, y + h);
+    g.addColorStop(0, "#450a0a");
+    g.addColorStop(0.25, "#ea580c");
+    g.addColorStop(0.5 + Math.sin(t * 2) * 0.08, "#fde047");
+    g.addColorStop(0.75, "#fb7185");
+    g.addColorStop(1, "#7f1d1d");
+  } else if (item.style === "plasma") {
+    const a = t * 1.1;
+    g = c.createLinearGradient(x + Math.cos(a) * w * 0.3, y + Math.sin(a) * h * 0.3, x + w, y + h);
+    g.addColorStop(0, "#022c22");
+    g.addColorStop(0.3, "#22d3ee");
+    g.addColorStop(0.55, "#a3e635");
+    g.addColorStop(0.8, "#f472b6");
+    g.addColorStop(1, "#312e81");
+  } else if (item.style === "quantum") {
+    const s1 = (Math.sin(t * 1.3) + 1) * 0.5;
+    g = c.createLinearGradient(x, y + h * s1, x + w, y + h * (1 - s1));
+    g.addColorStop(0, "#0f172a");
+    g.addColorStop(0.2, "#22d3ee");
+    g.addColorStop(0.45, "#ffffff");
+    g.addColorStop(0.7, "#818cf8");
+    g.addColorStop(1, "#0f172a");
+  } else if (item.style === "darkmatter") {
+    const ox = Math.cos(t * 0.8) * w * 0.5;
+    const oy = Math.sin(t * 0.6) * h * 0.4;
+    g = c.createRadialGradient(x + w * 0.5 + ox * 0.2, y + h * 0.5 + oy * 0.2, 2, x + w * 0.5, y + h * 0.5, Math.max(w, h));
+    g.addColorStop(0, "#f5d0fe");
+    g.addColorStop(0.25, "#581c87");
+    g.addColorStop(0.55, "#111827");
+    g.addColorStop(0.8, "#4c1d95");
+    g.addColorStop(1, "#000000");
+  } else if (item.style === "hypernova") {
+    const shift = ((t * 0.35) % 1);
+    g = c.createLinearGradient(x, y - h * shift, x + w, y + h * (1.2 - shift));
+    g.addColorStop(0, "#3b0764");
+    g.addColorStop(0.2, "#ef4444");
+    g.addColorStop(0.4, "#fbbf24");
+    g.addColorStop(0.6, "#22d3ee");
+    g.addColorStop(0.8, "#a855f7");
+    g.addColorStop(1, "#3b0764");
   } else {
     c.globalAlpha = alpha;
     c.fillStyle = item.color || "#fff";
@@ -324,19 +498,124 @@ function applyFillStyle(c, item, x, y, w, h, alpha) {
   c.fillStyle = g;
 }
 
+function drawEpicOverlay(c, item, x, y, w, h, alpha) {
+  if (!item.epic) return;
+  const t = performance.now() * 0.001;
+  c.save();
+  c.beginPath();
+  c.rect(x, y, w, h);
+  c.clip();
+
+  if (item.style === "nebula" || item.style === "interstellar" || item.style === "darkmatter") {
+    for (let i = 0; i < 14; i++) {
+      const px = x + ((Math.sin(t * 0.7 + i * 1.7) * 0.5 + 0.5) * w);
+      const py = y + ((Math.cos(t * 0.9 + i * 2.1) * 0.5 + 0.5) * h);
+      const r = 0.6 + (i % 3) * 0.5;
+      c.globalAlpha = alpha * (0.35 + (Math.sin(t * 3 + i) * 0.5 + 0.5) * 0.45);
+      c.fillStyle = i % 2 === 0 ? "#ffffff" : "#a5f3fc";
+      c.beginPath();
+      c.arc(px, py, r, 0, Math.PI * 2);
+      c.fill();
+    }
+  }
+
+  if (item.style === "interstellar" || item.style === "quantum") {
+    for (let i = 0; i < 5; i++) {
+      const yy = y + ((t * (18 + i * 7) + i * 17) % (h + 20)) - 10;
+      c.globalAlpha = alpha * 0.28;
+      c.strokeStyle = i % 2 ? "#67e8f9" : "#e879f9";
+      c.lineWidth = 1;
+      c.beginPath();
+      c.moveTo(x, yy);
+      c.lineTo(x + w, yy + (i - 2) * 2);
+      c.stroke();
+    }
+  }
+
+  if (item.style === "solarflare" || item.style === "hypernova" || item.style === "plasma") {
+    for (let i = 0; i < 4; i++) {
+      const wave = Math.sin(t * 2.4 + i * 1.3);
+      c.globalAlpha = alpha * (0.18 + Math.abs(wave) * 0.2);
+      c.strokeStyle = item.style === "plasma" ? "#67e8f9" : "#fde047";
+      c.lineWidth = 1.5;
+      c.beginPath();
+      for (let px = 0; px <= w; px += 2) {
+        const py = y + h * (0.25 + i * 0.18) + Math.sin(px * 0.12 + t * 3 + i) * (4 + i * 2) * wave;
+        if (px === 0) c.moveTo(x + px, py);
+        else c.lineTo(x + px, py);
+      }
+      c.stroke();
+    }
+  }
+
+  if (item.style === "voidpulse") {
+    const pulse = (Math.sin(t * 2.5) * 0.5 + 0.5);
+    c.globalAlpha = alpha * (0.2 + pulse * 0.35);
+    c.strokeStyle = "#e879f9";
+    c.lineWidth = 2;
+    c.strokeRect(x + 1, y + 1, Math.max(1, w - 2), Math.max(1, h - 2));
+  }
+
+  if (item.style === "hypernova") {
+    const cx = x + w * 0.5;
+    const cy = y + h * 0.5;
+    const rg = c.createRadialGradient(cx, cy, 1, cx, cy, Math.max(w, h) * 0.7);
+    rg.addColorStop(0, `rgba(255,255,255,${0.25 + Math.sin(t * 4) * 0.1})`);
+    rg.addColorStop(0.4, "rgba(251,191,36,0.12)");
+    rg.addColorStop(1, "rgba(0,0,0,0)");
+    c.globalAlpha = alpha;
+    c.fillStyle = rg;
+    c.fillRect(x, y, w, h);
+  }
+
+  c.restore();
+  c.globalAlpha = 1;
+}
+
+function drawCosmeticFill(c, item, x, y, w, h, alpha) {
+  applyFillStyle(c, item, x, y, w, h, alpha);
+  c.fillRect(x, y, w, h);
+  drawEpicOverlay(c, item, x, y, w, h, alpha);
+  c.globalAlpha = 1;
+}
+
+const shopAnimSwatches = [];
+let shopAnimRunning = false;
+
 function drawSwatch(item, el) {
   const c = document.createElement("canvas");
-  c.width = 100;
-  c.height = 40;
+  c.width = 120;
+  c.height = 48;
   const cctx = c.getContext("2d");
-  applyFillStyle(cctx, item, 0, 0, c.width, c.height, 1);
-  cctx.fillRect(0, 0, c.width, c.height);
+  drawCosmeticFill(cctx, item, 0, 0, c.width, c.height, 1);
   el.style.backgroundImage = `url(${c.toDataURL()})`;
   el.style.backgroundSize = "cover";
+  if (item.epic) {
+    el.dataset.epicStyle = item.style;
+    shopAnimSwatches.push({ el, item, canvas: c, ctx: cctx });
+  }
+}
+
+function tickShopSwatches() {
+  shopAnimRunning = false;
+  if (!ui.customizeOverlay || ui.customizeOverlay.classList.contains("hidden")) {
+    shopAnimSwatches.length = 0;
+    return;
+  }
+  if (!shopAnimSwatches.length) return;
+  shopAnimRunning = true;
+  for (const entry of shopAnimSwatches) {
+    if (!entry.el.isConnected) continue;
+    entry.ctx.clearRect(0, 0, entry.canvas.width, entry.canvas.height);
+    drawCosmeticFill(entry.ctx, entry.item, 0, 0, entry.canvas.width, entry.canvas.height, 1);
+    entry.el.style.backgroundImage = `url(${entry.canvas.toDataURL()})`;
+  }
+  requestAnimationFrame(tickShopSwatches);
 }
 
 function renderShop() {
   if (!ui.shopGrid) return;
+  shopAnimSwatches.length = 0;
   const kind = save.shopTab;
   ui.shopGrid.innerHTML = "";
   for (const item of SHOP[kind]) {
@@ -345,11 +624,13 @@ function renderShop() {
     const btn = document.createElement("button");
     btn.type = "button";
     btn.className = "shop-item";
+    if (item.epic) btn.classList.add("epic");
     if (equipped) btn.classList.add("equipped");
     const free = isAdmin() && save.abilities.freeShop;
     if (!owned && !free && save.points < item.price) btn.classList.add("cant-afford");
     const swatch = document.createElement("div");
     swatch.className = "shop-swatch";
+    if (item.epic) swatch.classList.add("epic-swatch");
     drawSwatch(item, swatch);
     const name = document.createElement("div");
     name.className = "shop-name";
@@ -358,6 +639,12 @@ function renderShop() {
     price.className = "shop-price";
     price.textContent = item.price === 0 ? "Free" : `${item.price} pts`;
     btn.append(swatch, name, price);
+    if (item.epic) {
+      const tag = document.createElement("span");
+      tag.className = "shop-epic-tag";
+      tag.textContent = "EPIC";
+      btn.appendChild(tag);
+    }
     if (equipped) {
       const b = document.createElement("span");
       b.className = "shop-badge";
@@ -365,6 +652,7 @@ function renderShop() {
       btn.appendChild(b);
     }
     btn.addEventListener("click", () => {
+      playMenuClick();
       if (owned) {
         save.equipped[kind] = item.id;
         persistSave();
@@ -386,6 +674,7 @@ function renderShop() {
     });
     ui.shopGrid.appendChild(btn);
   }
+  if (shopAnimSwatches.length && !shopAnimRunning) requestAnimationFrame(tickShopSwatches);
 }
 
 function setShopTab(tab) {
@@ -398,15 +687,17 @@ function setShopTab(tab) {
 
 function openCustomize() {
   hideOverlay(ui.menuOverlay);
+  hideOverlay(ui.botLevelOverlay);
   hideOverlay(ui.lobbyOverlay);
   showOverlay(ui.customizeOverlay);
   setStagePlaying(false);
   updatePointsUI();
   setShopTab(save.shopTab);
-  if (ui.shopMsg) ui.shopMsg.textContent = "Buy or equip a colour.";
+  if (ui.shopMsg) ui.shopMsg.textContent = "Buy or equip a colour. Epic skins (50+) are animated.";
 }
 
 function closeCustomize() {
+  shopAnimSwatches.length = 0;
   hideOverlay(ui.customizeOverlay);
   showOverlay(ui.menuOverlay);
   setStagePlaying(false);
@@ -418,6 +709,7 @@ function openAdmin() {
     return;
   }
   hideOverlay(ui.menuOverlay);
+  hideOverlay(ui.botLevelOverlay);
   hideOverlay(ui.customizeOverlay);
   hideOverlay(ui.lobbyOverlay);
   showOverlay(ui.adminOverlay);
@@ -435,6 +727,10 @@ function refreshAdminPanel() {
   if (!isAdmin()) return;
   if (ui.adminWelcome) ui.adminWelcome.textContent = "Welcome, Owner";
   if (ui.adminPoints) ui.adminPoints.textContent = String(save.points);
+  if (ui.adminLevel) ui.adminLevel.textContent = String(getPlayerLevel());
+  if (ui.adminLevelInput && document.activeElement !== ui.adminLevelInput) {
+    ui.adminLevelInput.value = String(getPlayerLevel());
+  }
   if (ui.abMegaPaddle) ui.abMegaPaddle.checked = save.abilities.megaPaddle;
   if (ui.abFreeShop) ui.abFreeShop.checked = save.abilities.freeShop;
   if (ui.abSlowBot) ui.abSlowBot.checked = save.abilities.slowBot;
@@ -472,6 +768,28 @@ function adminUnlockAll() {
   refreshAdminPanel();
 }
 
+function adminUnlockAllLevels() {
+  if (!isAdmin()) return;
+  save.maxBotCleared = 100;
+  persistSave();
+  updateNameUI();
+  refreshAdminPanel();
+  if (ui.botLevelGrid) renderBotLevelGrid();
+  if (ui.adminMsg) ui.adminMsg.textContent = "All bot levels unlocked (L100).";
+}
+
+function adminSetPlayerLevel(n) {
+  if (!isAdmin()) return;
+  const lv = Math.max(0, Math.min(100, Math.floor(Number(n) || 0)));
+  save.maxBotCleared = lv;
+  persistSave();
+  updateNameUI();
+  refreshAdminPanel();
+  if (ui.botLevelGrid) renderBotLevelGrid();
+  if (s.mode === "online" && net.connected) sendCosmetics();
+  if (ui.adminMsg) ui.adminMsg.textContent = `Player level set to L${lv}.`;
+}
+
 function setAdminAbility(key, on) {
   if (!isAdmin()) return;
   save.abilities[key] = on;
@@ -502,19 +820,227 @@ function drawTableHalf(side) {
   if (style.id === "classic") return;
   const halfW = table.w / 2;
   const x = side === "p1" ? table.x : table.x + halfW;
-  const alpha = style.price >= 20 ? 0.5 : 0.38;
-  applyFillStyle(ctx, style, x, table.y, halfW, table.h, alpha);
-  ctx.fillRect(x, table.y, halfW, table.h);
-  ctx.globalAlpha = 1;
+  const alpha = style.epic ? 0.58 : style.price >= 20 ? 0.5 : 0.38;
+  drawCosmeticFill(ctx, style, x, table.y, halfW, table.h, alpha);
 }
 
 function drawPaddleRect(p, side) {
   const h = effectivePaddleH(side);
   const eq = equippedForSide(side);
   const style = shopItem("paddle", eq.paddle);
-  applyFillStyle(ctx, style, p.x, p.y, paddle.w, h, 1);
-  ctx.fillRect(p.x, p.y, paddle.w, h);
+  drawCosmeticFill(ctx, style, p.x, p.y, paddle.w, h, 1);
+  if (side === "p1" && s.mode === "local" && s.ability.armed) {
+    drawFirePaddle(p.x, p.y, paddle.w, h);
+  }
+}
+
+function drawFirePaddle(x, y, w, h) {
+  const t = performance.now() * 0.001;
+  ctx.save();
+  for (let i = 0; i < 10; i++) {
+    const flicker = Math.sin(t * 14 + i * 1.7) * 0.5 + 0.5;
+    const fx = x + w * 0.5 + (Math.sin(t * 9 + i) * w * 0.35);
+    const fy = y + h * (0.1 + (i / 10) * 0.8);
+    const r = 4 + flicker * 7;
+    const g = ctx.createRadialGradient(fx, fy, 0, fx, fy, r);
+    g.addColorStop(0, `rgba(255,255,200,${0.55 + flicker * 0.35})`);
+    g.addColorStop(0.35, `rgba(255,140,0,${0.4 + flicker * 0.25})`);
+    g.addColorStop(1, "rgba(180,20,0,0)");
+    ctx.fillStyle = g;
+    ctx.beginPath();
+    ctx.arc(fx, fy, r, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.globalAlpha = 0.55 + Math.sin(t * 10) * 0.2;
+  ctx.strokeStyle = "#fbbf24";
+  ctx.lineWidth = 2;
+  ctx.strokeRect(x - 2, y - 2, w + 4, h + 4);
+  ctx.restore();
   ctx.globalAlpha = 1;
+}
+
+function resetAbility() {
+  s.ability.parries = 0;
+  s.ability.ready = false;
+  s.ability.armed = false;
+  s.ability.smashing = false;
+  s.ability.breakFx = null;
+  s.ability.flames = [];
+  updateAbilityUI();
+}
+
+function updateAbilityUI() {
+  if (!ui.abilityBar) return;
+  const show = s.mode === "local" && !s.gameOver;
+  ui.abilityBar.classList.toggle("hidden", !show);
+  if (!show) return;
+  const pct = Math.min(100, (s.ability.parries / PARRY_CHARGE_NEED) * 100);
+  if (ui.abilityFill) ui.abilityFill.style.width = `${pct}%`;
+  ui.abilityBar.classList.toggle("ready", s.ability.ready && !s.ability.armed);
+  ui.abilityBar.classList.toggle("armed", s.ability.armed);
+  if (ui.abilityLabel) {
+    if (s.ability.armed) ui.abilityLabel.textContent = "FIRE SMASH ARMED";
+    else if (s.ability.ready) ui.abilityLabel.textContent = "FIRE SMASH READY";
+    else ui.abilityLabel.textContent = `PARRY ${s.ability.parries}/${PARRY_CHARGE_NEED}`;
+  }
+  if (ui.abilityHint) {
+    if (s.ability.armed) {
+      ui.abilityHint.textContent = "Next hit shatters the bot bat & scores!";
+    } else if (s.ability.ready) {
+      ui.abilityHint.textContent = isTouchDevice
+        ? "Tap the court to ignite your paddle"
+        : "Click the court to ignite your paddle";
+    } else {
+      ui.abilityHint.textContent = "Land 10 hits to charge Fire Smash";
+    }
+  }
+}
+
+function tryActivateFireSmash() {
+  if (s.mode !== "local" || s.gameOver || !s.running) return false;
+  if (!s.ability.ready || s.ability.armed) return false;
+  s.ability.armed = true;
+  s.ability.ready = false;
+  ensureAudio();
+  const t = audioCtx.currentTime;
+  playTone(220, t, 0.12, "sawtooth", 0.12);
+  playTone(440, t + 0.08, 0.14, "square", 0.1);
+  playTone(880, t + 0.16, 0.18, "triangle", 0.12);
+  ui.status.textContent = "Fire Smash armed!";
+  updateAbilityUI();
+  return true;
+}
+
+function registerParry() {
+  if (s.mode !== "local" || s.gameOver) return;
+  if (s.ability.armed || s.ability.ready) return;
+  s.ability.parries = Math.min(PARRY_CHARGE_NEED, s.ability.parries + 1);
+  if (s.ability.parries >= PARRY_CHARGE_NEED) {
+    s.ability.ready = true;
+    s.ability.parries = PARRY_CHARGE_NEED;
+    ui.status.textContent = isTouchDevice
+      ? "Fire Smash ready — tap to ignite!"
+      : "Fire Smash ready — click to ignite!";
+  }
+  updateAbilityUI();
+}
+
+function playFireSmashSound() {
+  ensureAudio();
+  const t = audioCtx.currentTime;
+  playTone(180, t, 0.08, "sawtooth", 0.18);
+  playTone(520, t + 0.04, 0.1, "square", 0.14);
+  playTone(1200, t + 0.1, 0.16, "triangle", 0.16);
+  playTone(1800, t + 0.18, 0.2, "sine", 0.1);
+}
+
+function playBatBreakSound() {
+  ensureAudio();
+  const t = audioCtx.currentTime;
+  playTone(140, t, 0.12, "sawtooth", 0.22);
+  playTone(90, t + 0.04, 0.18, "square", 0.16);
+  playTone(320, t + 0.08, 0.1, "triangle", 0.12);
+  playTone(60, t + 0.12, 0.22, "sawtooth", 0.14);
+}
+
+function spawnBatBreakFx() {
+  const shards = [];
+  const cx = s.p2.x + paddle.w / 2;
+  const cy = s.p2.y + paddle.h / 2;
+  for (let i = 0; i < 22; i++) {
+    const a = (i / 22) * Math.PI * 2 + Math.random() * 0.4;
+    const sp = 180 + Math.random() * 420;
+    shards.push({
+      x: cx + (Math.random() - 0.5) * paddle.w,
+      y: cy + (Math.random() - 0.5) * paddle.h,
+      vx: Math.cos(a) * sp,
+      vy: Math.sin(a) * sp - 80,
+      rot: Math.random() * Math.PI * 2,
+      spin: (Math.random() - 0.5) * 12,
+      w: 4 + Math.random() * 10,
+      h: 3 + Math.random() * 8,
+      life: 0.55 + Math.random() * 0.35,
+      t: 0,
+    });
+  }
+  s.ability.breakFx = { shards, flash: 0.28 };
+  s.p2.broken = true;
+}
+
+function drawBatBreakFx() {
+  const fx = s.ability.breakFx;
+  if (!fx) return;
+  if (fx.flash > 0) {
+    ctx.save();
+    ctx.globalAlpha = Math.min(1, fx.flash * 2.2);
+    ctx.fillStyle = "#fff7ed";
+    ctx.fillRect(s.p2.x - 18, table.y, paddle.w + 36, table.h);
+    ctx.restore();
+  }
+  for (const sh of fx.shards) {
+    ctx.save();
+    ctx.translate(sh.x, sh.y);
+    ctx.rotate(sh.rot);
+    ctx.globalAlpha = Math.max(0, 1 - sh.t / sh.life);
+    ctx.fillStyle = sh.t < 0.08 ? "#fbbf24" : "#ffffff";
+    ctx.fillRect(-sh.w / 2, -sh.h / 2, sh.w, sh.h);
+    ctx.restore();
+  }
+  ctx.globalAlpha = 1;
+}
+
+function updateBatBreakFx(dt) {
+  const fx = s.ability.breakFx;
+  if (!fx) return;
+  if (fx.flash > 0) fx.flash = Math.max(0, fx.flash - dt);
+  for (const sh of fx.shards) {
+    sh.t += dt;
+    sh.x += sh.vx * dt;
+    sh.y += sh.vy * dt;
+    sh.vy += 900 * dt;
+    sh.rot += sh.spin * dt;
+  }
+  fx.shards = fx.shards.filter((sh) => sh.t < sh.life);
+  if (!fx.shards.length && fx.flash <= 0) {
+    s.ability.breakFx = null;
+    s.p2.broken = false;
+  }
+}
+
+function scorePointLocal(scorer) {
+  if (s.gameOver) return;
+  if (scorer === "p1") {
+    s.p1.score += 1;
+    ui.p1.textContent = String(s.p1.score);
+    scoreFx("p1");
+    if (s.p1.score >= SCORE_LIMIT) endGame("p1");
+    else resetBall(true);
+  } else {
+    resetAbility();
+    playPointLossSound();
+    s.p2.score += 1;
+    ui.p2.textContent = String(s.p2.score);
+    scoreFx("p2", { silent: true });
+    if (s.p2.score >= SCORE_LIMIT) endGame("p2");
+    else {
+      resetBall(false);
+      ui.status.textContent = "Parry charge lost — " + serveHint();
+    }
+  }
+}
+
+function breakBotBatAndScore() {
+  if (s.mode !== "local" || s.gameOver || !s.ability.smashing) return;
+  s.ability.smashing = false;
+  s.ability.armed = false;
+  s.ability.parries = 0;
+  s.ability.ready = false;
+  s.running = false;
+  spawnBatBreakFx();
+  playBatBreakSound();
+  ui.status.textContent = "BAT SHATTERED!";
+  updateAbilityUI();
+  scorePointLocal("p1");
 }
 
 const stageEl = document.querySelector(".stage");
@@ -545,6 +1071,10 @@ const ui = {
   p2Label: document.getElementById("p2Label"),
   status: document.getElementById("status"),
   menuOverlay: document.getElementById("menuOverlay"),
+  botLevelOverlay: document.getElementById("botLevelOverlay"),
+  botLevelGrid: document.getElementById("botLevelGrid"),
+  botLevelHint: document.getElementById("botLevelHint"),
+  btnBotLevelBack: document.getElementById("btnBotLevelBack"),
   lobbyOverlay: document.getElementById("lobbyOverlay"),
   lobbyStatus: document.getElementById("lobbyStatus"),
   lobbyActions: document.getElementById("lobbyActions"),
@@ -560,6 +1090,10 @@ const ui = {
   playAgain: document.getElementById("playAgain"),
   backToMenu: document.getElementById("backToMenu"),
   btnResign: document.getElementById("btnResign"),
+  abilityBar: document.getElementById("abilityBar"),
+  abilityLabel: document.getElementById("abilityLabel"),
+  abilityFill: document.getElementById("abilityFill"),
+  abilityHint: document.getElementById("abilityHint"),
   btnLocal: document.getElementById("btnLocal"),
   btnOnline: document.getElementById("btnOnline"),
   btnCreateRoom: document.getElementById("btnCreateRoom"),
@@ -581,6 +1115,10 @@ const ui = {
   btnAdminSetPts: document.getElementById("btnAdminSetPts"),
   btnAdminUnlockAll: document.getElementById("btnAdminUnlockAll"),
   btnAdminMaxPts: document.getElementById("btnAdminMaxPts"),
+  btnAdminUnlockLevels: document.getElementById("btnAdminUnlockLevels"),
+  adminLevel: document.getElementById("adminLevel"),
+  adminLevelInput: document.getElementById("adminLevelInput"),
+  btnAdminSetLevel: document.getElementById("btnAdminSetLevel"),
   adminMsg: document.getElementById("adminMsg"),
   abMegaPaddle: document.getElementById("abMegaPaddle"),
   abFreeShop: document.getElementById("abFreeShop"),
@@ -614,6 +1152,7 @@ const net = {
   lastPaddleSentY: -1,
   opponentCosmetics: null,
   opponentName: "",
+  opponentLevel: 0,
   searching: false,
   searchStartedAt: 0,
 };
@@ -742,21 +1281,122 @@ const s = {
   mode: "menu",
   running: false,
   gameOver: false,
+  botLevel: 1,
   lastT: performance.now(),
   mouseY: table.y + table.h / 2,
-  ai: { timer: 0, interval: 0.11, targetY: table.y + table.h / 2, errorPx: 28 },
+  ai: { timer: 0, interval: 0.11, targetY: table.y + table.h / 2, errorPx: 28, speed: 560, track: 0.55 },
+  ability: { parries: 0, ready: false, armed: false, smashing: false, breakFx: null, flames: [] },
   fx: { scoreT: 0, who: "p1", particles: [] },
   p1: { x: table.x + paddle.inset, y: table.y + (table.h - paddle.h) / 2, score: 0 },
   p2: {
     x: table.x + table.w - paddle.inset - paddle.w,
     y: table.y + (table.h - paddle.h) / 2,
     score: 0,
+    broken: false,
   },
   ball: { x: table.x + table.w / 2, y: table.y + table.h / 2, vx: 0, vy: 0 },
 };
 
 function clamp(v, a, b) {
   return Math.max(a, Math.min(b, v));
+}
+
+function botTierClass(level) {
+  if (level <= 20) return "tier-easy";
+  if (level <= 40) return "tier-medium";
+  if (level <= 60) return "tier-hard";
+  if (level <= 80) return "tier-expert";
+  return "tier-master";
+}
+
+function botLevelLabel(level) {
+  if (level <= 20) return "Slow & clumsy";
+  if (level <= 40) return "Getting sharper";
+  if (level <= 60) return "Fast reactions";
+  if (level <= 80) return "Near perfect";
+  return "Unforgiving master";
+}
+
+function applyBotLevel(level) {
+  const lv = clamp(Math.round(Number(level) || 1), 1, 100);
+  s.botLevel = lv;
+  const t = (lv - 1) / 99;
+  s.ai.errorPx = 72 - t * 70;
+  s.ai.interval = 0.28 - t * 0.255;
+  s.ai.speed = 220 + t * 980;
+  s.ai.track = 0.35 + t * 0.62;
+  if (isAdmin() && save.abilities.slowBot) s.ai.speed *= 0.45;
+}
+
+function openBotLevelSelect() {
+  hideOverlay(ui.menuOverlay);
+  hideOverlay(ui.lobbyOverlay);
+  hideOverlay(ui.customizeOverlay);
+  hideOverlay(ui.adminOverlay);
+  hideOverlay(ui.passkeyOverlay);
+  hideOverlay(ui.gameOver);
+  showOverlay(ui.botLevelOverlay);
+  setStagePlaying(false);
+  startMenuBg();
+  renderBotLevelGrid();
+  ui.hint.textContent = "Select a bot level.";
+  updateNameUI();
+}
+
+function closeBotLevelSelect() {
+  hideOverlay(ui.botLevelOverlay);
+  showOverlay(ui.menuOverlay);
+  startMenuBg();
+  updateNameUI();
+}
+
+function renderBotLevelGrid() {
+  if (!ui.botLevelGrid) return;
+  ui.botLevelGrid.innerHTML = "";
+  const nextUnlock = Math.min(100, (save.maxBotCleared || 0) + 1);
+  for (let i = 1; i <= 100; i++) {
+    const unlocked = isBotLevelUnlocked(i);
+    const cleared = i <= (save.maxBotCleared || 0);
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = `bot-level-btn ${botTierClass(i)}`;
+    if (!unlocked) btn.classList.add("locked");
+    if (cleared) btn.classList.add("cleared");
+    if (i === nextUnlock && unlocked) btn.classList.add("next");
+    btn.textContent = unlocked ? String(i) : "🔒";
+    btn.disabled = !unlocked;
+    btn.title = unlocked
+      ? `Level ${i} — ${botLevelLabel(i)}${cleared ? " (cleared)" : ""}`
+      : `Locked — clear level ${i - 1} first`;
+    btn.addEventListener("click", () => {
+      if (!unlocked) {
+        if (ui.botLevelHint) {
+          ui.botLevelHint.textContent = `Locked. Clear level ${i - 1} to unlock.`;
+        }
+        return;
+      }
+      playMenuClick();
+      startLocalMode(i);
+    });
+    btn.addEventListener("mouseenter", () => {
+      if (!ui.botLevelHint) return;
+      if (!unlocked) {
+        ui.botLevelHint.textContent = `Locked — beat level ${i - 1} first (+5 pts on clear).`;
+      } else if (cleared) {
+        ui.botLevelHint.textContent = `Level ${i} cleared — ${botLevelLabel(i)}`;
+      } else {
+        ui.botLevelHint.textContent = `Level ${i} — ${botLevelLabel(i)} · Clear for +5 pts`;
+      }
+    });
+    ui.botLevelGrid.appendChild(btn);
+  }
+  if (ui.botLevelHint) {
+    const cleared = save.maxBotCleared || 0;
+    ui.botLevelHint.textContent =
+      cleared >= 100
+        ? "All 100 levels cleared. Master status!"
+        : `Progress: L${cleared}/100 · Next unlock: L${nextUnlock} · Clear = +5 pts`;
+  }
 }
 
 function ensureAudio() {
@@ -776,6 +1416,13 @@ function playTone(freq, start, duration, type = "sine", peak = 0.18) {
   gain.connect(audioCtx.destination);
   osc.start(start);
   osc.stop(start + duration + 0.02);
+}
+
+function playMenuClick() {
+  ensureAudio();
+  const t = audioCtx.currentTime;
+  playTone(880, t, 0.05, "square", 0.1);
+  playTone(1320, t + 0.03, 0.06, "triangle", 0.08);
 }
 
 function playPaddleHit() {
@@ -806,6 +1453,14 @@ function playLossSound() {
   [392, 349.23, 293.66, 220].forEach((freq, i) => {
     playTone(freq, t + i * 0.13, 0.22, "triangle", 0.16);
   });
+}
+
+function playPointLossSound() {
+  ensureAudio();
+  const t = audioCtx.currentTime;
+  playTone(280, t, 0.12, "sawtooth", 0.16);
+  playTone(180, t + 0.08, 0.16, "triangle", 0.14);
+  playTone(110, t + 0.16, 0.22, "square", 0.1);
 }
 
 function scheduleMusicStep() {
@@ -841,7 +1496,8 @@ function updateResignButton() {
   const inMatch = (s.mode === "local" || s.mode === "online") && !s.gameOver;
   const lobbyOpen = ui.lobbyOverlay && !ui.lobbyOverlay.classList.contains("hidden");
   const menuOpen = ui.menuOverlay && !ui.menuOverlay.classList.contains("hidden");
-  ui.btnResign.classList.toggle("hidden", !(inMatch && !lobbyOpen && !menuOpen));
+  const botSelectOpen = ui.botLevelOverlay && !ui.botLevelOverlay.classList.contains("hidden");
+  ui.btnResign.classList.toggle("hidden", !(inMatch && !lobbyOpen && !menuOpen && !botSelectOpen));
 }
 
 function resignMatch() {
@@ -856,13 +1512,32 @@ function resignMatch() {
 
 function updateNameUI() {
   const name = getPlayerName();
+  const level = getPlayerLevel();
   if (ui.hint && hasValidName()) {
-    ui.hint.textContent = `Playing as ${name}`;
+    ui.hint.innerHTML = "";
+    ui.hint.append("Playing as ");
+    const span = document.createElement("span");
+    span.className = "player-level-inline";
+    span.textContent = formatNameWithLevel(name, level);
+    applyLevelClass(span, level);
+    ui.hint.appendChild(span);
   }
+}
+
+function setScoreboardLabels(left, right, opts = {}) {
+  const trim = (s) => {
+    const t = String(s || "");
+    return t.length > 18 ? `${t.slice(0, 17)}…` : t;
+  };
+  ui.p1Label.textContent = trim(left);
+  ui.p2Label.textContent = trim(right);
+  applyLevelClass(ui.p1Label, opts.p1Level != null ? opts.p1Level : null);
+  applyLevelClass(ui.p2Label, opts.p2Level != null ? opts.p2Level : null);
 }
 
 function openNameOverlay(fromMenu = false) {
   hideOverlay(ui.menuOverlay);
+  hideOverlay(ui.botLevelOverlay);
   hideOverlay(ui.lobbyOverlay);
   hideOverlay(ui.customizeOverlay);
   hideOverlay(ui.adminOverlay);
@@ -881,6 +1556,7 @@ function closeNameOverlay() {
   if (hasValidName()) {
     showOverlay(ui.menuOverlay);
     updateNameUI();
+    startMenuBg();
   }
 }
 
@@ -906,7 +1582,7 @@ function requireName(action) {
 function showOverlay(el) {
   el.classList.remove("hidden");
   el.setAttribute("aria-hidden", "false");
-  if (stageEl && (el === ui.nameOverlay || el === ui.menuOverlay || el === ui.lobbyOverlay || el === ui.customizeOverlay || el === ui.adminOverlay || el === ui.passkeyOverlay)) {
+  if (stageEl && (el === ui.nameOverlay || el === ui.menuOverlay || el === ui.botLevelOverlay || el === ui.lobbyOverlay || el === ui.customizeOverlay || el === ui.adminOverlay || el === ui.passkeyOverlay)) {
     stageEl.classList.add("menu-open");
   }
 }
@@ -914,18 +1590,9 @@ function showOverlay(el) {
 function hideOverlay(el) {
   el.classList.add("hidden");
   el.setAttribute("aria-hidden", "true");
-  if (stageEl && (el === ui.nameOverlay || el === ui.menuOverlay || el === ui.lobbyOverlay || el === ui.customizeOverlay || el === ui.adminOverlay || el === ui.passkeyOverlay)) {
+  if (stageEl && (el === ui.nameOverlay || el === ui.menuOverlay || el === ui.botLevelOverlay || el === ui.lobbyOverlay || el === ui.customizeOverlay || el === ui.adminOverlay || el === ui.passkeyOverlay)) {
     stageEl.classList.remove("menu-open");
   }
-}
-
-function setScoreboardLabels(left, right) {
-  const trim = (s) => {
-    const t = String(s || "");
-    return t.length > 14 ? `${t.slice(0, 13)}…` : t;
-  };
-  ui.p1Label.textContent = trim(left);
-  ui.p2Label.textContent = trim(right);
 }
 
 function normalizedMouseY() {
@@ -937,6 +1604,7 @@ function setStagePlaying(on) {
   stageEl.classList.toggle("playing", on);
   stageEl.classList.toggle("menu-open", !on && s.mode === "menu");
   updateResignButton();
+  if (on) stopMenuBg();
 }
 
 function resetBall(servingToRight = true) {
@@ -948,14 +1616,16 @@ function resetBall(servingToRight = true) {
   s.ball.vx = Math.cos(angle) * sp * dir;
   s.ball.vy = Math.sin(angle) * sp;
   s.running = false;
+  s.ability.smashing = false;
+  if (!s.ability.breakFx) s.p2.broken = false;
   if (!s.gameOver) ui.status.textContent = serveHint();
 }
 
-function scoreFx(who) {
+function scoreFx(who, opts = {}) {
   s.fx.scoreT = 0.65;
   s.fx.who = who;
   s.fx.particles.length = 0;
-  playScoreSound();
+  if (!opts.silent) playScoreSound();
   const cx = table.x + table.w / 2;
   const cy = table.y + table.h / 2;
   for (let i = 0; i < 26; i++) {
@@ -983,8 +1653,12 @@ function endGame(winner, opts = {}) {
   ui.status.textContent = "Game over";
   stopGameMusic();
   updateResignButton();
+  resetAbility();
+  if (ui.abilityBar) ui.abilityBar.classList.add("hidden");
 
   let youWon = false;
+  let clearBonus = 0;
+  let winPts = 0;
   if (opts.resigned) {
     if (s.mode === "local") {
       youWon = false;
@@ -995,15 +1669,30 @@ function endGame(winner, opts = {}) {
     }
   } else if (s.mode === "local") {
     youWon = winner === "p1";
-    ui.gameOverTitle.textContent = youWon ? "YOU WIN (+2 PTS)" : "BOT WINS";
+    if (justEnded && youWon) {
+      winPts = awardWinPoints(winner);
+      clearBonus = awardBotClear(s.botLevel);
+      const total = winPts + clearBonus;
+      if (clearBonus > 0) {
+        ui.gameOverTitle.textContent = `LEVEL ${s.botLevel} CLEARED (+${total} PTS)`;
+      } else {
+        ui.gameOverTitle.textContent = `YOU WIN (+${winPts || POINTS_PER_WIN} PTS)`;
+      }
+    } else {
+      ui.gameOverTitle.textContent = youWon ? "YOU WIN" : "BOT WINS";
+    }
   } else {
     youWon = (winner === "p1" && net.player === 1) || (winner === "p2" && net.player === 2);
-    ui.gameOverTitle.textContent = youWon ? "YOU WIN (+2 PTS)" : "YOU LOSE";
+    if (justEnded && youWon) {
+      winPts = awardWinPoints(winner);
+      ui.gameOverTitle.textContent = `YOU WIN (+${winPts || POINTS_PER_WIN} PTS)`;
+    } else {
+      ui.gameOverTitle.textContent = youWon ? "YOU WIN" : "YOU LOSE";
+    }
   }
 
   ui.gameOverScore.textContent = `${s.p1.score} : ${s.p2.score}`;
   if (justEnded) {
-    awardWinPoints(winner);
     if (youWon) playWinSound();
     else playLossSound();
   }
@@ -1017,10 +1706,12 @@ function resetLocalMatch() {
   ui.p1.textContent = "0";
   ui.p2.textContent = "0";
   hideOverlay(ui.gameOver);
+  resetAbility();
   resetBall(true);
   ui.status.textContent = serveHint();
   setStagePlaying(true);
   startGameMusic();
+  updateAbilityUI();
 }
 
 function serve() {
@@ -1044,20 +1735,31 @@ function reflectFromPaddle(p, side) {
   const h = effectivePaddleH(side);
   const mid = p.y + h / 2;
   const t = clamp((s.ball.y - mid) / (h / 2), -1, 1);
-  const speed = clamp(
-    Math.hypot(s.ball.vx, s.ball.vy) * 1.05,
-    ballCfg.speed0,
-    ballCfg.speedMax
-  );
-  const maxBounce = 0.42 * Math.PI;
+  const fireSmash = side === "p1" && s.mode === "local" && s.ability.armed;
+  const speed = fireSmash
+    ? FIRE_SMASH_SPEED
+    : clamp(Math.hypot(s.ball.vx, s.ball.vy) * 1.065, ballCfg.speed0, ballCfg.speedMax);
+  const maxBounce = fireSmash ? 0.12 * Math.PI : 0.42 * Math.PI;
   const a = t * maxBounce;
   const dir = side === "p1" ? 1 : -1;
   s.ball.vx = Math.cos(a) * speed * dir;
   s.ball.vy = Math.sin(a) * speed;
-  playPaddleHit();
+  if (fireSmash) {
+    s.ability.armed = false;
+    s.ability.smashing = true;
+    s.p2.broken = false;
+    playFireSmashSound();
+    ui.status.textContent = "UNSTOPPABLE SMASH!";
+    updateAbilityUI();
+  } else {
+    playPaddleHit();
+    if (side === "p1") registerParry();
+  }
 }
 
 function tryLocalPaddleHit(p, side) {
+  if (side === "p2" && s.ability.smashing) return false;
+  if (side === "p2" && s.p2.broken) return false;
   const h = effectivePaddleH(side);
   const movingToward =
     (side === "p1" && s.ball.vx < 0) || (side === "p2" && s.ball.vx > 0);
@@ -1073,22 +1775,25 @@ function updateLocal(dt) {
   const p1h = effectivePaddleH("p1");
   s.p1.y = clamp(s.mouseY - p1h / 2, table.y + 6, table.y + table.h - p1h - 6);
 
-  if (!s.gameOver) {
-    const botSpeed = isAdmin() && save.abilities.slowBot ? paddle.aiSpeed * 0.45 : paddle.aiSpeed;
+  if (!s.gameOver && !s.p2.broken) {
+    const botSpeed = s.ai.speed;
     s.ai.timer -= dt;
     if (s.ai.timer <= 0) {
-      s.ai.timer = s.ai.interval + (Math.random() * 0.05 - 0.02);
+      s.ai.timer = s.ai.interval + (Math.random() * 0.04 - 0.015);
       const err = (Math.random() * 2 - 1) * s.ai.errorPx;
-      s.ai.targetY = s.ball.y - paddle.h / 2 + err;
+      const lead = s.ball.vx > 0 ? s.ball.vy * 0.08 * ((s.botLevel - 1) / 99) : 0;
+      s.ai.targetY = s.ball.y + lead - paddle.h / 2 + err;
     }
     const dy = s.ai.targetY - s.p2.y;
     const maxStep = botSpeed * dt;
     s.p2.y = clamp(
-      s.p2.y + clamp(dy * 0.75, -maxStep, maxStep),
+      s.p2.y + clamp(dy * s.ai.track, -maxStep, maxStep),
       table.y + 6,
       table.y + table.h - paddle.h - 6
     );
   }
+
+  updateBatBreakFx(dt);
 
   if (!s.running || s.gameOver) return;
 
@@ -1106,20 +1811,18 @@ function updateLocal(dt) {
   }
 
   tryLocalPaddleHit(s.p1, "p1");
-  tryLocalPaddleHit(s.p2, "p2");
+  if (!s.ability.smashing) tryLocalPaddleHit(s.p2, "p2");
+
+  if (s.ability.smashing && s.ball.vx > 0 && s.ball.x + ballCfg.r >= s.p2.x) {
+    breakBotBatAndScore();
+    return;
+  }
 
   if (s.ball.x < table.x - 40) {
-    s.p2.score += 1;
-    ui.p2.textContent = String(s.p2.score);
-    scoreFx("p2");
-    if (s.p2.score >= SCORE_LIMIT) endGame("p2");
-    else resetBall(false);
+    scorePointLocal("p2");
   } else if (s.ball.x > table.x + table.w + 40) {
-    s.p1.score += 1;
-    ui.p1.textContent = String(s.p1.score);
-    scoreFx("p1");
-    if (s.p1.score >= SCORE_LIMIT) endGame("p1");
-    else resetBall(true);
+    if (s.ability.smashing) breakBotBatAndScore();
+    else scorePointLocal("p1");
   }
 }
 
@@ -1272,22 +1975,42 @@ function draw() {
 
   ctx.globalAlpha = 1;
   drawPaddleRect(s.p1, "p1");
-  drawPaddleRect(s.p2, "p2");
+  if (!(s.mode === "local" && s.p2.broken)) drawPaddleRect(s.p2, "p2");
+  if (s.mode === "local") drawBatBreakFx();
 
   if (s.mode === "local" || s.mode === "online") {
     const p1Name = ui.p1Label?.textContent || "";
     const p2Name = ui.p2Label?.textContent || "";
+    const p1Lv = s.mode === "local" ? getPlayerLevel() : net.player === 1 ? getPlayerLevel() : net.opponentLevel || 0;
+    const p2Lv = s.mode === "local" ? null : net.player === 2 ? getPlayerLevel() : net.opponentLevel || 0;
     ctx.font = `bold ${isTouchDevice ? 11 : 13}px system-ui, -apple-system, Segoe UI, Arial`;
     ctx.textAlign = "center";
     ctx.textBaseline = "bottom";
-    ctx.fillStyle = "#fff";
-    ctx.globalAlpha = 0.92;
+    ctx.globalAlpha = 0.95;
+    ctx.fillStyle = canvasLevelColor(p1Lv);
     ctx.fillText(p1Name, table.x + table.w * 0.25, table.y - 4);
+    ctx.fillStyle = canvasLevelColor(p2Lv);
     ctx.fillText(p2Name, table.x + table.w * 0.75, table.y - 4);
     ctx.globalAlpha = 1;
   }
 
-  ctx.fillStyle = "#fff";
+  if (s.mode === "local" && s.ability.smashing) {
+    const t = performance.now() * 0.001;
+    for (let i = 0; i < 5; i++) {
+      const trail = i * 10;
+      const bx = s.ball.x - Math.sign(s.ball.vx || 1) * trail;
+      const by = s.ball.y - Math.sign(s.ball.vy || 0) * trail * 0.15;
+      const g = ctx.createRadialGradient(bx, by, 0, bx, by, ballCfg.r + 8 - i);
+      g.addColorStop(0, `rgba(255,220,120,${0.45 - i * 0.07})`);
+      g.addColorStop(0.5, `rgba(255,90,0,${0.28 - i * 0.04})`);
+      g.addColorStop(1, "rgba(180,0,0,0)");
+      ctx.fillStyle = g;
+      ctx.beginPath();
+      ctx.arc(bx, by + Math.sin(t * 20 + i) * 2, ballCfg.r + 6 - i, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+  ctx.fillStyle = s.ability.smashing ? "#ffe08a" : "#fff";
   ctx.beginPath();
   ctx.arc(s.ball.x, s.ball.y, ballCfg.r, 0, Math.PI * 2);
   ctx.fill();
@@ -1334,6 +2057,7 @@ function draw() {
 function frame(t) {
   const dt = Math.min(0.03, (t - s.lastT) / 1000);
   s.lastT = t;
+  if (menuBg.active) updateMenuBg(t);
   if (s.mode === "local") updateLocal(dt);
   if (s.mode === "online") updateOnline(dt);
   updateFx(dt);
@@ -1364,6 +2088,7 @@ function closeWs() {
   net.remotePaddleY = null;
   net.opponentCosmetics = null;
   net.opponentName = "";
+  net.opponentLevel = 0;
 }
 
 function sendCosmetics() {
@@ -1372,6 +2097,7 @@ function sendCosmetics() {
     paddle: save.equipped.paddle,
     table: save.equipped.table,
     name: getPlayerName(),
+    level: getPlayerLevel(),
   });
 }
 
@@ -1454,6 +2180,7 @@ function handleWsMessage(msg) {
   if (msg.type === "oCos") {
     net.opponentCosmetics = { paddle: msg.paddle || "white", table: msg.table || "classic" };
     if (msg.name) net.opponentName = sanitizeName(msg.name) || "Opponent";
+    if (typeof msg.level === "number") net.opponentLevel = Math.max(0, Math.min(100, Math.floor(msg.level)));
     setOnlineLabels();
     return;
   }
@@ -1548,31 +2275,45 @@ function handleWsMessage(msg) {
 }
 
 function setOnlineLabels() {
-  const myName = getPlayerName() || "You";
-  const oppName = net.opponentName || "Opponent";
+  const myName = formatNameWithLevel(getPlayerName() || "You", getPlayerLevel());
+  const oppName = formatNameWithLevel(net.opponentName || "Opponent", net.opponentLevel || 0);
   if (net.player === 1) {
-    setScoreboardLabels(myName, oppName);
+    setScoreboardLabels(myName, oppName, { p1Level: getPlayerLevel(), p2Level: net.opponentLevel || 0 });
   } else if (net.player === 2) {
-    setScoreboardLabels(oppName, myName);
+    setScoreboardLabels(oppName, myName, { p1Level: net.opponentLevel || 0, p2Level: getPlayerLevel() });
   } else {
     setScoreboardLabels("LEFT", "RIGHT");
   }
 }
 
-function startLocalMode() {
+function startLocalMode(level = 1) {
+  if (!isBotLevelUnlocked(level)) {
+    openBotLevelSelect();
+    if (ui.botLevelHint) ui.botLevelHint.textContent = `Level ${level} is locked.`;
+    return;
+  }
+  stopMenuBg();
+  applyBotLevel(level);
   s.mode = "local";
   hideOverlay(ui.menuOverlay);
+  hideOverlay(ui.botLevelOverlay);
   hideOverlay(ui.lobbyOverlay);
   hideOverlay(ui.customizeOverlay);
   hideOverlay(ui.adminOverlay);
   hideOverlay(ui.gameOver);
-  setScoreboardLabels(getPlayerName() || "You", "BOT");
-  ui.hint.textContent = `${getPlayerName()} vs BOT — ` + controlHint() + " First to 5 wins.";
+  setScoreboardLabels(
+    formatNameWithLevel(getPlayerName() || "You", getPlayerLevel()),
+    `BOT L${s.botLevel}`,
+    { p1Level: getPlayerLevel(), p2Level: null }
+  );
+  ui.hint.textContent = `${getPlayerName()} (L${getPlayerLevel()}) vs BOT L${s.botLevel} — 10 parries → Fire Smash.`;
   resetLocalMatch();
 }
 
 function openLobby() {
+  stopMenuBg();
   hideOverlay(ui.menuOverlay);
+  hideOverlay(ui.botLevelOverlay);
   hideOverlay(ui.customizeOverlay);
   hideOverlay(ui.adminOverlay);
   hideOverlay(ui.gameOver);
@@ -1591,6 +2332,7 @@ function backToMenu() {
   s.running = false;
   hideOverlay(ui.gameOver);
   hideOverlay(ui.lobbyOverlay);
+  hideOverlay(ui.botLevelOverlay);
   hideOverlay(ui.customizeOverlay);
   hideOverlay(ui.adminOverlay);
   hideOverlay(ui.passkeyOverlay);
@@ -1604,6 +2346,9 @@ function backToMenu() {
   if (!hasValidName()) ui.hint.textContent = "Enter your name to start.";
   updatePointsUI();
   updateResignButton();
+  resetAbility();
+  if (ui.abilityBar) ui.abilityBar.classList.add("hidden");
+  startMenuBg();
 }
 
 let adminBound = false;
@@ -1625,6 +2370,20 @@ function bindAdminControls() {
   });
   bind(ui.btnAdminUnlockAll, adminUnlockAll);
   bind(ui.btnAdminMaxPts, () => adminAddPoints(999));
+  bind(ui.btnAdminUnlockLevels, adminUnlockAllLevels);
+  bind(ui.btnAdminSetLevel, () => {
+    const n = parseInt(ui.adminLevelInput?.value, 10);
+    adminSetPlayerLevel(Number.isFinite(n) ? n : 0);
+  });
+  if (ui.adminLevelInput) {
+    ui.adminLevelInput.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") {
+        playMenuClick();
+        const n = parseInt(ui.adminLevelInput.value, 10);
+        adminSetPlayerLevel(Number.isFinite(n) ? n : 0);
+      }
+    });
+  }
   const bindToggle = (el, key) => {
     if (!el) return;
     el.addEventListener("change", (e) => setAdminAbility(key, e.target.checked));
@@ -1661,6 +2420,7 @@ function submitPasskey() {
 
 function openPasskeyOverlay() {
   hideOverlay(ui.menuOverlay);
+  hideOverlay(ui.botLevelOverlay);
   showOverlay(ui.passkeyOverlay);
   if (ui.passkeyMsg) ui.passkeyMsg.textContent = "";
   if (ui.passkeyInput) {
@@ -1677,17 +2437,37 @@ function closePasskeyOverlay() {
 function bindUi() {
   const bind = (el, handler) => {
     if (!el) return;
-    el.addEventListener("click", handler);
+    el.addEventListener("click", () => {
+      playMenuClick();
+      handler();
+    });
   };
 
-  bind(ui.btnLocal, () => requireName(startLocalMode));
+  bind(ui.btnLocal, () => requireName(openBotLevelSelect));
   bind(ui.btnOnline, () => requireName(openLobby));
   bind(ui.btnCustomize, () => requireName(openCustomize));
   bind(ui.btnNameSubmit, submitName);
   bind(ui.btnChangeName, () => openNameOverlay(true));
+  bind(ui.btnBotLevelBack, closeBotLevelSelect);
+  document.querySelectorAll(".bot-preset").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      playMenuClick();
+      const level = parseInt(btn.dataset.level, 10) || 1;
+      if (!isBotLevelUnlocked(level)) {
+        if (ui.botLevelHint) {
+          ui.botLevelHint.textContent = `Locked — clear level ${level - 1} first.`;
+        }
+        return;
+      }
+      startLocalMode(level);
+    });
+  });
   if (ui.nameInput) {
     ui.nameInput.addEventListener("keydown", (e) => {
-      if (e.key === "Enter") submitName();
+      if (e.key === "Enter") {
+        playMenuClick();
+        submitName();
+      }
     });
   }
   bind(ui.btnCustomizeBack, closeCustomize);
@@ -1716,13 +2496,17 @@ function bindUi() {
       updateResignButton();
       return;
     }
+    applyBotLevel(s.botLevel);
     resetLocalMatch();
   });
 
   bind(ui.btnResign, resignMatch);
 
   document.querySelectorAll(".shop-tab").forEach((tab) => {
-    tab.addEventListener("click", () => setShopTab(tab.dataset.tab));
+    tab.addEventListener("click", () => {
+      playMenuClick();
+      setShopTab(tab.dataset.tab);
+    });
   });
 
   bindAdminControls();
@@ -1731,7 +2515,10 @@ function bindUi() {
   bind(ui.btnPasskeyCancel, closePasskeyOverlay);
   if (ui.passkeyInput) {
     ui.passkeyInput.addEventListener("keydown", (e) => {
-      if (e.key === "Enter") submitPasskey();
+      if (e.key === "Enter") {
+        playMenuClick();
+        submitPasskey();
+      }
     });
   }
 
@@ -1747,6 +2534,7 @@ function bindUi() {
       }, 700);
       if (titleClicks >= 3) {
         titleClicks = 0;
+        playMenuClick();
         if (isAdmin()) openAdmin();
         else openPasskeyOverlay();
       }
@@ -1768,7 +2556,9 @@ function bindCanvasInput() {
   canvas.addEventListener("pointerdown", (e) => {
     if (e.pointerType === "mouse" && e.button !== 0) return;
     setPaddleFromClientY(e.clientY);
-    if (s.mode === "local" || s.mode === "online") serve();
+    if (s.mode !== "local" && s.mode !== "online") return;
+    if (s.mode === "local" && s.running && tryActivateFireSmash()) return;
+    serve();
   });
 
   canvas.addEventListener("pointermove", (e) => {
@@ -1798,6 +2588,179 @@ function bindCanvasInput() {
 
 bindCanvasInput();
 
+const MENU_BG_COLORS = [
+  "#ff4d6d", "#ff9f1c", "#2ec4b6", "#7b2cbf", "#4361ee",
+  "#06d6a0", "#ef476f", "#ffd166", "#118ab2", "#f72585",
+  "#4cc9f0", "#80ed99", "#f4a261", "#e76f51", "#a2d2ff",
+];
+const MENU_BG_SHAPES = ["circle", "square", "triangle", "diamond", "ring"];
+
+const menuBg = {
+  canvas: document.getElementById("menuBg"),
+  ctx: null,
+  shapes: [],
+  active: false,
+  lastT: 0,
+  w: 0,
+  h: 0,
+};
+
+function resizeMenuBg() {
+  if (!menuBg.canvas) return;
+  const dpr = Math.min(window.devicePixelRatio || 1, 2);
+  menuBg.w = window.innerWidth;
+  menuBg.h = window.innerHeight;
+  menuBg.canvas.width = Math.floor(menuBg.w * dpr);
+  menuBg.canvas.height = Math.floor(menuBg.h * dpr);
+  menuBg.ctx = menuBg.canvas.getContext("2d");
+  menuBg.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+}
+
+function spawnMenuShape(fromEdge = true) {
+  const size = 10 + Math.random() * 42;
+  const color = MENU_BG_COLORS[Math.floor(Math.random() * MENU_BG_COLORS.length)];
+  const kind = MENU_BG_SHAPES[Math.floor(Math.random() * MENU_BG_SHAPES.length)];
+  const speed = 18 + Math.random() * 55;
+  const angle = Math.random() * Math.PI * 2;
+  let x;
+  let y;
+  if (fromEdge) {
+    const edge = Math.floor(Math.random() * 4);
+    if (edge === 0) {
+      x = -size;
+      y = Math.random() * menuBg.h;
+    } else if (edge === 1) {
+      x = menuBg.w + size;
+      y = Math.random() * menuBg.h;
+    } else if (edge === 2) {
+      x = Math.random() * menuBg.w;
+      y = -size;
+    } else {
+      x = Math.random() * menuBg.w;
+      y = menuBg.h + size;
+    }
+  } else {
+    x = Math.random() * menuBg.w;
+    y = Math.random() * menuBg.h;
+  }
+  return {
+    x,
+    y,
+    vx: Math.cos(angle) * speed,
+    vy: Math.sin(angle) * speed,
+    size,
+    color,
+    kind,
+    rot: Math.random() * Math.PI * 2,
+    spin: (Math.random() - 0.5) * 1.4,
+    life: 0,
+    maxLife: 6 + Math.random() * 10,
+    alpha: 0,
+  };
+}
+
+function drawMenuShape(ctx, sh) {
+  ctx.save();
+  ctx.translate(sh.x, sh.y);
+  ctx.rotate(sh.rot);
+  ctx.globalAlpha = sh.alpha;
+  ctx.fillStyle = sh.color;
+  ctx.strokeStyle = sh.color;
+  ctx.lineWidth = Math.max(2, sh.size * 0.12);
+  const r = sh.size;
+  if (sh.kind === "circle") {
+    ctx.beginPath();
+    ctx.arc(0, 0, r * 0.5, 0, Math.PI * 2);
+    ctx.fill();
+  } else if (sh.kind === "ring") {
+    ctx.beginPath();
+    ctx.arc(0, 0, r * 0.5, 0, Math.PI * 2);
+    ctx.stroke();
+  } else if (sh.kind === "square") {
+    ctx.fillRect(-r * 0.4, -r * 0.4, r * 0.8, r * 0.8);
+  } else if (sh.kind === "diamond") {
+    ctx.beginPath();
+    ctx.moveTo(0, -r * 0.55);
+    ctx.lineTo(r * 0.45, 0);
+    ctx.lineTo(0, r * 0.55);
+    ctx.lineTo(-r * 0.45, 0);
+    ctx.closePath();
+    ctx.fill();
+  } else {
+    ctx.beginPath();
+    ctx.moveTo(0, -r * 0.55);
+    ctx.lineTo(r * 0.5, r * 0.45);
+    ctx.lineTo(-r * 0.5, r * 0.45);
+    ctx.closePath();
+    ctx.fill();
+  }
+  ctx.restore();
+}
+
+function updateMenuBg(now) {
+  if (!menuBg.active || !menuBg.ctx) return;
+  const dt = Math.min(0.05, (now - menuBg.lastT) / 1000 || 0.016);
+  menuBg.lastT = now;
+  const ctx = menuBg.ctx;
+  ctx.clearRect(0, 0, menuBg.w, menuBg.h);
+
+  const g = ctx.createRadialGradient(
+    menuBg.w * 0.5,
+    menuBg.h * 0.45,
+    40,
+    menuBg.w * 0.5,
+    menuBg.h * 0.5,
+    Math.max(menuBg.w, menuBg.h) * 0.75
+  );
+  g.addColorStop(0, "#12121a");
+  g.addColorStop(0.55, "#08080c");
+  g.addColorStop(1, "#030305");
+  ctx.fillStyle = g;
+  ctx.fillRect(0, 0, menuBg.w, menuBg.h);
+
+  while (menuBg.shapes.length < 42) {
+    menuBg.shapes.push(spawnMenuShape(menuBg.shapes.length > 12));
+  }
+
+  for (const sh of menuBg.shapes) {
+    sh.life += dt;
+    sh.x += sh.vx * dt;
+    sh.y += sh.vy * dt;
+    sh.rot += sh.spin * dt;
+    const fadeIn = Math.min(1, sh.life / 0.8);
+    const fadeOut = Math.min(1, (sh.maxLife - sh.life) / 1.2);
+    sh.alpha = Math.max(0, Math.min(0.72, fadeIn * fadeOut * 0.72));
+    drawMenuShape(ctx, sh);
+  }
+
+  menuBg.shapes = menuBg.shapes.filter((sh) => {
+    if (sh.life >= sh.maxLife) return false;
+    const m = sh.size + 60;
+    return sh.x > -m && sh.x < menuBg.w + m && sh.y > -m && sh.y < menuBg.h + m;
+  });
+}
+
+function startMenuBg() {
+  if (!menuBg.canvas) return;
+  resizeMenuBg();
+  if (!menuBg.shapes.length) {
+    for (let i = 0; i < 36; i++) menuBg.shapes.push(spawnMenuShape(false));
+  }
+  menuBg.active = true;
+  menuBg.lastT = performance.now();
+  document.body.classList.add("menu-bg-active");
+}
+
+function stopMenuBg() {
+  menuBg.active = false;
+  document.body.classList.remove("menu-bg-active");
+  if (menuBg.ctx && menuBg.w) menuBg.ctx.clearRect(0, 0, menuBg.w, menuBg.h);
+}
+
+window.addEventListener("resize", () => {
+  if (menuBg.active) resizeMenuBg();
+});
+
 async function boot() {
   await loadSave();
   updatePointsUI();
@@ -1807,11 +2770,13 @@ async function boot() {
     hideOverlay(ui.nameOverlay);
     showOverlay(ui.menuOverlay);
     updateNameUI();
+    startMenuBg();
   } else {
     hideOverlay(ui.menuOverlay);
     showOverlay(ui.nameOverlay);
     if (ui.nameInput) ui.nameInput.focus();
     ui.hint.textContent = "Enter your name to start.";
+    startMenuBg();
   }
   if (stageEl) stageEl.classList.add("menu-open");
   requestAnimationFrame(frame);

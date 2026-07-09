@@ -9,7 +9,7 @@
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black" />
     <meta name="mobile-web-app-capable" content="yes" />
-    <title>Pong (B/W)</title>
+    <title>PongMaster</title>
     <style>
       html,
       body {
@@ -24,14 +24,22 @@
     <link rel="stylesheet" href="style.css" />
   </head>
   <body>
+    <canvas id="menuBg" class="menu-bg" aria-hidden="true"></canvas>
     <main class="wrap">
       <header class="top">
-        <div class="title" id="titleEl">PONG (BLACK / WHITE)</div>
+        <div class="title title-rainbow" id="titleEl">PongMaster</div>
         <div class="hint" id="hint">Choose a mode to start.</div>
       </header>
 
       <div class="stage">
         <canvas id="game" width="900" height="520" aria-label="Pong game"></canvas>
+        <div class="ability-bar hidden" id="abilityBar" aria-live="polite">
+          <div class="ability-label" id="abilityLabel">PARRY 0/10</div>
+          <div class="ability-track">
+            <div class="ability-fill" id="abilityFill"></div>
+          </div>
+          <div class="ability-hint" id="abilityHint">Land 10 hits to charge Fire Smash</div>
+        </div>
         <button type="button" class="resign-btn hidden" id="btnResign">Resign</button>
 
         <div class="overlay" id="nameOverlay">
@@ -52,6 +60,23 @@
             <button type="button" class="play-again secondary" id="btnCustomize">Customize</button>
             <button type="button" class="play-again secondary" id="btnAdmin">Admin</button>
             <button type="button" class="link-btn" id="btnChangeName">Change name</button>
+          </div>
+        </div>
+
+        <div class="overlay hidden" id="botLevelOverlay" aria-hidden="true">
+          <div class="overlay-card menu-card bot-level-card">
+            <div class="overlay-title">BOT LEVEL</div>
+            <p class="lobby-text">Clear each level to unlock the next. First clear of a level gives +5 pts.</p>
+            <div class="bot-level-presets">
+              <button type="button" class="play-again secondary bot-preset" data-level="1">Easy 1</button>
+              <button type="button" class="play-again secondary bot-preset" data-level="25">Medium 25</button>
+              <button type="button" class="play-again secondary bot-preset" data-level="50">Hard 50</button>
+              <button type="button" class="play-again secondary bot-preset" data-level="75">Expert 75</button>
+              <button type="button" class="play-again secondary bot-preset" data-level="100">Master 100</button>
+            </div>
+            <div class="bot-level-grid" id="botLevelGrid"></div>
+            <p class="shop-msg" id="botLevelHint">Level 1 — Slow &amp; clumsy</p>
+            <button type="button" class="link-btn" id="btnBotLevelBack">Back</button>
           </div>
         </div>
 
@@ -79,6 +104,13 @@
             <div class="admin-actions">
               <button type="button" class="play-again secondary" id="btnAdminUnlockAll">Unlock all colours</button>
               <button type="button" class="play-again secondary" id="btnAdminMaxPts">+999 points</button>
+              <button type="button" class="play-again secondary" id="btnAdminUnlockLevels">Unlock all bot levels</button>
+            </div>
+            <p class="admin-section-label">Player level (0–100)</p>
+            <p class="shop-points">Level: <span id="adminLevel">0</span></p>
+            <div class="admin-row">
+              <input id="adminLevelInput" class="room-input admin-input" type="number" min="0" max="100" placeholder="Level" />
+              <button type="button" class="play-again secondary admin-btn" id="btnAdminSetLevel">Set level</button>
             </div>
             <p class="admin-section-label">Abilities (local games)</p>
             <div class="admin-toggles">
