@@ -2471,6 +2471,66 @@ function openBotLevelSelect() {
   renderBotLevelGrid();
   ui.hint.textContent = "Select a bot level.";
   updateNameUI();
+  // #region agent log
+  requestAnimationFrame(() => {
+    const overlay = ui.botLevelOverlay;
+    const card = overlay?.querySelector(".bot-level-card");
+    const header = overlay?.querySelector(".bot-level-header");
+    const body = overlay?.querySelector(".bot-level-body");
+    const footer = overlay?.querySelector(".bot-level-footer");
+    const grid = overlay?.querySelector(".bot-level-grid") || ui.botLevelGrid;
+    const firstBtn = grid?.querySelector(".bot-level-btn");
+    const title = overlay?.querySelector(".overlay-title");
+    if (!card || !grid) return;
+    const or = overlay.getBoundingClientRect();
+    const cr = card.getBoundingClientRect();
+    const gr = grid.getBoundingClientRect();
+    const br = firstBtn?.getBoundingClientRect();
+    const tr = title?.getBoundingClientRect();
+    const cs = getComputedStyle(card);
+    const gs = getComputedStyle(grid);
+    const data = {
+      vw: window.innerWidth,
+      vh: window.innerHeight,
+      phoneMode: document.body.classList.contains("phone-mode"),
+      landscape: document.body.classList.contains("phone-landscape"),
+      overlayH: Math.round(or.height),
+      cardH: Math.round(cr.height),
+      cardTop: Math.round(cr.top),
+      cardBottom: Math.round(cr.bottom),
+      cardClientH: card.clientHeight,
+      cardScrollH: card.scrollHeight,
+      cardOverflowY: cs.overflowY,
+      cardMaxH: cs.maxHeight,
+      cardDisplay: cs.display,
+      cardFlexDir: cs.flexDirection,
+      headerH: header ? Math.round(header.getBoundingClientRect().height) : null,
+      bodyClientH: body?.clientHeight ?? null,
+      bodyScrollH: body?.scrollHeight ?? null,
+      footerH: footer ? Math.round(footer.getBoundingClientRect().height) : null,
+      titleTop: tr ? Math.round(tr.top) : null,
+      titleVisible: !!(tr && tr.top >= -2 && tr.bottom <= window.innerHeight + 2),
+      gridH: Math.round(gr.height),
+      gridClientH: grid.clientHeight,
+      gridScrollH: grid.scrollHeight,
+      gridOverflowY: gs.overflowY,
+      gridMaxH: gs.maxHeight,
+      gridTouchAction: gs.touchAction,
+      btnCount: grid.querySelectorAll(".bot-level-btn").length,
+      firstBtnH: br ? Math.round(br.height) : null,
+      firstBtnVisibleH: br
+        ? Math.round(Math.min(br.bottom, gr.bottom, window.innerHeight) - Math.max(br.top, gr.top, 0))
+        : null,
+      btnClipped: !!(br && (br.bottom > gr.bottom + 1 || br.top < gr.top - 1)),
+      cardClippedByViewport: cr.bottom > window.innerHeight + 2 || cr.top < -2,
+      gridScrollNeeded: grid.scrollHeight > grid.clientHeight + 1,
+      cardScrollNeeded: card.scrollHeight > card.clientHeight + 1,
+      hasHeaderBodyFooter: !!(header && body && footer),
+      cssHref: [...document.styleSheets].map((s) => s.href).filter(Boolean).slice(-1)[0] || null,
+    };
+    agentLog("A-E", "game.js:openBotLevelSelect", "bot level geometry", data, "pre-fix");
+  });
+  // #endregion
 }
 
 function closeBotLevelSelect() {
