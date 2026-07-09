@@ -73,11 +73,31 @@ const net = {
   code: "",
   connected: false,
   snap: null,
+  snapPrev: null,
   snapAt: 0,
+  snapPrevAt: 0,
   remotePaddleY: null,
   lastPaddleSend: 0,
   lastPaddleSentY: -1,
 };
+
+const NET_INTERP_MS = 90;
+
+function expandState(d) {
+  if (!d) return null;
+  if (d.p1y != null) return d;
+  return {
+    t: d.t,
+    p1y: d.y1,
+    p2y: d.y2,
+    ball: { x: d.b[0], y: d.b[1], vx: d.b[2], vy: d.b[3] },
+    p1Score: d.s[0],
+    p2Score: d.s[1],
+    running: d.r === 1,
+    gameOver: d.o > 0,
+    winner: d.o === 1 ? "p1" : d.o === 2 ? "p2" : null,
+  };
+}
 
 const s = {
   mode: "menu",
@@ -324,40 +344,44 @@ function myPaddleY() {
 }
 
 function nearPaddleZone(ballX) {
-  return ballX < table.x + 130 || ballX > table.x + table.w - 130;
+  return ballX < table.x + 150 || ballX > table.x + table.w - 150;
 }
 
-function predictBallOnline(ball, age) {
-  if (age <= 0) return { x: ball.x, y: ball.y, vx: ball.vx, vy: ball.vy };
+function pushSnapshot(state, serverT) {
+  if (net.snap) {
+    net.snapPrev = net.snap;
+    net.snapPrevAt = net.snapAt;
+  }
+  net.snap = state;
+  net.snapAt = serverT || state.t || Date.now();
+}
 
-  const steps = Math.max(1, Math.min(6, Math.ceil(age * 60)));
-  const stepDt = age / steps;
-  let x = ball.x;
-  let y = ball.y;
-  let vx = ball.vx;
-  let vy = ball.vy;
-  const top = table.y;
-  const bottom = table.y + table.h;
+function renderInterpolatedBall() {
+  if (!net.snap?.ball) return;
 
-  for (let i = 0; i < steps; i++) {
-    x += vx * stepDt;
-    y += vy * stepDt;
-    if (y - ballCfg.r <= top) {
-      y = top + ballCfg.r;
-      vy = Math.abs(vy);
-    } else if (y + ballCfg.r >= bottom) {
-      y = bottom - ballCfg.r;
-      vy = -Math.abs(vy);
-    }
+  const now = Date.now();
+  const renderT = now - NET_INTERP_MS;
+
+  if (net.snapPrev?.ball && net.snapPrevAt < net.snapAt) {
+    const t0 = net.snapPrevAt;
+    const t1 = net.snapAt;
+    const alpha = clamp((renderT - t0) / (t1 - t0), 0, 1);
+    s.ball.x = net.snapPrev.ball.x + (net.snap.ball.x - net.snapPrev.ball.x) * alpha;
+    s.ball.y = net.snapPrev.ball.y + (net.snap.ball.y - net.snapPrev.ball.y) * alpha;
+  } else {
+    s.ball.x = net.snap.ball.x;
+    s.ball.y = net.snap.ball.y;
   }
 
-  return { x, y, vx, vy };
+  s.ball.vx = net.snap.ball.vx;
+  s.ball.vy = net.snap.ball.vy;
 }
 
 function applyServerState(state, serverT, forceSnap = false) {
-  const prevVy = net.snap?.ball?.vy;
-  net.snap = state;
-  net.snapAt = serverT || state.t || Date.now();
+  if (forceSnap) {
+    net.snapPrev = null;
+  }
+  pushSnapshot(state, serverT);
 
   if (net.player === 1) net.remotePaddleY = state.p2y;
   else if (net.player === 2) net.remotePaddleY = state.p1y;
@@ -369,23 +393,13 @@ function applyServerState(state, serverT, forceSnap = false) {
   ui.p2.textContent = String(state.p2Score);
 
   if (state.ball) {
-    const err = Math.hypot(s.ball.x - state.ball.x, s.ball.y - state.ball.y);
-    const wallBounce =
-      prevVy != null &&
-      state.running &&
-      Math.sign(prevVy) !== Math.sign(state.ball.vy) &&
-      Math.abs(state.ball.vy) > 40;
-    const paddleZone = nearPaddleZone(state.ball.x);
-
-    if (forceSnap || err > 55 || wallBounce || paddleZone) {
+    if (forceSnap || nearPaddleZone(state.ball.x)) {
       s.ball.x = state.ball.x;
       s.ball.y = state.ball.y;
-    } else if (err > 5) {
-      s.ball.x += (state.ball.x - s.ball.x) * 0.7;
-      s.ball.y += (state.ball.y - s.ball.y) * 0.7;
+      s.ball.vx = state.ball.vx;
+      s.ball.vy = state.ball.vy;
+      net.snapPrev = null;
     }
-    s.ball.vx = state.ball.vx;
-    s.ball.vy = state.ball.vy;
   }
 
   if (state.gameOver && state.winner) {
@@ -406,27 +420,16 @@ function updateOnline(dt) {
 
   if (net.remotePaddleY != null) {
     const remote = net.player === 1 ? s.p2 : s.p1;
-    remote.y += (net.remotePaddleY - remote.y) * Math.min(1, dt * 20);
+    remote.y += (net.remotePaddleY - remote.y) * Math.min(1, dt * 24);
   }
 
   if (s.running && net.snap?.ball) {
-    const age = Math.min(0.05, (Date.now() - net.snapAt) / 1000);
-    const predicted = predictBallOnline(net.snap.ball, age);
-    const paddleZone = nearPaddleZone(net.snap.ball.x);
-
-    s.ball.y = predicted.y;
-    s.ball.vy = predicted.vy;
-    if (paddleZone) {
-      s.ball.x = net.snap.ball.x + net.snap.ball.vx * Math.min(age, 0.018);
-    } else {
-      s.ball.x = predicted.x;
-    }
-    s.ball.vx = net.snap.ball.vx;
+    renderInterpolatedBall();
   }
 
   const normY = normalizedMouseY();
   const now = performance.now();
-  if (now - net.lastPaddleSend > 33 || Math.abs(normY - net.lastPaddleSentY) > 0.008) {
+  if (now - net.lastPaddleSend > 50 || Math.abs(normY - net.lastPaddleSentY) > 0.01) {
     sendWs({ type: "paddle", y: normY });
     net.lastPaddleSend = now;
     net.lastPaddleSentY = normY;
@@ -529,7 +532,9 @@ function closeWs() {
   net.player = 0;
   net.code = "";
   net.snap = null;
+  net.snapPrev = null;
   net.snapAt = 0;
+  net.snapPrevAt = 0;
   net.remotePaddleY = null;
 }
 
@@ -601,14 +606,30 @@ function handleWsMessage(msg) {
     return;
   }
 
+  if (msg.type === "p" && typeof msg.y === "number") {
+    const centerY = table.y + clamp(msg.y, 0, 1) * table.h;
+    net.remotePaddleY = clamp(centerY - paddle.h / 2, table.y + 6, table.y + table.h - paddle.h - 6);
+    return;
+  }
+
   if (msg.type === "opponentPaddle" && typeof msg.y === "number") {
     const centerY = table.y + clamp(msg.y, 0, 1) * table.h;
     net.remotePaddleY = clamp(centerY - paddle.h / 2, table.y + 6, table.y + table.h - paddle.h - 6);
     return;
   }
 
+  if (msg.type === "s" && msg.d) {
+    const state = expandState(msg.d);
+    applyServerState(state, state.t, msg.h === 1);
+    if (msg.h === 1) playPaddleHit();
+    if (msg.g === 1) scoreFx("p1");
+    if (msg.g === 2) scoreFx("p2");
+    return;
+  }
+
   if (msg.type === "state") {
-    applyServerState(msg.state, msg.state.t, !!msg.hit);
+    const state = expandState(msg.state) || msg.state;
+    applyServerState(state, state.t, !!msg.hit);
     if (msg.hit) playPaddleHit();
     if (msg.scored) scoreFx(msg.scored);
     return;

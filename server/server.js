@@ -8,6 +8,8 @@ const ROOT = [path.join(__dirname, "public"), path.join(__dirname, "..")].find((
   fs.existsSync(path.join(dir, "index.html"))
 ) || path.join(__dirname, "public");
 const SCORE_LIMIT = 5;
+const TICK_RATE = 60;
+const BROADCAST_RATE = 20;
 
 const GAME = {
   W: 900,
@@ -95,10 +97,28 @@ function reflectFromPaddle(state, side) {
   return true;
 }
 
+function segmentHitsPaddle(ox, oy, nx, ny, px, py, pw, ph, pad) {
+  const bx = px - pad;
+  const by = py - pad;
+  const bw = pw + pad * 2;
+  const bh = ph + pad * 2;
+  const samples = 6;
+  for (let i = 0; i <= samples; i++) {
+    const t = i / samples;
+    const x = ox + (nx - ox) * t;
+    const y = oy + (ny - oy) * t;
+    if (x >= bx && x <= bx + bw && y >= by && y <= by + bh) return true;
+  }
+  return false;
+}
+
 function tickBall(state, dt) {
   const { table, paddle, ball } = GAME;
   let hit = false;
   let scored = null;
+
+  const ox = state.ball.x;
+  const oy = state.ball.y;
 
   state.ball.x += state.ball.vx * dt;
   state.ball.y += state.ball.vy * dt;
@@ -115,23 +135,11 @@ function tickBall(state, dt) {
 
   const p1x = paddleX(1);
   const p2x = paddleX(2);
-  const pad = 3;
-  const bLeft = state.ball.x - ball.r;
-  const bTop = state.ball.y - ball.r;
-  const bSize = ball.r * 2;
+  const pad = 6;
 
   if (
     state.ball.vx < 0 &&
-    rectsOverlap(
-      bLeft,
-      bTop,
-      bSize,
-      bSize,
-      p1x - pad,
-      state.p1y - pad,
-      paddle.w + pad * 2,
-      paddle.h + pad * 2
-    )
+    segmentHitsPaddle(ox, oy, state.ball.x, state.ball.y, p1x, state.p1y, paddle.w, paddle.h, pad)
   ) {
     state.ball.x = p1x + paddle.w + ball.r;
     hit = reflectFromPaddle(state, 1);
@@ -139,35 +147,22 @@ function tickBall(state, dt) {
 
   if (
     state.ball.vx > 0 &&
-    rectsOverlap(
-      bLeft,
-      bTop,
-      bSize,
-      bSize,
-      p2x - pad,
-      state.p2y - pad,
-      paddle.w + pad * 2,
-      paddle.h + pad * 2
-    )
+    segmentHitsPaddle(ox, oy, state.ball.x, state.ball.y, p2x, state.p2y, paddle.w, paddle.h, pad)
   ) {
     state.ball.x = p2x - ball.r;
     hit = reflectFromPaddle(state, 2);
   }
 
-  if (state.ball.x < table.x - 40) {
-    scored = "p2";
-  } else if (state.ball.x > table.x + table.w + 40) {
-    scored = "p1";
-  }
+  if (state.ball.x < table.x - 40) scored = "p2";
+  else if (state.ball.x > table.x + table.w + 40) scored = "p1";
 
   return { hit, scored };
 }
 
-function tickRoom(room, dt) {
-  const state = room.state;
+function tickRoom(state, dt) {
   if (state.gameOver || !state.running) return { hit: false, scored: null };
 
-  const steps = 4;
+  const steps = 8;
   const subDt = dt / steps;
   let hit = false;
   let scored = null;
@@ -198,18 +193,25 @@ function tickRoom(room, dt) {
   return { hit, scored };
 }
 
-function publicState(state) {
+function compactState(state) {
+  const b = state.ball;
   return {
     t: Date.now(),
-    p1y: state.p1y,
-    p2y: state.p2y,
-    ball: { ...state.ball },
-    p1Score: state.p1Score,
-    p2Score: state.p2Score,
-    running: state.running,
-    gameOver: state.gameOver,
-    winner: state.winner,
+    y1: Math.round(state.p1y),
+    y2: Math.round(state.p2y),
+    b: [Math.round(b.x), Math.round(b.y), Math.round(b.vx), Math.round(b.vy)],
+    s: [state.p1Score, state.p2Score],
+    r: state.running ? 1 : 0,
+    o: state.gameOver ? (state.winner === "p1" ? 1 : 2) : 0,
   };
+}
+
+function sendState(room, extra = {}) {
+  const payload = { type: "s", d: compactState(room.state), ...extra };
+  const data = JSON.stringify(payload);
+  for (const player of room.players) {
+    if (player && player.readyState === 1) player.send(data);
+  }
 }
 
 function broadcast(room, msg) {
@@ -227,17 +229,43 @@ function roomStatus(room) {
 function startLoop(room) {
   if (room.interval) return;
   room.lastTick = Date.now();
+  room.tickAcc = 0;
+  room.broadcastAcc = 0;
+
   room.interval = setInterval(() => {
     const now = Date.now();
-    const dt = Math.min(0.03, (now - room.lastTick) / 1000);
+    const frameDt = Math.min(0.05, (now - room.lastTick) / 1000);
     room.lastTick = now;
 
-    const result = tickRoom(room, dt);
-    const payload = { type: "state", state: publicState(room.state) };
-    if (result.hit) payload.hit = true;
-    if (result.scored) payload.scored = result.scored;
-    broadcast(room, payload);
-  }, 1000 / 60);
+    let hit = false;
+    let scored = null;
+
+    if (room.state.running && !room.state.gameOver) {
+      room.tickAcc += frameDt;
+      const fixedDt = 1 / TICK_RATE;
+      while (room.tickAcc >= fixedDt) {
+        const result = tickRoom(room.state, fixedDt);
+        room.tickAcc -= fixedDt;
+        if (result.hit) hit = true;
+        if (result.scored) {
+          scored = result.scored;
+          break;
+        }
+      }
+    }
+
+    room.broadcastAcc += frameDt;
+    const shouldBroadcast =
+      hit || scored || room.broadcastAcc >= 1 / BROADCAST_RATE || !room.state.running;
+
+    if (shouldBroadcast) {
+      const extra = {};
+      if (hit) extra.h = 1;
+      if (scored) extra.g = scored === "p1" ? 1 : 2;
+      sendState(room, extra);
+      room.broadcastAcc = 0;
+    }
+  }, 1000 / TICK_RATE);
 }
 
 function stopLoop(room) {
@@ -322,7 +350,15 @@ wss.on("connection", (ws) => {
 
     if (msg.type === "create") {
       const code = makeCode();
-      const room = { code, players: [null, null], state: createState(), interval: null, lastTick: Date.now() };
+      const room = {
+        code,
+        players: [null, null],
+        state: createState(),
+        interval: null,
+        lastTick: Date.now(),
+        tickAcc: 0,
+        broadcastAcc: 0,
+      };
       rooms.set(code, room);
       attachPlayer(room, ws, 0);
       ws.send(JSON.stringify({ type: "roomCreated", code, player: 1 }));
@@ -348,7 +384,7 @@ wss.on("connection", (ws) => {
       if (room.players[0] && room.players[1]) {
         resetBall(room.state, true);
         broadcast(room, { type: "matchReady" });
-        broadcast(room, { type: "state", state: publicState(room.state) });
+        sendState(room);
         startLoop(room);
       }
       return;
@@ -361,28 +397,21 @@ wss.on("connection", (ws) => {
       setPaddleY(room.state, ws.playerSlot, msg.y);
       const other = room.players[ws.playerSlot === 0 ? 1 : 0];
       if (other && other.readyState === 1) {
-        other.send(
-          JSON.stringify({
-            type: "opponentPaddle",
-            player: ws.playerSlot + 1,
-            y: msg.y,
-            t: Date.now(),
-          })
-        );
+        other.send(JSON.stringify({ type: "p", y: msg.y }));
       }
       return;
     }
 
     if (msg.type === "serve" && !room.state.running && !room.state.gameOver) {
       room.state.running = true;
-      broadcast(room, { type: "state", state: publicState(room.state) });
+      sendState(room);
       return;
     }
 
     if (msg.type === "rematch" && room.state.gameOver) {
       room.state = createState();
       resetBall(room.state, true);
-      broadcast(room, { type: "state", state: publicState(room.state) });
+      sendState(room);
       startLoop(room);
     }
   });
