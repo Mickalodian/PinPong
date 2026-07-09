@@ -81,7 +81,45 @@ const net = {
   lastPaddleSentY: -1,
 };
 
-const NET_INTERP_MS = 90;
+const NET_INTERP_MS = 70;
+
+function inCenterCourt(ballX) {
+  const margin = 220;
+  return ballX > table.x + margin && ballX < table.x + table.w - margin;
+}
+
+function nearPaddleZone(ballX) {
+  return ballX < table.x + 200 || ballX > table.x + table.w - 200;
+}
+
+function ballOverlapsRect(x, y, w, h) {
+  const r = ballCfg.r;
+  const cx = s.ball.x;
+  const cy = s.ball.y;
+  const closestX = clamp(cx, x, x + w);
+  const closestY = clamp(cy, y, y + h);
+  return Math.hypot(cx - closestX, cy - closestY) <= r + 1;
+}
+
+function clampVisualBallAtPaddles() {
+  if (!net.snap?.ball) return;
+
+  const serverVx = net.snap.ball.vx;
+
+  if (net.player === 1 && s.ball.vx > 0 && serverVx > 0) {
+    const py = net.remotePaddleY ?? s.p2.y;
+    const face = s.p2.x - ballCfg.r;
+    if (s.ball.x > face && ballOverlapsRect(s.p2.x, py, paddle.w, paddle.h)) {
+      s.ball.x = face;
+    }
+  } else if (net.player === 2 && s.ball.vx < 0 && serverVx < 0) {
+    const py = net.remotePaddleY ?? s.p1.y;
+    const face = s.p1.x + paddle.w + ballCfg.r;
+    if (s.ball.x < face && ballOverlapsRect(s.p1.x, py, paddle.w, paddle.h)) {
+      s.ball.x = face;
+    }
+  }
+}
 
 function expandState(d) {
   if (!d) return null;
@@ -343,10 +381,6 @@ function myPaddleY() {
   return clamp(s.mouseY - paddle.h / 2, table.y + 6, table.y + table.h - paddle.h - 6);
 }
 
-function nearPaddleZone(ballX) {
-  return ballX < table.x + 150 || ballX > table.x + table.w - 150;
-}
-
 function pushSnapshot(state, serverT) {
   if (net.snap) {
     net.snapPrev = net.snap;
@@ -358,6 +392,14 @@ function pushSnapshot(state, serverT) {
 
 function renderInterpolatedBall() {
   if (!net.snap?.ball) return;
+
+  if (!inCenterCourt(net.snap.ball.x)) {
+    s.ball.x = net.snap.ball.x;
+    s.ball.y = net.snap.ball.y;
+    s.ball.vx = net.snap.ball.vx;
+    s.ball.vy = net.snap.ball.vy;
+    return;
+  }
 
   const now = Date.now();
   const renderT = now - NET_INTERP_MS;
@@ -383,8 +425,13 @@ function applyServerState(state, serverT, forceSnap = false) {
   }
   pushSnapshot(state, serverT);
 
-  if (net.player === 1) net.remotePaddleY = state.p2y;
-  else if (net.player === 2) net.remotePaddleY = state.p1y;
+  if (net.player === 1) {
+    net.remotePaddleY = state.p2y;
+    s.p2.y = state.p2y;
+  } else if (net.player === 2) {
+    net.remotePaddleY = state.p1y;
+    s.p1.y = state.p1y;
+  }
 
   s.p1.score = state.p1Score;
   s.p2.score = state.p2Score;
@@ -393,11 +440,11 @@ function applyServerState(state, serverT, forceSnap = false) {
   ui.p2.textContent = String(state.p2Score);
 
   if (state.ball) {
-    if (forceSnap || nearPaddleZone(state.ball.x)) {
-      s.ball.x = state.ball.x;
-      s.ball.y = state.ball.y;
-      s.ball.vx = state.ball.vx;
-      s.ball.vy = state.ball.vy;
+    s.ball.x = state.ball.x;
+    s.ball.y = state.ball.y;
+    s.ball.vx = state.ball.vx;
+    s.ball.vy = state.ball.vy;
+    if (forceSnap || !inCenterCourt(state.ball.x)) {
       net.snapPrev = null;
     }
   }
@@ -420,16 +467,24 @@ function updateOnline(dt) {
 
   if (net.remotePaddleY != null) {
     const remote = net.player === 1 ? s.p2 : s.p1;
-    remote.y += (net.remotePaddleY - remote.y) * Math.min(1, dt * 24);
+    const ballNear = net.snap?.ball && nearPaddleZone(net.snap.ball.x);
+    if (ballNear) {
+      remote.y = net.remotePaddleY;
+    } else {
+      remote.y += (net.remotePaddleY - remote.y) * Math.min(1, dt * 24);
+    }
   }
 
   if (s.running && net.snap?.ball) {
     renderInterpolatedBall();
+    clampVisualBallAtPaddles();
   }
 
   const normY = normalizedMouseY();
   const now = performance.now();
-  if (now - net.lastPaddleSend > 50 || Math.abs(normY - net.lastPaddleSentY) > 0.01) {
+  const ballNear = net.snap?.ball && nearPaddleZone(net.snap.ball.x);
+  const paddleInterval = ballNear ? 33 : 50;
+  if (now - net.lastPaddleSend > paddleInterval || Math.abs(normY - net.lastPaddleSentY) > 0.008) {
     sendWs({ type: "paddle", y: normY });
     net.lastPaddleSend = now;
     net.lastPaddleSentY = normY;
@@ -608,13 +663,23 @@ function handleWsMessage(msg) {
 
   if (msg.type === "p" && typeof msg.y === "number") {
     const centerY = table.y + clamp(msg.y, 0, 1) * table.h;
-    net.remotePaddleY = clamp(centerY - paddle.h / 2, table.y + 6, table.y + table.h - paddle.h - 6);
+    const y = clamp(centerY - paddle.h / 2, table.y + 6, table.y + table.h - paddle.h - 6);
+    net.remotePaddleY = y;
+    if (net.snap?.ball && nearPaddleZone(net.snap.ball.x)) {
+      const remote = net.player === 1 ? s.p2 : s.p1;
+      remote.y = y;
+    }
     return;
   }
 
   if (msg.type === "opponentPaddle" && typeof msg.y === "number") {
     const centerY = table.y + clamp(msg.y, 0, 1) * table.h;
-    net.remotePaddleY = clamp(centerY - paddle.h / 2, table.y + 6, table.y + table.h - paddle.h - 6);
+    const y = clamp(centerY - paddle.h / 2, table.y + 6, table.y + table.h - paddle.h - 6);
+    net.remotePaddleY = y;
+    if (net.snap?.ball && nearPaddleZone(net.snap.ball.x)) {
+      const remote = net.player === 1 ? s.p2 : s.p1;
+      remote.y = y;
+    }
     return;
   }
 

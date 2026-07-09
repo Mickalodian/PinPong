@@ -97,23 +97,80 @@ function reflectFromPaddle(state, side) {
   return true;
 }
 
-function segmentHitsPaddle(ox, oy, nx, ny, px, py, pw, ph, pad) {
-  const bx = px - pad;
-  const by = py - pad;
-  const bw = pw + pad * 2;
-  const bh = ph + pad * 2;
-  const samples = 6;
+function segmentHitsPaddle(ox, oy, nx, ny, px, py, pw, ph, extraPad) {
+  const { ball } = GAME;
+  const pad = extraPad + ball.r;
+  const rx = px - pad;
+  const ry = py - pad;
+  const rw = pw + pad * 2;
+  const rh = ph + pad * 2;
+  const dist = Math.hypot(nx - ox, ny - oy);
+  const samples = Math.max(10, Math.ceil(dist / 3));
   for (let i = 0; i <= samples; i++) {
     const t = i / samples;
-    const x = ox + (nx - ox) * t;
-    const y = oy + (ny - oy) * t;
-    if (x >= bx && x <= bx + bw && y >= by && y <= by + bh) return true;
+    const cx = ox + (nx - ox) * t;
+    const cy = oy + (ny - oy) * t;
+    if (cx >= rx && cx <= rx + rw && cy >= ry && cy <= ry + rh) return true;
+  }
+  return false;
+}
+
+function tryPaddleHit(state, side, ox, oy, nx, ny) {
+  const { paddle, ball } = GAME;
+  const px = paddleX(side);
+  const baseY = side === 1 ? state.p1y : state.p2y;
+  const yOffsets = [0, -25, 25, -50, 50, -70, 70];
+  const pad = 12;
+
+  for (const off of yOffsets) {
+    const py = baseY + off;
+    const movingToward =
+      (side === 1 && state.ball.vx < 0) || (side === 2 && state.ball.vx > 0);
+    if (!movingToward) continue;
+    if (!segmentHitsPaddle(ox, oy, nx, ny, px, py, paddle.w, paddle.h, pad)) continue;
+
+    if (side === 1) state.ball.x = px + paddle.w + ball.r;
+    else state.ball.x = px - ball.r;
+    reflectFromPaddle(state, side);
+    return true;
+  }
+  return false;
+}
+
+function overlapPaddleHit(state, side) {
+  const { paddle, ball } = GAME;
+  const px = paddleX(side);
+  const baseY = side === 1 ? state.p1y : state.p2y;
+  const yOffsets = [0, -25, 25, -50, 50, -70, 70];
+  const pad = 12;
+
+  for (const off of yOffsets) {
+    const py = baseY + off;
+    const movingToward =
+      (side === 1 && state.ball.vx < 0) || (side === 2 && state.ball.vx > 0);
+    if (!movingToward) continue;
+
+    const rx = px - pad;
+    const ry = py - pad;
+    const rw = paddle.w + pad * 2;
+    const rh = paddle.h + pad * 2;
+    if (
+      state.ball.x + ball.r > rx &&
+      state.ball.x - ball.r < rx + rw &&
+      state.ball.y + ball.r > ry &&
+      state.ball.y - ball.r < ry + rh
+    ) {
+      if (side === 1) state.ball.x = px + paddle.w + ball.r;
+      else state.ball.x = px - ball.r;
+      reflectFromPaddle(state, side);
+      return true;
+    }
   }
   return false;
 }
 
 function tickBall(state, dt) {
-  const { table, paddle, ball } = GAME;
+  const { table, ball } = GAME;
   let hit = false;
   let scored = null;
 
@@ -133,25 +190,10 @@ function tickBall(state, dt) {
     state.ball.vy *= -1;
   }
 
-  const p1x = paddleX(1);
-  const p2x = paddleX(2);
-  const pad = 6;
-
-  if (
-    state.ball.vx < 0 &&
-    segmentHitsPaddle(ox, oy, state.ball.x, state.ball.y, p1x, state.p1y, paddle.w, paddle.h, pad)
-  ) {
-    state.ball.x = p1x + paddle.w + ball.r;
-    hit = reflectFromPaddle(state, 1);
-  }
-
-  if (
-    state.ball.vx > 0 &&
-    segmentHitsPaddle(ox, oy, state.ball.x, state.ball.y, p2x, state.p2y, paddle.w, paddle.h, pad)
-  ) {
-    state.ball.x = p2x - ball.r;
-    hit = reflectFromPaddle(state, 2);
-  }
+  if (tryPaddleHit(state, 1, ox, oy, state.ball.x, state.ball.y)) hit = true;
+  else if (tryPaddleHit(state, 2, ox, oy, state.ball.x, state.ball.y)) hit = true;
+  else if (overlapPaddleHit(state, 1)) hit = true;
+  else if (overlapPaddleHit(state, 2)) hit = true;
 
   if (state.ball.x < table.x - 40) scored = "p2";
   else if (state.ball.x > table.x + table.w + 40) scored = "p1";
@@ -162,7 +204,8 @@ function tickBall(state, dt) {
 function tickRoom(state, dt) {
   if (state.gameOver || !state.running) return { hit: false, scored: null };
 
-  const steps = 8;
+  const speed = Math.hypot(state.ball.vx, state.ball.vy);
+  const steps = speed > 700 ? 16 : speed > 500 ? 12 : 8;
   const subDt = dt / steps;
   let hit = false;
   let scored = null;
@@ -255,8 +298,16 @@ function startLoop(room) {
     }
 
     room.broadcastAcc += frameDt;
+    const ball = room.state.ball;
+    const nearPaddle =
+      room.state.running &&
+      (ball.x < GAME.table.x + 160 || ball.x > GAME.table.x + GAME.table.w - 160);
     const shouldBroadcast =
-      hit || scored || room.broadcastAcc >= 1 / BROADCAST_RATE || !room.state.running;
+      hit ||
+      scored ||
+      nearPaddle ||
+      room.broadcastAcc >= 1 / BROADCAST_RATE ||
+      !room.state.running;
 
     if (shouldBroadcast) {
       const extra = {};
