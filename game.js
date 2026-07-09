@@ -639,32 +639,24 @@ function nearPaddleZone(ballX) {
   return ballX < table.x + 200 || ballX > table.x + table.w - 200;
 }
 
-function ballOverlapsRect(x, y, w, h) {
+function ballOverlapsPaddleRect(bx, by, px, py, pw, ph) {
+  const edgePad = 4;
   const r = ballCfg.r;
-  const cx = s.ball.x;
-  const cy = s.ball.y;
-  const closestX = clamp(cx, x, x + w);
-  const closestY = clamp(cy, y, y + h);
-  return Math.hypot(cx - closestX, cy - closestY) <= r + 1;
+  return (
+    bx + r > px &&
+    bx - r < px + pw &&
+    by + r > py - edgePad &&
+    by - r < py + ph + edgePad
+  );
 }
 
 function clampVisualBallAtPaddles() {
   if (!net.snap?.ball) return;
-
-  const serverVx = net.snap.ball.vx;
-
-  if (net.player === 1 && s.ball.vx > 0 && serverVx > 0) {
-    const py = net.remotePaddleY ?? s.p2.y;
-    const face = s.p2.x - ballCfg.r;
-    if (s.ball.x > face && ballOverlapsRect(s.p2.x, py, paddle.w, paddle.h)) {
-      s.ball.x = face;
-    }
-  } else if (net.player === 2 && s.ball.vx < 0 && serverVx < 0) {
-    const py = net.remotePaddleY ?? s.p1.y;
-    const face = s.p1.x + paddle.w + ballCfg.r;
-    if (s.ball.x < face && ballOverlapsRect(s.p1.x, py, paddle.w, paddle.h)) {
-      s.ball.x = face;
-    }
+  if (nearPaddleZone(net.snap.ball.x)) {
+    s.ball.x = net.snap.ball.x;
+    s.ball.y = net.snap.ball.y;
+    s.ball.vx = net.snap.ball.vx;
+    s.ball.vy = net.snap.ball.vy;
   }
 }
 
@@ -933,9 +925,10 @@ function rectsOverlap(ax, ay, aw, ah, bx, by, bw, bh) {
   return ax < bx + bw && ax + aw > bx && ay < by + bh && ay + ah > by;
 }
 
-function reflectFromPaddle(p) {
-  const mid = p.y + paddle.h / 2;
-  const t = clamp((s.ball.y - mid) / (paddle.h / 2), -1, 1);
+function reflectFromPaddle(p, side) {
+  const h = effectivePaddleH(side);
+  const mid = p.y + h / 2;
+  const t = clamp((s.ball.y - mid) / (h / 2), -1, 1);
   const speed = clamp(
     Math.hypot(s.ball.vx, s.ball.vy) * 1.05,
     ballCfg.speed0,
@@ -943,10 +936,22 @@ function reflectFromPaddle(p) {
   );
   const maxBounce = 0.42 * Math.PI;
   const a = t * maxBounce;
-  const dir = p === s.p1 ? 1 : -1;
+  const dir = side === "p1" ? 1 : -1;
   s.ball.vx = Math.cos(a) * speed * dir;
   s.ball.vy = Math.sin(a) * speed;
   playPaddleHit();
+}
+
+function tryLocalPaddleHit(p, side) {
+  const h = effectivePaddleH(side);
+  const movingToward =
+    (side === "p1" && s.ball.vx < 0) || (side === "p2" && s.ball.vx > 0);
+  if (!movingToward) return false;
+  if (!ballOverlapsPaddleRect(s.ball.x, s.ball.y, p.x, p.y, paddle.w, h)) return false;
+  if (side === "p1") s.ball.x = p.x + paddle.w + ballCfg.r;
+  else s.ball.x = p.x - ballCfg.r;
+  reflectFromPaddle(p, side);
+  return true;
 }
 
 function updateLocal(dt) {
@@ -985,25 +990,8 @@ function updateLocal(dt) {
     s.ball.vy *= -1;
   }
 
-  const bLeft = s.ball.x - ballCfg.r;
-  const bTop = s.ball.y - ballCfg.r;
-  const bSize = ballCfg.r * 2;
-
-  if (
-    s.ball.vx < 0 &&
-    rectsOverlap(bLeft, bTop, bSize, bSize, s.p1.x, s.p1.y, paddle.w, paddle.h)
-  ) {
-    s.ball.x = s.p1.x + paddle.w + ballCfg.r;
-    reflectFromPaddle(s.p1);
-  }
-
-  if (
-    s.ball.vx > 0 &&
-    rectsOverlap(bLeft, bTop, bSize, bSize, s.p2.x, s.p2.y, paddle.w, paddle.h)
-  ) {
-    s.ball.x = s.p2.x - ballCfg.r;
-    reflectFromPaddle(s.p2);
-  }
+  tryLocalPaddleHit(s.p1, "p1");
+  tryLocalPaddleHit(s.p2, "p2");
 
   if (s.ball.x < table.x - 40) {
     s.p2.score += 1;
@@ -1063,9 +1051,11 @@ function renderInterpolatedBall() {
   s.ball.vx = net.snap.ball.vx;
   s.ball.vy = net.snap.ball.vy;
 
-  const extrap = clamp((Date.now() - net.snapAt) / 1000, 0, NET_EXTRAP_MAX);
-  s.ball.x += s.ball.vx * extrap * 0.35;
-  s.ball.y += s.ball.vy * extrap * 0.35;
+  if (!nearPaddleZone(s.ball.x)) {
+    const extrap = clamp((Date.now() - net.snapAt) / 1000, 0, NET_EXTRAP_MAX);
+    s.ball.x += s.ball.vx * extrap * 0.35;
+    s.ball.y += s.ball.vy * extrap * 0.35;
+  }
 }
 
 function applyServerState(state, serverT, forceSnap = false) {
@@ -1116,12 +1106,7 @@ function updateOnline(dt) {
 
   if (net.remotePaddleY != null) {
     const remote = net.player === 1 ? s.p2 : s.p1;
-    const ballNear = net.snap?.ball && nearPaddleZone(net.snap.ball.x);
-    if (ballNear) {
-      remote.y = net.remotePaddleY;
-    } else {
-      remote.y += (net.remotePaddleY - remote.y) * Math.min(1, dt * 18);
-    }
+    remote.y = net.remotePaddleY;
   }
 
   if (s.running && net.snap?.ball) {

@@ -253,76 +253,70 @@ function reflectFromPaddle(state, side) {
   return true;
 }
 
-function segmentHitsPaddle(ox, oy, nx, ny, px, py, pw, ph, extraPad) {
+function segmentHitsPaddle(ox, oy, nx, ny, px, py, pw, ph) {
   const { ball } = GAME;
-  const pad = extraPad + ball.r;
-  const rx = px - pad;
-  const ry = py - pad;
-  const rw = pw + pad * 2;
-  const rh = ph + pad * 2;
+  const edgePad = 4;
+  const r = ball.r;
   const dist = Math.hypot(nx - ox, ny - oy);
   const samples = Math.max(10, Math.ceil(dist / 3));
   for (let i = 0; i <= samples; i++) {
     const t = i / samples;
     const cx = ox + (nx - ox) * t;
     const cy = oy + (ny - oy) * t;
-    if (cx >= rx && cx <= rx + rw && cy >= ry && cy <= ry + rh) return true;
-  }
-  return false;
-}
-
-function tryPaddleHit(state, side, ox, oy, nx, ny) {
-  const { paddle, ball } = GAME;
-  const px = paddleX(side);
-  const baseY = side === 1 ? state.p1y : state.p2y;
-  const yOffsets = [0, -25, 25, -50, 50, -70, 70];
-  const pad = 12;
-
-  for (const off of yOffsets) {
-    const py = baseY + off;
-    const movingToward =
-      (side === 1 && state.ball.vx < 0) || (side === 2 && state.ball.vx > 0);
-    if (!movingToward) continue;
-    if (!segmentHitsPaddle(ox, oy, nx, ny, px, py, paddle.w, paddle.h, pad)) continue;
-
-    if (side === 1) state.ball.x = px + paddle.w + ball.r;
-    else state.ball.x = px - ball.r;
-    reflectFromPaddle(state, side);
-    return true;
-  }
-  return false;
-}
-
-function overlapPaddleHit(state, side) {
-  const { paddle, ball } = GAME;
-  const px = paddleX(side);
-  const baseY = side === 1 ? state.p1y : state.p2y;
-  const yOffsets = [0, -25, 25, -50, 50, -70, 70];
-  const pad = 12;
-
-  for (const off of yOffsets) {
-    const py = baseY + off;
-    const movingToward =
-      (side === 1 && state.ball.vx < 0) || (side === 2 && state.ball.vx > 0);
-    if (!movingToward) continue;
-
-    const rx = px - pad;
-    const ry = py - pad;
-    const rw = paddle.w + pad * 2;
-    const rh = paddle.h + pad * 2;
     if (
-      state.ball.x + ball.r > rx &&
-      state.ball.x - ball.r < rx + rw &&
-      state.ball.y + ball.r > ry &&
-      state.ball.y - ball.r < ry + rh
+      cx + r > px &&
+      cx - r < px + pw &&
+      cy + r > py - edgePad &&
+      cy - r < py + ph + edgePad
     ) {
-      if (side === 1) state.ball.x = px + paddle.w + ball.r;
-      else state.ball.x = px - ball.r;
-      reflectFromPaddle(state, side);
       return true;
     }
   }
   return false;
+}
+
+function ballOverlapsPaddle(bx, by, px, py, pw, ph) {
+  const { ball } = GAME;
+  const edgePad = 4;
+  const r = ball.r;
+  return (
+    bx + r > px &&
+    bx - r < px + pw &&
+    by + r > py - edgePad &&
+    by - r < py + ph + edgePad
+  );
+}
+
+function resolvePaddleHit(state, side) {
+  const { paddle, ball } = GAME;
+  const px = paddleX(side);
+  if (side === 1) state.ball.x = px + paddle.w + ball.r;
+  else state.ball.x = px - ball.r;
+  reflectFromPaddle(state, side);
+}
+
+function tryPaddleHit(state, side, ox, oy, nx, ny) {
+  const { paddle } = GAME;
+  const movingToward =
+    (side === 1 && state.ball.vx < 0) || (side === 2 && state.ball.vx > 0);
+  if (!movingToward) return false;
+  const px = paddleX(side);
+  const py = side === 1 ? state.p1y : state.p2y;
+  if (!segmentHitsPaddle(ox, oy, nx, ny, px, py, paddle.w, paddle.h)) return false;
+  resolvePaddleHit(state, side);
+  return true;
+}
+
+function overlapPaddleHit(state, side) {
+  const { paddle } = GAME;
+  const movingToward =
+    (side === 1 && state.ball.vx < 0) || (side === 2 && state.ball.vx > 0);
+  if (!movingToward) return false;
+  const px = paddleX(side);
+  const py = side === 1 ? state.p1y : state.p2y;
+  if (!ballOverlapsPaddle(state.ball.x, state.ball.y, px, py, paddle.w, paddle.h)) return false;
+  resolvePaddleHit(state, side);
+  return true;
 }
 
 function tickBall(state, dt) {
