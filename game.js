@@ -1414,6 +1414,16 @@ function handleWsMessage(msg) {
   }
 
   if (msg.type === "matchReady") {
+    // #region agent log
+    dbgClient("H14", "game.js:matchReady", "table alignment check", {
+      clientTableW: table.w,
+      clientP1x: s.p1.x,
+      clientP2x: s.p2.x,
+      clientP2Face: paddleFaceX("p2", s.p2.x),
+      player: net.player,
+      runId: "post-fix",
+    });
+    // #endregion
     stopSearchUI();
     hideOverlay(ui.lobbyOverlay);
     s.gameOver = false;

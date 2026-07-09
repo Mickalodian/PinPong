@@ -27,7 +27,7 @@ function dbgServer(hypothesisId, location, message, data) {
   try {
     fs.appendFileSync(
       DEBUG_LOG,
-      `${JSON.stringify({ sessionId: "e4bbdd", hypothesisId, location, message, data, timestamp: Date.now() })}\n`
+      `${JSON.stringify({ sessionId: "e4bbdd", hypothesisId, location, message, data, timestamp: Date.now(), runId: data?.runId || "pre-fix" })}\n`
     );
   } catch {
     /* ignore */
@@ -35,10 +35,23 @@ function dbgServer(hypothesisId, location, message, data) {
   // #endregion
 }
 
+function logTableAlignment() {
+  const px2 = paddleX(2);
+  // #region agent log
+  dbgServer("H14", "server.js:GAME", "table alignment check", {
+    serverTableW: GAME.table.w,
+    serverP1x: paddleX(1),
+    serverP2x: px2,
+    serverP2Face: px2 - GAME.ball.r,
+    runId: "post-fix",
+  });
+  // #endregion
+}
+
 const GAME = {
   W: 900,
   H: 520,
-  table: { x: 38, y: 26, w: 788, h: 468 },
+  table: { x: 38, y: 26, w: 900 - 76, h: 520 - 52 },
   paddle: { w: 14, h: 110, inset: 18 },
   ball: { r: 8, speed0: 430, speedMax: 1000 },
 };
@@ -809,5 +822,6 @@ wss.on("connection", (ws) => {
 });
 
 server.listen(PORT, "0.0.0.0", () => {
+  logTableAlignment();
   console.log(`Pong server running on port ${PORT}`);
 });
