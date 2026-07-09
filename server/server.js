@@ -56,6 +56,7 @@ function defaultProfile() {
     maxBotCleared: 0,
     owned: { paddle: ["white"], table: ["classic"] },
     equipped: { paddle: "white", table: "classic" },
+    redeemedCodes: [],
   };
 }
 
@@ -96,6 +97,12 @@ function mergeProfileRecord(existing, incoming, { force = false } = {}) {
       paddle: String(p.equipped?.paddle || prev.equipped?.paddle || "white"),
       table: String(p.equipped?.table || prev.equipped?.table || "classic"),
     },
+    redeemedCodes: [
+      ...new Set([
+        ...(Array.isArray(prev.redeemedCodes) ? prev.redeemedCodes.map(String) : []),
+        ...(Array.isArray(p.redeemedCodes) ? p.redeemedCodes.map(String) : []),
+      ]),
+    ],
     updatedAt: Date.now(),
   };
 }
@@ -112,13 +119,13 @@ const VALID_PADDLE = new Set([
   "white", "blue", "pink", "orange", "red", "green", "yellow", "purple", "cyan",
   "galaxy", "moon", "sunset", "neon", "lava", "ice", "rainbow", "aurora",
   "nebula", "interstellar", "voidpulse", "solarflare", "plasma", "quantum", "darkmatter", "hypernova",
-  "rosegold",
+  "rosegold", "heartbloom",
 ]);
 const VALID_TABLE = new Set([
   "classic", "blue", "pink", "orange", "red", "green", "yellow", "purple", "cyan",
   "galaxy", "moon", "sunset", "neon", "lava", "ice", "rainbow", "aurora",
   "nebula", "interstellar", "voidpulse", "solarflare", "plasma", "quantum", "darkmatter", "hypernova",
-  "rosegold",
+  "rosegold", "heartbloom",
 ]);
 
 function sanitizeCosmetics(cos) {

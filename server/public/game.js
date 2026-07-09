@@ -57,6 +57,15 @@ const SHOP = {
       legendary: true,
       requireLevel: 20,
     },
+    {
+      id: "heartbloom",
+      name: "Heart Bloom",
+      price: 0,
+      style: "heartbloom",
+      secret: true,
+      hidden: true,
+      codeOnly: true,
+    },
   ],
   table: [
     { id: "classic", name: "Classic", price: 0, style: "solid", color: "#000000" },
@@ -92,7 +101,27 @@ const SHOP = {
       legendary: true,
       requireLevel: 20,
     },
+    {
+      id: "heartbloom",
+      name: "Heart Bloom",
+      price: 0,
+      style: "heartbloom",
+      secret: true,
+      hidden: true,
+      codeOnly: true,
+    },
   ],
+};
+
+const REDEEM_CODES = {
+  "6767": {
+    id: "6767",
+    label: "Heart Bloom",
+    rewards: [
+      { type: "cosmetic", kind: "paddle", id: "heartbloom" },
+      { type: "cosmetic", kind: "table", id: "heartbloom" },
+    ],
+  },
 };
 
 const save = {
@@ -101,6 +130,7 @@ const save = {
   maxBotCleared: 0,
   owned: { paddle: ["white"], table: ["classic"] },
   equipped: { paddle: "white", table: "classic" },
+  redeemedCodes: [],
   shopTab: "paddle",
   abilities: { megaPaddle: false, freeShop: false, slowBot: false, bonusPts: false },
 };
@@ -188,6 +218,10 @@ function applyProfile(data, { replace = false } = {}) {
 
   if (data.equipped?.paddle) save.equipped.paddle = String(data.equipped.paddle);
   if (data.equipped?.table) save.equipped.table = String(data.equipped.table);
+  if (Array.isArray(data.redeemedCodes)) {
+    const merged = new Set([...(save.redeemedCodes || []), ...data.redeemedCodes.map(String)]);
+    save.redeemedCodes = [...merged];
+  }
   if (!save.owned.paddle.includes("white")) save.owned.paddle.unshift("white");
   if (!save.owned.table.includes("classic")) save.owned.table.unshift("classic");
   sanitizeEquippedCosmetics();
@@ -305,6 +339,7 @@ function profilePayload() {
     maxBotCleared: save.maxBotCleared,
     owned: save.owned,
     equipped: save.equipped,
+    redeemedCodes: Array.isArray(save.redeemedCodes) ? save.redeemedCodes : [],
   };
 }
 
@@ -605,6 +640,14 @@ function applyFillStyle(c, item, x, y, w, h, alpha) {
     safeColorStop(g, 0.72, "#d4a574");
     safeColorStop(g, 0.88, "#c97b84");
     safeColorStop(g, 1, "#8b3a3a");
+  } else if (item.style === "heartbloom") {
+    const ox = Math.sin(t * 0.7) * w * 0.18;
+    g = c.createLinearGradient(x + ox, y, x + w - ox, y + h);
+    safeColorStop(g, 0, "#831843");
+    safeColorStop(g, 0.28, "#db2777");
+    safeColorStop(g, 0.52 + Math.sin(t * 1.4) * 0.05, "#f472b6");
+    safeColorStop(g, 0.78, "#fda4d5");
+    safeColorStop(g, 1, "#9d174d");
   } else {
     c.globalAlpha = alpha;
     c.fillStyle = item.color || "#fff";
@@ -628,8 +671,20 @@ function drawStar(c, cx, cy, spikes, outerR, innerR) {
   c.fill();
 }
 
+function drawHeart(c, cx, cy, size) {
+  c.beginPath();
+  const s = size;
+  c.moveTo(cx, cy + s * 0.35);
+  c.bezierCurveTo(cx, cy, cx - s, cy, cx - s, cy + s * 0.35);
+  c.bezierCurveTo(cx - s, cy + s * 0.75, cx, cy + s * 1.05, cx, cy + s * 1.35);
+  c.bezierCurveTo(cx, cy + s * 1.05, cx + s, cy + s * 0.75, cx + s, cy + s * 0.35);
+  c.bezierCurveTo(cx + s, cy, cx, cy, cx, cy + s * 0.35);
+  c.closePath();
+  c.fill();
+}
+
 function drawEpicOverlay(c, item, x, y, w, h, alpha) {
-  if (!item.epic && !item.legendary) return;
+  if (!item.epic && !item.legendary && !item.secret) return;
   const t = performance.now() * 0.001;
   c.save();
   c.beginPath();
@@ -727,6 +782,28 @@ function drawEpicOverlay(c, item, x, y, w, h, alpha) {
     c.fillRect(x, y, w, h);
   }
 
+  if (item.style === "heartbloom") {
+    const scale = Math.max(0.7, Math.min(2.4, Math.min(w, h) / 28));
+    for (let i = 0; i < 22; i++) {
+      const drift = ((t * (0.14 + (i % 6) * 0.045) + i * 0.11) % 1);
+      const lane = (Math.sin(t * 0.4 + i * 1.7) * 0.5 + 0.5);
+      const hx = x + lane * w;
+      const hy = y + h * (1.2 - drift * 1.45);
+      const sizeTier = i % 5;
+      const base =
+        sizeTier === 0 ? 0.7 :
+        sizeTier === 1 ? 1.2 :
+        sizeTier === 2 ? 2.0 :
+        sizeTier === 3 ? 3.1 :
+        4.4;
+      const size = (base + Math.sin(t * 2.4 + i * 0.9) * 0.35) * scale;
+      const fade = Math.max(0, 1 - Math.abs(drift - 0.5) * 1.55);
+      c.globalAlpha = alpha * (0.22 + fade * 0.7);
+      c.fillStyle = i % 4 === 0 ? "#fff1f8" : i % 4 === 1 ? "#fda4d5" : i % 4 === 2 ? "#fb7185" : "#f9a8d4";
+      drawHeart(c, hx, hy, size);
+    }
+  }
+
   c.restore();
   c.globalAlpha = 1;
 }
@@ -788,7 +865,7 @@ function drawSwatch(item, el) {
     cctx.fillStyle = item.color || "#7c3aed";
     cctx.fillRect(0, 0, c.width, c.height);
   }
-  if (item.epic || item.legendary) {
+  if (item.epic || item.legendary || item.secret) {
     el.dataset.epicStyle = item.style;
     shopAnimSwatches.push(entry);
     if (shopAnimSwatches.length <= 3) {
@@ -858,6 +935,7 @@ function renderShop() {
   let cantAffordEpic = 0;
   for (const item of SHOP[kind]) {
     const owned = save.owned[kind].includes(item.id);
+    if (item.hidden && !owned) continue;
     const equipped = save.equipped[kind] === item.id;
     const unlocked = itemUnlocked(item);
     const btn = document.createElement("button");
@@ -865,12 +943,13 @@ function renderShop() {
     btn.className = "shop-item";
     if (item.epic) btn.classList.add("epic");
     if (item.legendary) btn.classList.add("legendary");
+    if (item.secret) btn.classList.add("secret");
     if (equipped) btn.classList.add("equipped");
     const free = isAdmin() && save.abilities.freeShop;
     const cantAfford = unlocked && !owned && !free && item.price > 0 && save.points < item.price;
     if (!unlocked) btn.classList.add("level-locked");
     else if (cantAfford) btn.classList.add("cant-afford");
-    if (item.epic || item.legendary) {
+    if (item.epic || item.legendary || item.secret) {
       epicCount += 1;
       if (cantAfford || !unlocked) cantAffordEpic += 1;
     }
@@ -878,6 +957,7 @@ function renderShop() {
     swatch.className = "shop-swatch";
     if (item.epic) swatch.classList.add("epic-swatch");
     if (item.legendary) swatch.classList.add("legendary-swatch");
+    if (item.secret) swatch.classList.add("secret-swatch");
     drawSwatch(item, swatch);
     const name = document.createElement("div");
     name.className = "shop-name";
@@ -885,10 +965,16 @@ function renderShop() {
     const price = document.createElement("div");
     price.className = "shop-price";
     if (!unlocked) price.textContent = `LVL ${item.requireLevel}`;
+    else if (item.secret) price.textContent = owned ? "Code unlock" : "Hidden";
     else if (item.price === 0) price.textContent = owned || item.legendary ? "Unlocked" : "Free";
     else price.textContent = `${item.price} pts`;
     btn.append(swatch, name, price);
-    if (item.legendary) {
+    if (item.secret) {
+      const tag = document.createElement("span");
+      tag.className = "shop-secret-tag";
+      tag.textContent = "SECRET";
+      btn.appendChild(tag);
+    } else if (item.legendary) {
       const tag = document.createElement("span");
       tag.className = "shop-legendary-tag";
       tag.textContent = "LEGENDARY";
@@ -1059,9 +1145,11 @@ function adminSetPoints(n) {
 function adminUnlockAll() {
   if (!isAdmin()) return;
   for (const item of SHOP.paddle) {
+    if (item.hidden || item.codeOnly) continue;
     if (!save.owned.paddle.includes(item.id)) save.owned.paddle.push(item.id);
   }
   for (const item of SHOP.table) {
+    if (item.hidden || item.codeOnly) continue;
     if (!save.owned.table.includes(item.id)) save.owned.table.push(item.id);
   }
   persistSave();
@@ -1123,7 +1211,7 @@ function drawTableHalf(side) {
   if (style.id === "classic") return;
   const halfW = table.w / 2;
   const x = side === "p1" ? table.x : table.x + halfW;
-  const alpha = style.legendary ? 0.62 : style.epic ? 0.58 : style.price >= 20 ? 0.5 : 0.38;
+  const alpha = style.legendary || style.secret ? 0.62 : style.epic ? 0.58 : style.price >= 20 ? 0.5 : 0.38;
   drawCosmeticFill(ctx, style, x, table.y, halfW, table.h, alpha);
 }
 
@@ -1415,6 +1503,11 @@ const ui = {
   fullscreenHint: document.getElementById("fullscreenHint"),
   settingsMsg: document.getElementById("settingsMsg"),
   musicTrackGrid: document.getElementById("musicTrackGrid"),
+  btnRedeemCode: document.getElementById("btnRedeemCode"),
+  redeemPanel: document.getElementById("redeemPanel"),
+  redeemInput: document.getElementById("redeemInput"),
+  btnRedeemSubmit: document.getElementById("btnRedeemSubmit"),
+  redeemMsg: document.getElementById("redeemMsg"),
   shopPoints: document.getElementById("shopPoints"),
   shopGrid: document.getElementById("shopGrid"),
   shopMsg: document.getElementById("shopMsg"),
@@ -2168,6 +2261,9 @@ function openSettings() {
 
 function closeSettings() {
   hideOverlay(ui.settingsOverlay);
+  if (ui.redeemPanel) ui.redeemPanel.classList.add("hidden");
+  if (ui.redeemMsg) ui.redeemMsg.textContent = "";
+  if (ui.redeemInput) ui.redeemInput.value = "";
   showOverlay(ui.menuOverlay);
   setStagePlaying(false);
   const inMatch = (s.mode === "local" || s.mode === "online") && !s.gameOver;
@@ -2176,6 +2272,82 @@ function closeSettings() {
     if (!musicPlaying) startGameMusic();
   } else {
     stopGameMusic();
+  }
+}
+
+function normalizeRedeemCode(raw) {
+  return String(raw || "")
+    .trim()
+    .toUpperCase()
+    .replace(/[^A-Z0-9]/g, "");
+}
+
+function grantRedeemReward(reward) {
+  if (!reward) return null;
+  if (reward.type === "cosmetic") {
+    const kind = reward.kind === "table" ? "table" : "paddle";
+    const item = shopItem(kind, reward.id);
+    if (!item || item.id !== reward.id) return null;
+    if (!save.owned[kind].includes(item.id)) save.owned[kind].push(item.id);
+    save.equipped[kind] = item.id;
+    return item.name;
+  }
+  if (reward.type === "ability" && reward.key && Object.prototype.hasOwnProperty.call(save.abilities, reward.key)) {
+    save.abilities[reward.key] = true;
+    persistAbilities();
+    return reward.label || reward.key;
+  }
+  if (reward.type === "points") {
+    const n = Math.max(0, Math.floor(Number(reward.amount) || 0));
+    save.points += n;
+    return `+${n} points`;
+  }
+  return null;
+}
+
+function redeemCode(raw) {
+  const code = normalizeRedeemCode(raw);
+  if (!code) {
+    if (ui.redeemMsg) ui.redeemMsg.textContent = "Enter a code.";
+    return false;
+  }
+  const entry = REDEEM_CODES[code];
+  if (!entry) {
+    if (ui.redeemMsg) ui.redeemMsg.textContent = "Invalid code.";
+    return false;
+  }
+  if (!Array.isArray(save.redeemedCodes)) save.redeemedCodes = [];
+  if (save.redeemedCodes.includes(entry.id)) {
+    if (ui.redeemMsg) ui.redeemMsg.textContent = "Code already redeemed.";
+    return false;
+  }
+  const granted = [];
+  for (const reward of entry.rewards || []) {
+    const label = grantRedeemReward(reward);
+    if (label) granted.push(label);
+  }
+  save.redeemedCodes.push(entry.id);
+  persistSave();
+  updatePointsUI();
+  sanitizeEquippedCosmetics();
+  if (ui.redeemMsg) {
+    ui.redeemMsg.textContent = granted.length
+      ? `Unlocked: ${granted.join(" · ")}`
+      : `Redeemed ${entry.label || entry.id}.`;
+  }
+  if (ui.settingsMsg) ui.settingsMsg.textContent = `Code ${entry.id} redeemed!`;
+  return true;
+}
+
+function toggleRedeemPanel() {
+  if (!ui.redeemPanel) return;
+  const open = ui.redeemPanel.classList.toggle("hidden") === false;
+  if (open) {
+    if (ui.redeemMsg) ui.redeemMsg.textContent = "Enter a redeem code.";
+    if (ui.redeemInput) {
+      ui.redeemInput.value = "";
+      ui.redeemInput.focus();
+    }
   }
 }
 
@@ -3168,6 +3340,18 @@ function bindUi() {
   bind(ui.btnCustomize, () => requireName(openCustomize));
   bind(ui.btnSettings, openSettings);
   bind(ui.btnSettingsBack, closeSettings);
+  bind(ui.btnRedeemCode, toggleRedeemPanel);
+  bind(ui.btnRedeemSubmit, () => {
+    redeemCode(ui.redeemInput?.value);
+  });
+  if (ui.redeemInput) {
+    ui.redeemInput.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") {
+        playMenuClick();
+        redeemCode(ui.redeemInput.value);
+      }
+    });
+  }
   bind(ui.btnFullscreen, () => {
     toggleFullscreenSetting();
   });
