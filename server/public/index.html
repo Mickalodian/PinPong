@@ -98,11 +98,19 @@
         <div class="overlay hidden" id="lobbyOverlay" aria-hidden="true">
           <div class="overlay-card menu-card">
             <div class="overlay-title">ONLINE 1V1</div>
-            <p class="lobby-text">Create a room and share the code, or join a friend's room.</p>
-            <button type="button" class="play-again" id="btnCreateRoom">Create room</button>
-            <div class="join-row">
-              <input id="roomCodeInput" class="room-input" maxlength="4" placeholder="CODE" />
-              <button type="button" class="play-again secondary" id="btnJoinRoom">Join</button>
+            <p class="lobby-text">Create a room, join with a code, or search for an opponent.</p>
+            <div class="lobby-actions" id="lobbyActions">
+              <button type="button" class="play-again" id="btnCreateRoom">Create room</button>
+              <div class="join-row">
+                <input id="roomCodeInput" class="room-input" maxlength="4" placeholder="CODE" />
+                <button type="button" class="play-again secondary" id="btnJoinRoom">Join</button>
+              </div>
+              <button type="button" class="play-again secondary" id="btnSearch">Search</button>
+            </div>
+            <div class="search-panel hidden" id="searchPanel">
+              <p class="search-status" id="lobbySearchStatus">Searching for opponent...</p>
+              <p class="search-timer" id="lobbySearchTimer">0:00</p>
+              <button type="button" class="link-btn" id="btnCancelSearch">Cancel search</button>
             </div>
             <p class="lobby-status" id="lobbyStatus">Not connected</p>
             <button type="button" class="link-btn" id="btnBackMenu">Back</button>

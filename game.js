@@ -485,6 +485,12 @@ const ui = {
   menuOverlay: document.getElementById("menuOverlay"),
   lobbyOverlay: document.getElementById("lobbyOverlay"),
   lobbyStatus: document.getElementById("lobbyStatus"),
+  lobbyActions: document.getElementById("lobbyActions"),
+  searchPanel: document.getElementById("searchPanel"),
+  lobbySearchStatus: document.getElementById("lobbySearchStatus"),
+  lobbySearchTimer: document.getElementById("lobbySearchTimer"),
+  btnSearch: document.getElementById("btnSearch"),
+  btnCancelSearch: document.getElementById("btnCancelSearch"),
   roomCodeInput: document.getElementById("roomCodeInput"),
   gameOver: document.getElementById("gameOver"),
   gameOverTitle: document.getElementById("gameOverTitle"),
@@ -546,7 +552,80 @@ const net = {
   lastPaddleSend: 0,
   lastPaddleSentY: -1,
   opponentCosmetics: null,
+  searching: false,
+  searchStartedAt: 0,
 };
+
+let searchTimerInterval = null;
+
+function formatSearchTime(ms) {
+  const sec = Math.max(0, Math.floor(ms / 1000));
+  const m = Math.floor(sec / 60);
+  const s = sec % 60;
+  return `${m}:${String(s).padStart(2, "0")}`;
+}
+
+function updateSearchTimerDisplay() {
+  if (!ui.lobbySearchTimer || !net.searching) return;
+  ui.lobbySearchTimer.textContent = formatSearchTime(Date.now() - net.searchStartedAt);
+}
+
+function startSearchTimer() {
+  stopSearchTimer();
+  updateSearchTimerDisplay();
+  searchTimerInterval = setInterval(updateSearchTimerDisplay, 250);
+}
+
+function stopSearchTimer() {
+  if (searchTimerInterval) {
+    clearInterval(searchTimerInterval);
+    searchTimerInterval = null;
+  }
+}
+
+function beginSearchUI(startedAt) {
+  net.searching = true;
+  net.searchStartedAt = startedAt || Date.now();
+  ui.lobbyActions?.classList.add("hidden");
+  ui.searchPanel?.classList.remove("hidden");
+  if (ui.lobbySearchStatus) {
+    ui.lobbySearchStatus.textContent = "Searching for opponent...";
+    ui.lobbySearchStatus.classList.remove("match-found");
+  }
+  if (ui.lobbyStatus) ui.lobbyStatus.textContent = "Looking for an active player...";
+  startSearchTimer();
+}
+
+function showMatchFoundUI() {
+  net.searching = false;
+  stopSearchTimer();
+  if (ui.lobbySearchStatus) {
+    ui.lobbySearchStatus.textContent = "MATCH FOUND!";
+    ui.lobbySearchStatus.classList.add("match-found");
+  }
+  updateSearchTimerDisplay();
+  if (ui.lobbyStatus) ui.lobbyStatus.textContent = "Starting match...";
+}
+
+function stopSearchUI() {
+  net.searching = false;
+  net.searchStartedAt = 0;
+  stopSearchTimer();
+  ui.lobbyActions?.classList.remove("hidden");
+  ui.searchPanel?.classList.add("hidden");
+  if (ui.lobbySearchStatus) ui.lobbySearchStatus.classList.remove("match-found");
+  if (ui.lobbySearchTimer) ui.lobbySearchTimer.textContent = "0:00";
+}
+
+function startMatchSearch() {
+  connectWs(() => sendWs({ type: "search" }));
+}
+
+function cancelMatchSearch() {
+  if (net.searching) sendWs({ type: "cancelSearch" });
+  stopSearchUI();
+  if (ui.lobbyStatus) ui.lobbyStatus.textContent = "Create or join a room.";
+}
 
 const NET_INTERP_MS = 58;
 const NET_EXTRAP_MAX = 0.045;
@@ -1155,6 +1234,8 @@ function wsURL() {
 }
 
 function closeWs() {
+  if (net.searching) sendWs({ type: "cancelSearch" });
+  stopSearchUI();
   if (ws) {
     ws.close();
     ws = null;
@@ -1205,6 +1286,7 @@ function connectWs(onOpen) {
   };
   ws.onclose = () => {
     net.connected = false;
+    stopSearchUI();
     if (s.mode === "online" && !s.gameOver) {
       ui.status.textContent = "Disconnected";
     }
@@ -1212,6 +1294,27 @@ function connectWs(onOpen) {
 }
 
 function handleWsMessage(msg) {
+  if (msg.type === "searching") {
+    beginSearchUI(msg.startedAt);
+    return;
+  }
+
+  if (msg.type === "matchFound") {
+    net.code = msg.code;
+    net.player = msg.player;
+    s.mode = "online";
+    setOnlineLabels();
+    sendCosmetics();
+    showMatchFoundUI();
+    return;
+  }
+
+  if (msg.type === "searchCancelled") {
+    stopSearchUI();
+    if (ui.lobbyStatus) ui.lobbyStatus.textContent = "Create or join a room.";
+    return;
+  }
+
   if (msg.type === "roomCreated") {
     net.code = msg.code;
     net.player = msg.player;
@@ -1246,6 +1349,7 @@ function handleWsMessage(msg) {
   }
 
   if (msg.type === "matchReady") {
+    stopSearchUI();
     hideOverlay(ui.lobbyOverlay);
     s.gameOver = false;
     hideOverlay(ui.gameOver);
@@ -1310,6 +1414,7 @@ function handleWsMessage(msg) {
 
   if (msg.type === "opponentLeft") {
     stopGameMusic();
+    stopSearchUI();
     ui.lobbyStatus.textContent = "Opponent left the game.";
     ui.status.textContent = "Opponent left";
     s.running = false;
@@ -1351,7 +1456,8 @@ function openLobby() {
   hideOverlay(ui.gameOver);
   showOverlay(ui.lobbyOverlay);
   setStagePlaying(false);
-  ui.lobbyStatus.textContent = "Create or join a room.";
+  stopSearchUI();
+  ui.lobbyStatus.textContent = "Create a room, join with a code, or search for a match.";
   ui.hint.textContent = "Online 1v1 — share your room code with a friend.";
 }
 
@@ -1460,6 +1566,8 @@ function bindUi() {
   bind(ui.btnBackMenu, backToMenu);
   bind(ui.backToMenu, backToMenu);
   bind(ui.btnCreateRoom, () => connectWs(() => sendWs({ type: "create" })));
+  bind(ui.btnSearch, startMatchSearch);
+  bind(ui.btnCancelSearch, cancelMatchSearch);
   bind(ui.btnJoinRoom, () => {
     const code = ui.roomCodeInput.value.trim().toUpperCase();
     if (code.length !== 4) {

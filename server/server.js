@@ -28,6 +28,7 @@ const MIME = {
 };
 
 const rooms = new Map();
+const matchQueue = [];
 
 const PROFILES_PATH = path.join(__dirname, "profiles.json");
 const ADMIN_CODE = process.env.ADMIN_CODE || "4536";
@@ -419,6 +420,55 @@ function broadcast(room, msg) {
   }
 }
 
+function removeFromQueue(ws) {
+  const idx = matchQueue.indexOf(ws);
+  if (idx >= 0) matchQueue.splice(idx, 1);
+  ws.searchingSince = null;
+}
+
+function startMatch(room) {
+  resetBall(room.state, true);
+  exchangeCosmetics(room);
+  broadcast(room, { type: "matchReady" });
+  sendState(room);
+  startLoop(room);
+}
+
+function pairSearchers(ws1, ws2) {
+  removeFromQueue(ws1);
+  removeFromQueue(ws2);
+  const code = makeCode();
+  const room = {
+    code,
+    players: [null, null],
+    state: createState(),
+    interval: null,
+    lastTick: Date.now(),
+    tickAcc: 0,
+    broadcastAcc: 0,
+    matchmade: true,
+  };
+  rooms.set(code, room);
+  attachPlayer(room, ws1, 0);
+  attachPlayer(room, ws2, 1);
+  ws1.send(JSON.stringify({ type: "matchFound", code, player: 1 }));
+  ws2.send(JSON.stringify({ type: "matchFound", code, player: 2 }));
+  startMatch(room);
+}
+
+function tryMatchmake(ws) {
+  if (ws.roomCode) return;
+  removeFromQueue(ws);
+  const opponent = matchQueue.find((q) => q !== ws && q.readyState === 1 && !q.roomCode);
+  if (opponent) {
+    pairSearchers(opponent, ws);
+    return;
+  }
+  ws.searchingSince = Date.now();
+  matchQueue.push(ws);
+  ws.send(JSON.stringify({ type: "searching", startedAt: ws.searchingSince }));
+}
+
 function roomStatus(room) {
   const count = room.players.filter(Boolean).length;
   return { type: "waiting", players: count, code: room.code };
@@ -500,6 +550,7 @@ function findOpenSlot(room) {
 }
 
 function handleDisconnect(ws) {
+  removeFromQueue(ws);
   const code = ws.roomCode;
   if (!code || !rooms.has(code)) return;
   const room = rooms.get(code);
@@ -583,7 +634,23 @@ wss.on("connection", (ws) => {
       return;
     }
 
+    if (msg.type === "search") {
+      if (ws.roomCode) {
+        ws.send(JSON.stringify({ type: "error", message: "Already in a room" }));
+        return;
+      }
+      tryMatchmake(ws);
+      return;
+    }
+
+    if (msg.type === "cancelSearch") {
+      removeFromQueue(ws);
+      ws.send(JSON.stringify({ type: "searchCancelled" }));
+      return;
+    }
+
     if (msg.type === "create") {
+      removeFromQueue(ws);
       const code = makeCode();
       const room = {
         code,
@@ -603,6 +670,7 @@ wss.on("connection", (ws) => {
     }
 
     if (msg.type === "join") {
+      removeFromQueue(ws);
       const code = String(msg.code || "").toUpperCase();
       const room = rooms.get(code);
       if (!room) {

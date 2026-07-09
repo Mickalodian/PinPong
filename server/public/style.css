@@ -117,6 +117,10 @@ canvas {
   display: none;
 }
 
+.hidden {
+  display: none !important;
+}
+
 .overlay-card {
   text-align: center;
   padding: 28px 34px;
@@ -365,6 +369,42 @@ canvas {
   font-size: 14px;
   opacity: 0.85;
   line-height: 1.4;
+}
+
+.lobby-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: 100%;
+}
+
+.search-panel {
+  margin: 12px 0 4px;
+  padding: 16px 14px;
+  border: 2px solid #fff;
+  box-sizing: border-box;
+}
+
+.search-status {
+  margin: 0 0 8px;
+  font-size: 14px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  opacity: 0.9;
+}
+
+.search-status.match-found {
+  font-weight: 900;
+  font-size: 20px;
+  opacity: 1;
+}
+
+.search-timer {
+  margin: 0 0 12px;
+  font-size: 30px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  font-variant-numeric: tabular-nums;
 }
 
 .join-row {
