@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Pong (B/W)</title>
+    <link rel="stylesheet" href="/style.css" />
+  </head>
+  <body>
+    <main class="wrap">
+      <header class="top">
+        <div class="title">PONG (BLACK / WHITE)</div>
+        <div class="hint" id="hint">Choose a mode to start.</div>
+      </header>
+
+      <div class="stage">
+        <canvas id="game" width="900" height="520" aria-label="Pong game"></canvas>
+
+        <div class="overlay" id="menuOverlay">
+          <div class="overlay-card menu-card">
+            <div class="overlay-title">SELECT MODE</div>
+            <button type="button" class="play-again" id="btnLocal">Play vs Bot</button>
+            <button type="button" class="play-again secondary" id="btnOnline">Online 1v1</button>
+          </div>
+        </div>
+
+        <div class="overlay hidden" id="lobbyOverlay" aria-hidden="true">
+          <div class="overlay-card menu-card">
+            <div class="overlay-title">ONLINE 1V1</div>
+            <p class="lobby-text">Create a room and share the code, or join a friend's room.</p>
+            <button type="button" class="play-again" id="btnCreateRoom">Create room</button>
+            <div class="join-row">
+              <input id="roomCodeInput" class="room-input" maxlength="4" placeholder="CODE" />
+              <button type="button" class="play-again secondary" id="btnJoinRoom">Join</button>
+            </div>
+            <p class="lobby-status" id="lobbyStatus">Not connected</p>
+            <button type="button" class="link-btn" id="btnBackMenu">Back</button>
+          </div>
+        </div>
+
+        <div class="overlay hidden" id="gameOver" aria-hidden="true">
+          <div class="overlay-card">
+            <div class="overlay-title" id="gameOverTitle">YOU WIN</div>
+            <div class="overlay-score" id="gameOverScore">5 : 3</div>
+            <button type="button" class="play-again" id="playAgain">Play again</button>
+            <button type="button" class="play-again secondary" id="backToMenu">Main menu</button>
+          </div>
+        </div>
+      </div>
+
+      <footer class="bottom">
+        <div class="scoreboard" aria-label="Scoreboard">
+          <div class="scorebox">
+            <div class="label" id="p1Label">LEFT</div>
+            <div class="value" id="p1">0</div>
+          </div>
+          <div class="divider" aria-hidden="true"></div>
+          <div class="scorebox">
+            <div class="label" id="p2Label">RIGHT</div>
+            <div class="value" id="p2">0</div>
+          </div>
+        </div>
+        <div class="meta" id="status">Ready</div>
+      </footer>
+    </main>
+
+    <script src="/game.js" defer></script>
+  </body>
+</html>
