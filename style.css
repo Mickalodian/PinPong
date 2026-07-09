@@ -236,12 +236,77 @@ body.phone-mode .play-again {
   font-size: 14px;
 }
 
+body.phone-mode .shop-card {
+  max-width: min(620px, calc(100vw - 12px));
+  max-height: min(88dvh, calc(100dvh - 12px));
+  overflow: hidden;
+  padding: 8px 10px 6px;
+  gap: 4px;
+}
+
+body.phone-mode .shop-header {
+  gap: 4px;
+}
+
+body.phone-mode .shop-header .overlay-title {
+  font-size: clamp(16px, 4vw, 20px);
+  margin-bottom: 0;
+  padding: 2px 0.15em 2px;
+}
+
+body.phone-mode .shop-points {
+  font-size: 11px;
+}
+
+body.phone-mode .shop-tab {
+  min-height: 34px;
+  padding: 6px 4px;
+  font-size: 10px;
+}
+
+body.phone-mode .shop-footer {
+  gap: 2px;
+}
+
+body.phone-mode .shop-footer .shop-msg {
+  font-size: 11px;
+  min-height: 0;
+  margin: 0;
+}
+
+body.phone-mode .shop-footer .link-btn {
+  min-height: 34px;
+}
+
 body.phone-mode .shop-grid {
-  max-height: min(42dvh, 260px);
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  min-height: 150px;
+  max-height: none;
+  touch-action: pan-y;
+}
+
+body.phone-mode .shop-item {
+  min-height: 118px;
+  padding: 8px 4px 6px;
+}
+
+body.phone-mode .shop-swatch {
+  height: 42px;
+}
+
+body.phone-mode .shop-swatch.epic-swatch,
+body.phone-mode .shop-swatch.legendary-swatch,
+body.phone-mode .shop-swatch.secret-swatch,
+body.phone-mode .shop-swatch.limited-swatch {
+  height: 46px;
 }
 
 body.phone-mode .bot-level-grid {
-  max-height: min(36dvh, 200px);
+  max-height: min(48dvh, 260px);
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  touch-action: pan-y;
 }
 
 body.phone-mode .ability-bar {
@@ -772,8 +837,34 @@ canvas {
 }
 
 .shop-card {
-  max-width: min(400px, 92vw);
-  max-height: min(88vh, 700px);
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  max-width: min(520px, 96vw);
+  width: 100%;
+  max-height: min(86dvh, calc(100dvh - 28px));
+  overflow: hidden;
+  padding: 14px 16px 10px;
+  gap: 8px;
+}
+
+.shop-header,
+.shop-footer {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+}
+
+.shop-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  width: 100%;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
 }
 
 .shop-points {
@@ -790,6 +881,7 @@ canvas {
 .shop-tabs {
   display: flex;
   gap: 8px;
+  width: 100%;
 }
 
 .shop-tab {
@@ -815,12 +907,18 @@ canvas {
 
 .shop-grid {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 8px;
-  max-height: 40vh;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  flex: 1 1 auto;
+  min-height: 140px;
+  max-height: none;
+  height: 100%;
+  overflow-x: hidden;
   overflow-y: auto;
-  padding: 2px;
+  padding: 4px 2px 8px;
   -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+  touch-action: pan-y;
 }
 
 .shop-item {
@@ -835,7 +933,7 @@ canvas {
   align-items: center;
   justify-content: flex-start;
   gap: 4px;
-  min-height: 92px;
+  min-height: 100px;
   position: relative;
   overflow: visible;
 }
@@ -1362,18 +1460,69 @@ body.ios-landscape-hint {
 
   body.phone-mode .shop-card,
   body.phone-mode .bot-level-card,
-  body.phone-mode .admin-card {
-    max-height: min(82dvh, calc(100dvh - 24px));
-    overflow-y: auto;
+  body.phone-mode .admin-card,
+  .shop-card,
+  .bot-level-card,
+  .admin-card {
+    max-height: min(92dvh, calc(100dvh - 8px));
+    overflow: hidden;
   }
 
+  .shop-card,
+  body.phone-mode .shop-card {
+    display: flex;
+    flex-direction: column;
+    max-width: min(640px, calc(100vw - 10px));
+    padding: 8px 10px 6px;
+    gap: 4px;
+  }
+
+  .shop-header .overlay-title,
+  body.phone-mode .shop-header .overlay-title {
+    font-size: clamp(16px, 4vw, 20px);
+    margin: 0;
+    padding: 2px 0.12em;
+  }
+
+  .shop-points,
+  .shop-footer .shop-msg {
+    font-size: 11px;
+  }
+
+  .shop-tab {
+    min-height: 32px;
+    padding: 6px 4px;
+    font-size: 10px;
+  }
+
+  .shop-grid,
   body.phone-mode .shop-grid {
-    max-height: min(38dvh, 180px);
+    max-height: none;
+    min-height: 180px;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 8px;
+    touch-action: pan-y;
   }
 
-  body.phone-mode .bot-level-grid {
-    max-height: min(30dvh, 150px);
-    grid-template-columns: repeat(10, minmax(0, 1fr));
+  .shop-item,
+  body.phone-mode .shop-item {
+    min-height: 118px;
+  }
+
+  .shop-swatch {
+    height: 42px;
+  }
+
+  .shop-footer .link-btn {
+    min-height: 32px;
+  }
+
+  body.phone-mode .bot-level-grid,
+  .bot-level-grid {
+    max-height: min(52dvh, 240px);
+    grid-template-columns: repeat(8, minmax(0, 1fr));
+    overflow-y: auto;
+    touch-action: pan-y;
   }
 }
 

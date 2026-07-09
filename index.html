@@ -22,7 +22,7 @@
         display: none !important;
       }
     </style>
-    <link rel="stylesheet" href="style.css?v=20260709k" />
+    <link rel="stylesheet" href="style.css?v=20260709p" />
   </head>
   <body>
     <div id="rotateGate" class="rotate-gate hidden" aria-live="polite">
@@ -176,15 +176,21 @@
 
         <div class="overlay hidden" id="customizeOverlay" aria-hidden="true">
           <div class="overlay-card menu-card shop-card">
-            <div class="overlay-title">CUSTOMIZE</div>
-            <p class="shop-points">Points: <span id="shopPoints">0</span> <span class="shop-hint">(+2 per win · synced online)</span></p>
-            <div class="shop-tabs">
-              <button type="button" class="shop-tab active" data-tab="paddle">Paddle</button>
-              <button type="button" class="shop-tab" data-tab="table">Table side</button>
+            <div class="shop-header">
+              <div class="overlay-title">CUSTOMIZE</div>
+              <p class="shop-points">Points: <span id="shopPoints">0</span> <span class="shop-hint">(+2 per win · synced online)</span></p>
+              <div class="shop-tabs">
+                <button type="button" class="shop-tab active" data-tab="paddle">Paddle</button>
+                <button type="button" class="shop-tab" data-tab="table">Table side</button>
+              </div>
             </div>
-            <div class="shop-grid" id="shopGrid"></div>
-            <p class="shop-msg" id="shopMsg">Buy or equip a colour.</p>
-            <button type="button" class="link-btn" id="btnCustomizeBack">Back</button>
+            <div class="shop-body">
+              <div class="shop-grid" id="shopGrid"></div>
+            </div>
+            <div class="shop-footer">
+              <p class="shop-msg" id="shopMsg">Buy or equip a colour.</p>
+              <button type="button" class="link-btn" id="btnCustomizeBack">Back</button>
+            </div>
           </div>
         </div>
 
@@ -242,6 +248,6 @@
       window.PONG_ADMIN = null;
     </script>
     <script src="admin.local.js"></script>
-    <script src="game.js?v=20260709k" defer></script>
+    <script src="game.js?v=20260709p" defer></script>
   </body>
 </html>

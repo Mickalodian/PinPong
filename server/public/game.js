@@ -1612,6 +1612,62 @@ function openCustomize() {
   });
   setShopTab(save.shopTab);
   if (ui.shopMsg) ui.shopMsg.textContent = "Buy or equip a colour. Epic skins animate. Rose Gold unlocks at L20.";
+  // #region agent log
+  requestAnimationFrame(() => {
+    const overlay = ui.customizeOverlay;
+    const card = overlay?.querySelector(".shop-card");
+    const body = overlay?.querySelector(".shop-body");
+    const grid = overlay?.querySelector(".shop-grid");
+    const firstItem = grid?.querySelector(".shop-item");
+    if (!card || !grid) return;
+    const or = overlay.getBoundingClientRect();
+    const cr = card.getBoundingClientRect();
+    const gr = grid.getBoundingClientRect();
+    const ir = firstItem?.getBoundingClientRect();
+    const cs = getComputedStyle(card);
+    const gs = getComputedStyle(grid);
+    const data = {
+      vw: window.innerWidth,
+      vh: window.innerHeight,
+      phoneMode: document.body.classList.contains("phone-mode"),
+      landscape: document.body.classList.contains("phone-landscape"),
+      overlayH: Math.round(or.height),
+      cardH: Math.round(cr.height),
+      cardClientH: card.clientHeight,
+      cardScrollH: card.scrollHeight,
+      cardOverflowY: cs.overflowY,
+      cardMaxH: cs.maxHeight,
+      bodyClientH: body?.clientHeight ?? null,
+      bodyScrollH: body?.scrollHeight ?? null,
+      gridH: Math.round(gr.height),
+      gridClientH: grid.clientHeight,
+      gridScrollH: grid.scrollHeight,
+      gridOverflowY: gs.overflowY,
+      gridMaxH: gs.maxHeight,
+      gridTouchAction: gs.touchAction,
+      itemCount: grid.querySelectorAll(".shop-item").length,
+      firstItemH: ir ? Math.round(ir.height) : null,
+      firstItemVisibleH: ir ? Math.round(Math.min(ir.bottom, gr.bottom) - Math.max(ir.top, gr.top)) : null,
+      itemClipped: !!(ir && (ir.bottom > gr.bottom + 1 || ir.top < gr.top - 1)),
+      gridScrollNeeded: grid.scrollHeight > grid.clientHeight + 1,
+      cardScrollNeeded: card.scrollHeight > card.clientHeight + 1,
+      cssHref: [...document.styleSheets].map((s) => s.href).filter(Boolean).slice(-1)[0] || null,
+    };
+    fetch("http://127.0.0.1:7263/ingest/7b680789-6fbf-44a7-9704-6ddeb5cf3ed6", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "38eb5e" },
+      body: JSON.stringify({
+        sessionId: "38eb5e",
+        runId: "post-fix",
+        hypothesisId: "A-E",
+        location: "game.js:openCustomize",
+        message: "customize shop geometry",
+        data,
+        timestamp: Date.now(),
+      }),
+    }).catch(() => {});
+  });
+  // #endregion
 }
 
 function closeCustomize() {
@@ -1979,10 +2035,12 @@ function isIOSLike() {
 }
 
 function isPhoneLike() {
+  const shortSide = Math.min(window.innerWidth, window.innerHeight);
+  const longSide = Math.max(window.innerWidth, window.innerHeight);
+  // Short landscape viewports (phones / emulators) always use phone layout
+  if (shortSide <= 500 && longSide <= 980) return true;
   if (typeof window.matchMedia === "function") {
     if (matchMedia("(hover: none) and (pointer: coarse)").matches) {
-      const shortSide = Math.min(window.innerWidth, window.innerHeight);
-      const longSide = Math.max(window.innerWidth, window.innerHeight);
       if (shortSide <= 520 || (shortSide <= 700 && longSide <= 980)) return true;
     }
   }
@@ -1991,7 +2049,7 @@ function isPhoneLike() {
     return true;
   }
   if (isIOSLike() && Math.min(window.screen.width, window.screen.height) <= 820) return true;
-  return isTouchDevice && Math.min(window.innerWidth, window.innerHeight) <= 520;
+  return isTouchDevice && shortSide <= 520;
 }
 
 function isLandscapeNow() {
