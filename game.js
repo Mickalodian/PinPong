@@ -16,6 +16,7 @@ const PLAYER_NAME_KEY = "pong-player-name";
 const ADMIN_SESSION_KEY = "pong-admin-until";
 const ADMIN_PASSKEY = "4536";
 const ABILITIES_KEY = "pong-bw-abilities";
+const SETTINGS_KEY = "pong-bw-settings";
 const POINTS_PER_WIN = 2;
 const POINTS_PER_BOT_CLEAR = 5;
 const PARRY_CHARGE_NEED = 10;
@@ -148,16 +149,45 @@ function getPlayerId() {
   return id;
 }
 
-function applyProfile(data) {
-  if (typeof data.name === "string" && sanitizeName(data.name)) save.name = sanitizeName(data.name);
-  if (typeof data.points === "number") save.points = data.points;
-  if (typeof data.maxBotCleared === "number") {
-    save.maxBotCleared = Math.max(0, Math.min(100, Math.floor(data.maxBotCleared)));
+function uniqIds(list, fallback) {
+  const out = [];
+  for (const id of Array.isArray(list) ? list : []) {
+    const s = String(id || "");
+    if (s && !out.includes(s)) out.push(s);
   }
-  if (data.owned?.paddle) save.owned.paddle = data.owned.paddle;
-  if (data.owned?.table) save.owned.table = data.owned.table;
-  if (data.equipped?.paddle) save.equipped.paddle = data.equipped.paddle;
-  if (data.equipped?.table) save.equipped.table = data.equipped.table;
+  if (fallback && !out.includes(fallback)) out.unshift(fallback);
+  return out;
+}
+
+function mergeOwned(localList, remoteList, fallback) {
+  return uniqIds([...(Array.isArray(localList) ? localList : []), ...(Array.isArray(remoteList) ? remoteList : [])], fallback);
+}
+
+function applyProfile(data, { replace = false } = {}) {
+  if (!data || typeof data !== "object") return;
+  if (typeof data.name === "string" && sanitizeName(data.name)) save.name = sanitizeName(data.name);
+
+  if (typeof data.points === "number" && Number.isFinite(data.points)) {
+    const incoming = Math.max(0, Math.floor(data.points));
+    save.points = replace ? incoming : Math.max(save.points || 0, incoming);
+  }
+
+  if (typeof data.maxBotCleared === "number" && Number.isFinite(data.maxBotCleared)) {
+    const incoming = Math.max(0, Math.min(100, Math.floor(data.maxBotCleared)));
+    save.maxBotCleared = replace ? incoming : Math.max(save.maxBotCleared || 0, incoming);
+  }
+
+  if (data.owned?.paddle || data.owned?.table) {
+    save.owned.paddle = replace
+      ? uniqIds(data.owned?.paddle, "white")
+      : mergeOwned(save.owned.paddle, data.owned?.paddle, "white");
+    save.owned.table = replace
+      ? uniqIds(data.owned?.table, "classic")
+      : mergeOwned(save.owned.table, data.owned?.table, "classic");
+  }
+
+  if (data.equipped?.paddle) save.equipped.paddle = String(data.equipped.paddle);
+  if (data.equipped?.table) save.equipped.table = String(data.equipped.table);
   if (!save.owned.paddle.includes("white")) save.owned.paddle.unshift("white");
   if (!save.owned.table.includes("classic")) save.owned.table.unshift("classic");
   sanitizeEquippedCosmetics();
@@ -300,6 +330,12 @@ function persistAbilities() {
 async function syncProfileFromServer() {
   if (!location.host) return;
   try {
+    const before = {
+      points: save.points || 0,
+      maxBotCleared: save.maxBotCleared || 0,
+      ownedPaddle: (save.owned.paddle || []).length,
+      ownedTable: (save.owned.table || []).length,
+    };
     const res = await fetch("/api/profile", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -310,25 +346,46 @@ async function syncProfileFromServer() {
     if (data.profile) {
       applyProfile(data.profile);
       localStorage.setItem(SAVE_CACHE_KEY, JSON.stringify(profilePayload()));
+      const after = {
+        points: save.points || 0,
+        maxBotCleared: save.maxBotCleared || 0,
+        ownedPaddle: (save.owned.paddle || []).length,
+        ownedTable: (save.owned.table || []).length,
+      };
+      // If local progress was ahead of server, push the merged profile back up.
+      if (
+        after.points > (Number(data.profile.points) || 0) ||
+        after.maxBotCleared > (Number(data.profile.maxBotCleared) || 0) ||
+        after.ownedPaddle > (data.profile.owned?.paddle || []).length ||
+        after.ownedTable > (data.profile.owned?.table || []).length ||
+        before.points > (Number(data.profile.points) || 0) ||
+        before.maxBotCleared > (Number(data.profile.maxBotCleared) || 0)
+      ) {
+        await syncProfileToServer();
+      }
     }
   } catch {
-    /* offline */
+    /* offline — keep local cache */
   }
 }
 
 let profileSyncTimer = null;
-async function syncProfileToServer() {
+async function syncProfileToServer(opts = {}) {
   if (!location.host) return;
   try {
-    await fetch("/api/profile", {
+    const res = await fetch("/api/profile", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         action: "save",
         playerId: getPlayerId(),
         profile: profilePayload(),
+        force: !!opts.force,
       }),
     });
+    if (!res.ok) return;
+    const data = await res.json().catch(() => null);
+    if (data?.profile && !opts.force) applyProfile(data.profile);
   } catch {
     /* offline */
   }
@@ -353,22 +410,22 @@ async function loadSave() {
     /* ignore */
   }
   await syncProfileFromServer();
-  if (save.name) {
-    try {
-      localStorage.setItem(PLAYER_NAME_KEY, save.name);
-    } catch {
-      /* ignore */
-    }
+  // Always write the merged progress back to local cache.
+  try {
+    localStorage.setItem(SAVE_CACHE_KEY, JSON.stringify(profilePayload()));
+    if (save.name) localStorage.setItem(PLAYER_NAME_KEY, save.name);
+  } catch {
+    /* ignore */
   }
 }
 
-function persistSave() {
+function persistSave(opts = {}) {
   try {
     localStorage.setItem(SAVE_CACHE_KEY, JSON.stringify(profilePayload()));
     if (save.name) localStorage.setItem(PLAYER_NAME_KEY, save.name);
     persistAbilities();
     clearTimeout(profileSyncTimer);
-    profileSyncTimer = setTimeout(syncProfileToServer, 300);
+    profileSyncTimer = setTimeout(() => syncProfileToServer(opts), opts.force ? 0 : 300);
     if (s.mode === "online" && net.connected) sendCosmetics();
   } catch {
     /* ignore */
@@ -925,6 +982,7 @@ function openCustomize() {
   hideOverlay(ui.menuOverlay);
   hideOverlay(ui.botLevelOverlay);
   hideOverlay(ui.lobbyOverlay);
+  hideOverlay(ui.settingsOverlay);
   showOverlay(ui.customizeOverlay);
   setStagePlaying(false);
   updatePointsUI();
@@ -953,6 +1011,7 @@ function openAdmin() {
   hideOverlay(ui.menuOverlay);
   hideOverlay(ui.botLevelOverlay);
   hideOverlay(ui.customizeOverlay);
+  hideOverlay(ui.settingsOverlay);
   hideOverlay(ui.lobbyOverlay);
   showOverlay(ui.adminOverlay);
   setStagePlaying(false);
@@ -991,7 +1050,7 @@ function adminAddPoints(n) {
 function adminSetPoints(n) {
   if (!isAdmin()) return;
   save.points = Math.max(0, n);
-  persistSave();
+  persistSave({ force: true });
   updatePointsUI();
   refreshAdminPanel();
   if (ui.adminMsg) ui.adminMsg.textContent = `Points set to ${save.points}.`;
@@ -1026,7 +1085,7 @@ function adminSetPlayerLevel(n) {
   const lv = Math.max(0, Math.min(100, Math.floor(Number(n) || 0)));
   save.maxBotCleared = lv;
   sanitizeEquippedCosmetics();
-  persistSave();
+  persistSave({ force: true });
   updateNameUI();
   refreshAdminPanel();
   if (ui.botLevelGrid) renderBotLevelGrid();
@@ -1333,6 +1392,7 @@ const ui = {
   gameOverReward: document.getElementById("gameOverReward"),
   gameOverScore: document.getElementById("gameOverScore"),
   playAgain: document.getElementById("playAgain"),
+  btnNextLevel: document.getElementById("btnNextLevel"),
   backToMenu: document.getElementById("backToMenu"),
   btnResign: document.getElementById("btnResign"),
   abilityBar: document.getElementById("abilityBar"),
@@ -1347,6 +1407,14 @@ const ui = {
   btnCustomize: document.getElementById("btnCustomize"),
   btnCustomizeBack: document.getElementById("btnCustomizeBack"),
   customizeOverlay: document.getElementById("customizeOverlay"),
+  btnSettings: document.getElementById("btnSettings"),
+  btnSettingsBack: document.getElementById("btnSettingsBack"),
+  settingsOverlay: document.getElementById("settingsOverlay"),
+  btnFullscreen: document.getElementById("btnFullscreen"),
+  btnMusicToggle: document.getElementById("btnMusicToggle"),
+  fullscreenHint: document.getElementById("fullscreenHint"),
+  settingsMsg: document.getElementById("settingsMsg"),
+  musicTrackGrid: document.getElementById("musicTrackGrid"),
   shopPoints: document.getElementById("shopPoints"),
   shopGrid: document.getElementById("shopGrid"),
   shopMsg: document.getElementById("shopMsg"),
@@ -1378,10 +1446,94 @@ const ui = {
 
 let audioCtx = null;
 let musicPlaying = false;
+let musicPreviewing = false;
 let musicTimer = null;
 let musicStep = 0;
-const MUSIC_NOTES = [261.63, 329.63, 392, 523.25, 392, 329.63, 293.66, 349.23];
-const MUSIC_BASS = [130.81, 130.81, 146.83, 146.83];
+let musicGainNode = null;
+let musicBlendFrom = 1;
+let musicBlendTo = 1;
+let musicBlendStart = 0;
+const MUSIC_BLEND_MS = 1400;
+
+const MUSIC_TRACKS = {
+  arcade: {
+    name: "Arcade Pulse",
+    interval: 220,
+    melody: [261.63, 329.63, 392, 523.25, 392, 329.63, 293.66, 349.23],
+    bass: [130.81, 130.81, 146.83, 146.83],
+    melodyType: "square",
+    bassType: "triangle",
+    melodyVol: 0.045,
+    bassVol: 0.035,
+  },
+  neon: {
+    name: "Neon Drift",
+    interval: 260,
+    melody: [220, 277.18, 329.63, 440, 392, 329.63, 277.18, 246.94],
+    bass: [110, 110, 123.47, 98],
+    melodyType: "sawtooth",
+    bassType: "sine",
+    melodyVol: 0.038,
+    bassVol: 0.04,
+    pad: [440, 554.37],
+    padVol: 0.018,
+  },
+  ocean: {
+    name: "Ocean Calm",
+    interval: 320,
+    melody: [196, 246.94, 293.66, 349.23, 329.63, 293.66, 246.94, 220],
+    bass: [98, 98, 110, 87.31],
+    melodyType: "sine",
+    bassType: "triangle",
+    melodyVol: 0.05,
+    bassVol: 0.03,
+    pad: [392, 493.88],
+    padVol: 0.022,
+  },
+  storm: {
+    name: "Storm Rush",
+    interval: 180,
+    melody: [311.13, 369.99, 466.16, 554.37, 466.16, 369.99, 349.23, 415.3],
+    bass: [77.78, 92.5, 103.83, 92.5],
+    melodyType: "square",
+    bassType: "sawtooth",
+    melodyVol: 0.042,
+    bassVol: 0.028,
+  },
+};
+
+const settings = {
+  musicOn: true,
+  musicTrack: "arcade",
+  fullscreen: false,
+};
+
+function loadSettings() {
+  try {
+    const raw = localStorage.getItem(SETTINGS_KEY);
+    if (!raw) return;
+    const data = JSON.parse(raw);
+    if (typeof data.musicOn === "boolean") settings.musicOn = data.musicOn;
+    if (data.musicTrack && MUSIC_TRACKS[data.musicTrack]) settings.musicTrack = data.musicTrack;
+  } catch {
+    /* ignore */
+  }
+}
+
+function persistSettings() {
+  try {
+    localStorage.setItem(
+      SETTINGS_KEY,
+      JSON.stringify({
+        musicOn: settings.musicOn,
+        musicTrack: settings.musicTrack,
+      })
+    );
+  } catch {
+    /* ignore */
+  }
+}
+
 let ws = null;
 
 const net = {
@@ -1577,6 +1729,7 @@ function openBotLevelSelect() {
   hideOverlay(ui.menuOverlay);
   hideOverlay(ui.lobbyOverlay);
   hideOverlay(ui.customizeOverlay);
+  hideOverlay(ui.settingsOverlay);
   hideOverlay(ui.adminOverlay);
   hideOverlay(ui.passkeyOverlay);
   hideOverlay(ui.gameOver);
@@ -1647,20 +1800,50 @@ function renderBotLevelGrid() {
 function ensureAudio() {
   if (!audioCtx) audioCtx = new AudioContext();
   if (audioCtx.state === "suspended") audioCtx.resume();
+  if (!musicGainNode && audioCtx) {
+    musicGainNode = audioCtx.createGain();
+    musicGainNode.gain.value = 1;
+    musicGainNode.connect(audioCtx.destination);
+  }
+  // #region agent log
+  if (!ensureAudio._loggedState || ensureAudio._loggedState !== audioCtx.state) {
+    ensureAudio._loggedState = audioCtx.state;
+    agentLog("B", "game.js:ensureAudio", "audio context state", {
+      state: audioCtx.state,
+      hasGain: !!musicGainNode,
+    }, "pre-fix");
+  }
+  // #endregion
 }
 
-function playTone(freq, start, duration, type = "sine", peak = 0.18) {
-  const osc = audioCtx.createOscillator();
-  const gain = audioCtx.createGain();
-  osc.type = type;
-  osc.frequency.setValueAtTime(freq, start);
-  gain.gain.setValueAtTime(0.0001, start);
-  gain.gain.exponentialRampToValueAtTime(peak, start + 0.012);
-  gain.gain.exponentialRampToValueAtTime(0.0001, start + duration);
-  osc.connect(gain);
-  gain.connect(audioCtx.destination);
-  osc.start(start);
-  osc.stop(start + duration + 0.02);
+function playTone(freq, start, duration, type = "sine", peak = 0.18, dest = null) {
+  if (!audioCtx) return;
+  try {
+    const osc = audioCtx.createOscillator();
+    const gain = audioCtx.createGain();
+    osc.type = type;
+    osc.frequency.setValueAtTime(freq, start);
+    const safePeak = Math.max(0.0002, peak || 0.0002);
+    gain.gain.setValueAtTime(0.0001, start);
+    gain.gain.exponentialRampToValueAtTime(safePeak, start + 0.012);
+    gain.gain.exponentialRampToValueAtTime(0.0001, start + duration);
+    osc.connect(gain);
+    gain.connect(dest || audioCtx.destination);
+    osc.start(start);
+    osc.stop(start + duration + 0.02);
+  } catch (err) {
+    // #region agent log
+    if (!playTone._errLogged) {
+      playTone._errLogged = true;
+      agentLog("C", "game.js:playTone", "playTone threw", {
+        err: String(err && err.message ? err.message : err),
+        freq,
+        peak,
+        type,
+      }, "pre-fix");
+    }
+    // #endregion
+  }
 }
 
 function playMenuClick() {
@@ -1708,31 +1891,291 @@ function playPointLossSound() {
   playTone(110, t + 0.16, 0.22, "square", 0.1);
 }
 
+function currentMusicTrack() {
+  return MUSIC_TRACKS[settings.musicTrack] || MUSIC_TRACKS.arcade;
+}
+
+function musicMasterGain() {
+  if (!musicGainNode || !audioCtx) return 1;
+  const now = performance.now();
+  if (now - musicBlendStart >= MUSIC_BLEND_MS) return musicBlendTo;
+  const t = Math.min(1, (now - musicBlendStart) / MUSIC_BLEND_MS);
+  const eased = t * t * (3 - 2 * t);
+  return musicBlendFrom + (musicBlendTo - musicBlendFrom) * eased;
+}
+
 function scheduleMusicStep() {
-  if (!musicPlaying) return;
+  if (!musicPlaying && !musicPreviewing) return;
+  if (!settings.musicOn && !musicPreviewing) return;
   ensureAudio();
+  const track = currentMusicTrack();
   const t = audioCtx.currentTime;
-  const melody = MUSIC_NOTES[musicStep % MUSIC_NOTES.length];
-  playTone(melody, t, 0.16, "square", 0.045);
+  const vol = musicMasterGain();
+  // #region agent log
+  if (musicStep < 2 || musicStep % 20 === 0) {
+    agentLog("D", "game.js:scheduleMusicStep", "music tick", {
+      step: musicStep,
+      track: settings.musicTrack,
+      vol,
+      musicPlaying,
+      musicPreviewing,
+      musicOn: settings.musicOn,
+      audioState: audioCtx && audioCtx.state,
+      interval: track.interval,
+    }, "pre-fix");
+  }
+  // #endregion
+  const melody = track.melody[musicStep % track.melody.length];
+  playTone(melody, t, Math.min(0.22, track.interval / 1000 * 0.75), track.melodyType, track.melodyVol * vol, musicGainNode);
   if (musicStep % 2 === 0) {
-    playTone(MUSIC_BASS[(musicStep / 2) % MUSIC_BASS.length], t, 0.22, "triangle", 0.035);
+    playTone(
+      track.bass[(musicStep / 2) % track.bass.length],
+      t,
+      Math.min(0.3, track.interval / 1000 * 1.05),
+      track.bassType,
+      track.bassVol * vol,
+      musicGainNode
+    );
+  }
+  if (track.pad && musicStep % 4 === 0) {
+    const padNote = track.pad[(musicStep / 4) % track.pad.length];
+    playTone(padNote, t, track.interval / 1000 * 3.2, "sine", (track.padVol || 0.02) * vol, musicGainNode);
   }
   musicStep += 1;
-  musicTimer = setTimeout(scheduleMusicStep, 220);
+  musicTimer = setTimeout(scheduleMusicStep, track.interval);
 }
 
 function startGameMusic() {
+  // #region agent log
+  agentLog("A", "game.js:startGameMusic", "startGameMusic called", {
+    musicOn: settings.musicOn,
+    track: settings.musicTrack,
+    musicPlaying,
+    musicPreviewing,
+    mode: s.mode,
+    gameOver: s.gameOver,
+  }, "pre-fix");
+  // #endregion
+  if (!settings.musicOn) return;
+  musicPreviewing = false;
   if (musicPlaying) return;
+  ensureAudio();
   musicPlaying = true;
+  musicBlendFrom = 0;
+  musicBlendTo = 1;
+  musicBlendStart = performance.now();
+  scheduleMusicStep();
+  // #region agent log
+  agentLog("E", "game.js:startGameMusic", "music started", {
+    musicPlaying,
+    audioState: audioCtx && audioCtx.state,
+    track: settings.musicTrack,
+  }, "pre-fix");
+  // #endregion
+}
+
+function startMusicPreview() {
+  // #region agent log
+  agentLog("E", "game.js:startMusicPreview", "preview start", {
+    track: settings.musicTrack,
+    musicOn: settings.musicOn,
+  }, "pre-fix");
+  // #endregion
+  ensureAudio();
+  stopMusicTimerOnly();
+  musicPreviewing = true;
+  musicPlaying = false;
+  musicBlendFrom = musicMasterGain() > 0.05 ? musicMasterGain() : 0;
+  musicBlendTo = 1;
+  musicBlendStart = performance.now();
   musicStep = 0;
   scheduleMusicStep();
 }
 
-function stopGameMusic() {
-  musicPlaying = false;
+function stopMusicTimerOnly() {
   if (musicTimer) {
     clearTimeout(musicTimer);
     musicTimer = null;
+  }
+}
+
+function stopGameMusic() {
+  // #region agent log
+  agentLog("E", "game.js:stopGameMusic", "music stopped", {
+    wasPlaying: musicPlaying,
+    wasPreview: musicPreviewing,
+    mode: s.mode,
+  }, "pre-fix");
+  // #endregion
+  musicPlaying = false;
+  musicPreviewing = false;
+  stopMusicTimerOnly();
+}
+
+function setMusicEnabled(on) {
+  settings.musicOn = !!on;
+  persistSettings();
+  if (settings.musicOn) {
+    const inMatch = (s.mode === "local" || s.mode === "online") && !s.gameOver;
+    const settingsOpen = ui.settingsOverlay && !ui.settingsOverlay.classList.contains("hidden");
+    if (inMatch) startGameMusic();
+    else if (settingsOpen) startMusicPreview();
+  } else {
+    stopGameMusic();
+  }
+  refreshSettingsUI();
+  if (ui.settingsMsg) {
+    ui.settingsMsg.textContent = settings.musicOn
+      ? `Music on · ${currentMusicTrack().name}`
+      : "Music off — tap a track to preview";
+  }
+}
+
+function setMusicTrack(trackId, { preview = false } = {}) {
+  if (!MUSIC_TRACKS[trackId]) return;
+  settings.musicTrack = trackId;
+  persistSettings();
+  musicBlendFrom = musicMasterGain();
+  musicBlendTo = 1;
+  musicBlendStart = performance.now();
+  musicStep = 0;
+
+  const settingsOpen = ui.settingsOverlay && !ui.settingsOverlay.classList.contains("hidden");
+  const inMatch = (s.mode === "local" || s.mode === "online") && !s.gameOver;
+
+  if (preview || settingsOpen) {
+    startMusicPreview();
+    if (ui.settingsMsg) ui.settingsMsg.textContent = `Preview: ${MUSIC_TRACKS[trackId].name}`;
+  } else if (inMatch && settings.musicOn) {
+    stopMusicTimerOnly();
+    musicPlaying = false;
+    startGameMusic();
+    if (ui.settingsMsg) ui.settingsMsg.textContent = `Now playing: ${MUSIC_TRACKS[trackId].name}`;
+  } else {
+    refreshSettingsUI();
+    if (ui.settingsMsg) ui.settingsMsg.textContent = `Selected: ${MUSIC_TRACKS[trackId].name}`;
+    return;
+  }
+  refreshSettingsUI();
+}
+
+function isFullscreenActive() {
+  return !!(document.fullscreenElement || document.webkitFullscreenElement);
+}
+
+function isIOSLike() {
+  const ua = navigator.userAgent || "";
+  return /iPad|iPhone|iPod/.test(ua) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+}
+
+async function lockLandscapeIfPossible() {
+  try {
+    if (screen.orientation && screen.orientation.lock) {
+      await screen.orientation.lock("landscape");
+    }
+  } catch {
+    /* iOS often blocks orientation.lock */
+  }
+}
+
+function unlockOrientationIfPossible() {
+  try {
+    if (screen.orientation && screen.orientation.unlock) screen.orientation.unlock();
+  } catch {
+    /* ignore */
+  }
+}
+
+async function enterFullscreenMode() {
+  const root = document.documentElement;
+  try {
+    if (root.requestFullscreen) await root.requestFullscreen();
+    else if (root.webkitRequestFullscreen) root.webkitRequestFullscreen();
+  } catch {
+    /* ignore */
+  }
+  await lockLandscapeIfPossible();
+  if (isIOSLike() && !isFullscreenActive()) {
+    document.body.classList.add("ios-landscape-hint");
+    if (ui.fullscreenHint) {
+      ui.fullscreenHint.textContent =
+        "iPhone: rotate to landscape. Add to Home Screen for a fuller display.";
+    }
+  }
+  settings.fullscreen = isFullscreenActive() || document.body.classList.contains("ios-landscape-hint");
+  refreshSettingsUI();
+}
+
+async function exitFullscreenMode() {
+  document.body.classList.remove("ios-landscape-hint");
+  unlockOrientationIfPossible();
+  try {
+    if (document.exitFullscreen && isFullscreenActive()) await document.exitFullscreen();
+    else if (document.webkitExitFullscreen && document.webkitFullscreenElement) {
+      document.webkitExitFullscreen();
+    }
+  } catch {
+    /* ignore */
+  }
+  settings.fullscreen = false;
+  if (ui.fullscreenHint) {
+    ui.fullscreenHint.textContent = "Locks landscape on supported phones.";
+  }
+  refreshSettingsUI();
+}
+
+async function toggleFullscreenSetting() {
+  if (isFullscreenActive() || document.body.classList.contains("ios-landscape-hint")) {
+    await exitFullscreenMode();
+  } else {
+    await enterFullscreenMode();
+  }
+}
+
+function refreshSettingsUI() {
+  if (ui.btnMusicToggle) {
+    ui.btnMusicToggle.setAttribute("aria-pressed", settings.musicOn ? "true" : "false");
+    ui.btnMusicToggle.textContent = settings.musicOn ? "On" : "Off";
+  }
+  const fsOn = isFullscreenActive() || document.body.classList.contains("ios-landscape-hint");
+  settings.fullscreen = fsOn;
+  if (ui.btnFullscreen) {
+    ui.btnFullscreen.setAttribute("aria-pressed", fsOn ? "true" : "false");
+    ui.btnFullscreen.textContent = fsOn ? "On" : "Off";
+  }
+  document.querySelectorAll(".music-track-btn").forEach((btn) => {
+    btn.classList.toggle("active", btn.dataset.track === settings.musicTrack);
+  });
+}
+
+function openSettings() {
+  hideOverlay(ui.menuOverlay);
+  hideOverlay(ui.botLevelOverlay);
+  hideOverlay(ui.lobbyOverlay);
+  hideOverlay(ui.customizeOverlay);
+  hideOverlay(ui.adminOverlay);
+  showOverlay(ui.settingsOverlay);
+  setStagePlaying(false);
+  refreshSettingsUI();
+  ensureAudio();
+  startMusicPreview();
+  if (ui.settingsMsg) {
+    ui.settingsMsg.textContent = settings.musicOn
+      ? `Preview: ${currentMusicTrack().name}`
+      : `Preview: ${currentMusicTrack().name} (music stays off in matches until you turn it on)`;
+  }
+}
+
+function closeSettings() {
+  hideOverlay(ui.settingsOverlay);
+  showOverlay(ui.menuOverlay);
+  setStagePlaying(false);
+  const inMatch = (s.mode === "local" || s.mode === "online") && !s.gameOver;
+  if (inMatch && settings.musicOn) {
+    musicPreviewing = false;
+    if (!musicPlaying) startGameMusic();
+  } else {
+    stopGameMusic();
   }
 }
 
@@ -1742,7 +2185,8 @@ function updateResignButton() {
   const lobbyOpen = ui.lobbyOverlay && !ui.lobbyOverlay.classList.contains("hidden");
   const menuOpen = ui.menuOverlay && !ui.menuOverlay.classList.contains("hidden");
   const botSelectOpen = ui.botLevelOverlay && !ui.botLevelOverlay.classList.contains("hidden");
-  ui.btnResign.classList.toggle("hidden", !(inMatch && !lobbyOpen && !menuOpen && !botSelectOpen));
+  const settingsOpen = ui.settingsOverlay && !ui.settingsOverlay.classList.contains("hidden");
+  ui.btnResign.classList.toggle("hidden", !(inMatch && !lobbyOpen && !menuOpen && !botSelectOpen && !settingsOpen));
 }
 
 function resignMatch() {
@@ -1785,6 +2229,7 @@ function openNameOverlay(fromMenu = false) {
   hideOverlay(ui.botLevelOverlay);
   hideOverlay(ui.lobbyOverlay);
   hideOverlay(ui.customizeOverlay);
+  hideOverlay(ui.settingsOverlay);
   hideOverlay(ui.adminOverlay);
   hideOverlay(ui.passkeyOverlay);
   showOverlay(ui.nameOverlay);
@@ -1827,7 +2272,7 @@ function requireName(action) {
 function showOverlay(el) {
   el.classList.remove("hidden");
   el.setAttribute("aria-hidden", "false");
-  if (stageEl && (el === ui.nameOverlay || el === ui.menuOverlay || el === ui.botLevelOverlay || el === ui.lobbyOverlay || el === ui.customizeOverlay || el === ui.adminOverlay || el === ui.passkeyOverlay)) {
+  if (stageEl && (el === ui.nameOverlay || el === ui.menuOverlay || el === ui.botLevelOverlay || el === ui.lobbyOverlay || el === ui.customizeOverlay || el === ui.settingsOverlay || el === ui.adminOverlay || el === ui.passkeyOverlay)) {
     stageEl.classList.add("menu-open");
   }
 }
@@ -1835,7 +2280,7 @@ function showOverlay(el) {
 function hideOverlay(el) {
   el.classList.add("hidden");
   el.setAttribute("aria-hidden", "true");
-  if (stageEl && (el === ui.nameOverlay || el === ui.menuOverlay || el === ui.botLevelOverlay || el === ui.lobbyOverlay || el === ui.customizeOverlay || el === ui.adminOverlay || el === ui.passkeyOverlay)) {
+  if (stageEl && (el === ui.nameOverlay || el === ui.menuOverlay || el === ui.botLevelOverlay || el === ui.lobbyOverlay || el === ui.customizeOverlay || el === ui.settingsOverlay || el === ui.adminOverlay || el === ui.passkeyOverlay)) {
     stageEl.classList.remove("menu-open");
   }
 }
@@ -1956,6 +2401,14 @@ function endGame(winner, opts = {}) {
   }
 
   ui.gameOverScore.textContent = `${s.p1.score} : ${s.p2.score}`;
+  if (ui.btnNextLevel) {
+    const showNext =
+      s.mode === "local" && youWon && !opts.resigned && s.botLevel < 100;
+    ui.btnNextLevel.classList.toggle("hidden", !showNext);
+    if (showNext) {
+      ui.btnNextLevel.textContent = `Next level (L${s.botLevel + 1})`;
+    }
+  }
   if (justEnded) {
     if (youWon) playWinSound();
     else playLossSound();
@@ -2563,6 +3016,7 @@ function startLocalMode(level = 1) {
   hideOverlay(ui.botLevelOverlay);
   hideOverlay(ui.lobbyOverlay);
   hideOverlay(ui.customizeOverlay);
+  hideOverlay(ui.settingsOverlay);
   hideOverlay(ui.adminOverlay);
   hideOverlay(ui.gameOver);
   setScoreboardLabels(
@@ -2579,6 +3033,7 @@ function openLobby() {
   hideOverlay(ui.menuOverlay);
   hideOverlay(ui.botLevelOverlay);
   hideOverlay(ui.customizeOverlay);
+  hideOverlay(ui.settingsOverlay);
   hideOverlay(ui.adminOverlay);
   hideOverlay(ui.gameOver);
   showOverlay(ui.lobbyOverlay);
@@ -2598,6 +3053,7 @@ function backToMenu() {
   hideOverlay(ui.lobbyOverlay);
   hideOverlay(ui.botLevelOverlay);
   hideOverlay(ui.customizeOverlay);
+  hideOverlay(ui.settingsOverlay);
   hideOverlay(ui.adminOverlay);
   hideOverlay(ui.passkeyOverlay);
   showOverlay(ui.menuOverlay);
@@ -2710,6 +3166,31 @@ function bindUi() {
   bind(ui.btnLocal, () => requireName(openBotLevelSelect));
   bind(ui.btnOnline, () => requireName(openLobby));
   bind(ui.btnCustomize, () => requireName(openCustomize));
+  bind(ui.btnSettings, openSettings);
+  bind(ui.btnSettingsBack, closeSettings);
+  bind(ui.btnFullscreen, () => {
+    toggleFullscreenSetting();
+  });
+  bind(ui.btnMusicToggle, () => {
+    setMusicEnabled(!settings.musicOn);
+  });
+  if (ui.musicTrackGrid) {
+    ui.musicTrackGrid.addEventListener("click", (e) => {
+      const btn = e.target.closest(".music-track-btn");
+      if (!btn || !btn.dataset.track) return;
+      playMenuClick();
+      setMusicTrack(btn.dataset.track, { preview: true });
+    });
+  } else {
+    document.querySelectorAll(".music-track-btn").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        playMenuClick();
+        setMusicTrack(btn.dataset.track, { preview: true });
+      });
+    });
+  }
+  document.addEventListener("fullscreenchange", refreshSettingsUI);
+  document.addEventListener("webkitfullscreenchange", refreshSettingsUI);
   bind(ui.btnNameSubmit, submitName);
   bind(ui.btnChangeName, () => openNameOverlay(true));
   bind(ui.btnBotLevelBack, closeBotLevelSelect);
@@ -2762,6 +3243,18 @@ function bindUi() {
     }
     applyBotLevel(s.botLevel);
     resetLocalMatch();
+  });
+  bind(ui.btnNextLevel, () => {
+    if (s.mode !== "local") return;
+    const next = Math.min(100, (s.botLevel || 1) + 1);
+    if (!isBotLevelUnlocked(next)) {
+      openBotLevelSelect();
+      if (ui.botLevelHint) {
+        ui.botLevelHint.textContent = `Level ${next} is locked. Clear level ${next - 1} first.`;
+      }
+      return;
+    }
+    startLocalMode(next);
   });
 
   bind(ui.btnResign, resignMatch);
@@ -3026,10 +3519,12 @@ window.addEventListener("resize", () => {
 });
 
 async function boot() {
+  loadSettings();
   await loadSave();
   updatePointsUI();
   initAdminUi();
   bindUi();
+  refreshSettingsUI();
   if (hasValidName()) {
     hideOverlay(ui.nameOverlay);
     showOverlay(ui.menuOverlay);

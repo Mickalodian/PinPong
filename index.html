@@ -58,8 +58,33 @@
             <button type="button" class="play-again" id="btnLocal">Play vs Bot</button>
             <button type="button" class="play-again secondary" id="btnOnline">Online 1v1</button>
             <button type="button" class="play-again secondary" id="btnCustomize">Customize</button>
+            <button type="button" class="play-again secondary" id="btnSettings">Settings</button>
             <button type="button" class="play-again secondary" id="btnAdmin">Admin</button>
             <button type="button" class="link-btn" id="btnChangeName">Change name</button>
+          </div>
+        </div>
+
+        <div class="overlay hidden" id="settingsOverlay" aria-hidden="true">
+          <div class="overlay-card menu-card settings-card">
+            <div class="overlay-title">SETTINGS</div>
+            <div class="settings-row">
+              <span class="settings-label">Fullscreen</span>
+              <button type="button" class="settings-toggle" id="btnFullscreen" aria-pressed="false">Off</button>
+            </div>
+            <p class="settings-hint" id="fullscreenHint">Locks landscape on supported phones.</p>
+            <div class="settings-row">
+              <span class="settings-label">Music</span>
+              <button type="button" class="settings-toggle" id="btnMusicToggle" aria-pressed="true">On</button>
+            </div>
+            <p class="admin-section-label">Music track</p>
+            <div class="music-track-grid" id="musicTrackGrid" role="group" aria-label="Music tracks">
+              <button type="button" class="music-track-btn active" data-track="arcade">Arcade Pulse</button>
+              <button type="button" class="music-track-btn" data-track="neon">Neon Drift</button>
+              <button type="button" class="music-track-btn" data-track="ocean">Ocean Calm</button>
+              <button type="button" class="music-track-btn" data-track="storm">Storm Rush</button>
+            </div>
+            <p class="shop-msg" id="settingsMsg">Tracks blend when you switch.</p>
+            <button type="button" class="link-btn" id="btnSettingsBack">Back</button>
           </div>
         </div>
 
@@ -165,6 +190,7 @@
             <div class="overlay-title" id="gameOverTitle">YOU WIN</div>
             <div class="overlay-reward hidden" id="gameOverReward" aria-live="polite"></div>
             <div class="overlay-score" id="gameOverScore">5 : 3</div>
+            <button type="button" class="play-again hidden" id="btnNextLevel">Next level</button>
             <button type="button" class="play-again" id="playAgain">Play again</button>
             <button type="button" class="play-again secondary" id="backToMenu">Main menu</button>
           </div>

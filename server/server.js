@@ -59,6 +59,47 @@ function defaultProfile() {
   };
 }
 
+function mergeProfileRecord(existing, incoming, { force = false } = {}) {
+  const prev = existing || defaultProfile();
+  const p = incoming || {};
+  const ownedPaddle = force
+    ? [...new Set([...(Array.isArray(p.owned?.paddle) ? p.owned.paddle : prev.owned?.paddle || []), "white"])]
+    : [
+        ...new Set([
+          ...(Array.isArray(prev.owned?.paddle) ? prev.owned.paddle : ["white"]),
+          ...(Array.isArray(p.owned?.paddle) ? p.owned.paddle : []),
+          "white",
+        ]),
+      ];
+  const ownedTable = force
+    ? [...new Set([...(Array.isArray(p.owned?.table) ? p.owned.table : prev.owned?.table || []), "classic"])]
+    : [
+        ...new Set([
+          ...(Array.isArray(prev.owned?.table) ? prev.owned.table : ["classic"]),
+          ...(Array.isArray(p.owned?.table) ? p.owned.table : []),
+          "classic",
+        ]),
+      ];
+  const incomingLevel = Math.max(0, Math.min(100, Math.floor(Number(p.maxBotCleared) || 0)));
+  const prevLevel = Math.max(0, Math.min(100, Math.floor(Number(prev.maxBotCleared) || 0)));
+  const incomingPoints = Math.max(0, Math.floor(Number(p.points) || 0));
+  const prevPoints = Math.max(0, Math.floor(Number(prev.points) || 0));
+  return {
+    name: sanitizeName(p.name || prev.name || ""),
+    points: force ? incomingPoints : Math.max(prevPoints, incomingPoints),
+    maxBotCleared: force ? incomingLevel : Math.max(prevLevel, incomingLevel),
+    owned: {
+      paddle: ownedPaddle.includes("white") ? ownedPaddle : ["white", ...ownedPaddle],
+      table: ownedTable.includes("classic") ? ownedTable : ["classic", ...ownedTable],
+    },
+    equipped: {
+      paddle: String(p.equipped?.paddle || prev.equipped?.paddle || "white"),
+      table: String(p.equipped?.table || prev.equipped?.table || "classic"),
+    },
+    updatedAt: Date.now(),
+  };
+}
+
 function sanitizeName(name) {
   const clean = String(name || "")
     .trim()
@@ -190,28 +231,12 @@ async function handleApi(req, res, urlPath) {
     }
     if (body.action === "save" && body.profile) {
       const p = body.profile;
-      db[playerId] = {
-        name: sanitizeName(p.name || db[playerId]?.name || ""),
-        points: Math.max(0, Number(p.points) || 0),
-        maxBotCleared: Math.max(
-          0,
-          Math.min(100, Math.floor(Number(p.maxBotCleared) || db[playerId]?.maxBotCleared || 0))
-        ),
-        owned: {
-          paddle: Array.isArray(p.owned?.paddle) ? p.owned.paddle : ["white"],
-          table: Array.isArray(p.owned?.table) ? p.owned.table : ["classic"],
-        },
-        equipped: {
-          paddle: String(p.equipped?.paddle || "white"),
-          table: String(p.equipped?.table || "classic"),
-        },
-        updatedAt: Date.now(),
-      };
+      db[playerId] = mergeProfileRecord(db[playerId], p, { force: !!body.force });
       if (!db[playerId].owned.paddle.includes("white")) db[playerId].owned.paddle.unshift("white");
       if (!db[playerId].owned.table.includes("classic")) db[playerId].owned.table.unshift("classic");
       saveProfiles(db);
       res.writeHead(200, { "Content-Type": "application/json" });
-      res.end(JSON.stringify({ ok: true }));
+      res.end(JSON.stringify({ ok: true, profile: db[playerId] }));
       return true;
     }
     res.writeHead(400, { "Content-Type": "application/json" });
@@ -753,26 +778,9 @@ wss.on("connection", (ws) => {
 
     if (msg.type === "profileSave" && msg.playerId && msg.profile) {
       const db = loadProfiles();
-      const p = msg.profile;
-      db[msg.playerId] = {
-        name: sanitizeName(p.name || db[msg.playerId]?.name || ""),
-        points: Math.max(0, Number(p.points) || 0),
-        maxBotCleared: Math.max(
-          0,
-          Math.min(100, Math.floor(Number(p.maxBotCleared) || db[msg.playerId]?.maxBotCleared || 0))
-        ),
-        owned: {
-          paddle: Array.isArray(p.owned?.paddle) ? p.owned.paddle : ["white"],
-          table: Array.isArray(p.owned?.table) ? p.owned.table : ["classic"],
-        },
-        equipped: {
-          paddle: String(p.equipped?.paddle || "white"),
-          table: String(p.equipped?.table || "classic"),
-        },
-        updatedAt: Date.now(),
-      };
+      db[msg.playerId] = mergeProfileRecord(db[msg.playerId], msg.profile, { force: !!msg.force });
       saveProfiles(db);
-      ws.send(JSON.stringify({ type: "profileSaved", ok: true }));
+      ws.send(JSON.stringify({ type: "profileSaved", ok: true, profile: db[msg.playerId] }));
       return;
     }
 
