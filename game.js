@@ -1485,6 +1485,8 @@ function renderShop() {
     const name = document.createElement("div");
     name.className = "shop-name";
     name.textContent = item.name;
+    name.title = item.name;
+    btn.title = item.name;
     const price = document.createElement("div");
     price.className = "shop-price";
     if (!unlocked) price.textContent = `LVL ${item.requireLevel}`;

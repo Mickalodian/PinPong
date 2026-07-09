@@ -697,7 +697,15 @@ function serveStatic(req, res) {
       res.end("Not found");
       return;
     }
-    res.writeHead(200, { "Content-Type": MIME[path.extname(filePath)] || "text/plain" });
+    const ext = path.extname(filePath);
+    const headers = { "Content-Type": MIME[ext] || "text/plain" };
+    if (ext === ".html" || urlPath === "" || urlPath === "index.html") {
+      headers["Cache-Control"] = "no-store, no-cache, must-revalidate";
+      headers.Pragma = "no-cache";
+    } else if (ext === ".js" || ext === ".css") {
+      headers["Cache-Control"] = "public, max-age=60, must-revalidate";
+    }
+    res.writeHead(200, headers);
     res.end(data);
   });
 }
