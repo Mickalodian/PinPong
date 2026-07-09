@@ -588,22 +588,45 @@ function drawSwatch(item, el) {
   c.height = 48;
   const cctx = c.getContext("2d");
   drawCosmeticFill(cctx, item, 0, 0, c.width, c.height, 1);
-  el.style.backgroundImage = `url(${c.toDataURL()})`;
+  let dataUrl = "";
+  try {
+    dataUrl = c.toDataURL();
+    el.style.backgroundImage = `url(${dataUrl})`;
+  } catch (err) {
+    // #region agent log
+    fetch('http://127.0.0.1:7263/ingest/7b680789-6fbf-44a7-9704-6ddeb5cf3ed6',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'38eb5e'},body:JSON.stringify({sessionId:'38eb5e',runId:'pre-fix',hypothesisId:'C',location:'game.js:drawSwatch',message:'toDataURL failed',data:{id:item.id,epic:!!item.epic,err:String(err&&err.message||err)},timestamp:Date.now()})}).catch(()=>{});
+    // #endregion
+  }
   el.style.backgroundSize = "cover";
   if (item.epic) {
     el.dataset.epicStyle = item.style;
     shopAnimSwatches.push({ el, item, canvas: c, ctx: cctx });
+    // #region agent log
+    if (shopAnimSwatches.length <= 2) {
+      const sample = cctx.getImageData(60, 24, 1, 1).data;
+      fetch('http://127.0.0.1:7263/ingest/7b680789-6fbf-44a7-9704-6ddeb5cf3ed6',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'38eb5e'},body:JSON.stringify({sessionId:'38eb5e',runId:'pre-fix',hypothesisId:'C',location:'game.js:drawSwatch',message:'epic swatch drawn',data:{id:item.id,style:item.style,dataUrlLen:dataUrl.length,px:[sample[0],sample[1],sample[2],sample[3]]},timestamp:Date.now()})}).catch(()=>{});
+    }
+    // #endregion
   }
 }
 
 function tickShopSwatches() {
   shopAnimRunning = false;
   if (!ui.customizeOverlay || ui.customizeOverlay.classList.contains("hidden")) {
+    // #region agent log
+    fetch('http://127.0.0.1:7263/ingest/7b680789-6fbf-44a7-9704-6ddeb5cf3ed6',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'38eb5e'},body:JSON.stringify({sessionId:'38eb5e',runId:'pre-fix',hypothesisId:'B',location:'game.js:tickShopSwatches',message:'tick aborted overlay hidden',data:{hasOverlay:!!ui.customizeOverlay,hidden:!!(ui.customizeOverlay&&ui.customizeOverlay.classList.contains('hidden')),swatchCount:shopAnimSwatches.length},timestamp:Date.now()})}).catch(()=>{});
+    // #endregion
     shopAnimSwatches.length = 0;
     return;
   }
   if (!shopAnimSwatches.length) return;
   shopAnimRunning = true;
+  // #region agent log
+  if (!tickShopSwatches._logged) {
+    tickShopSwatches._logged = true;
+    fetch('http://127.0.0.1:7263/ingest/7b680789-6fbf-44a7-9704-6ddeb5cf3ed6',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'38eb5e'},body:JSON.stringify({sessionId:'38eb5e',runId:'pre-fix',hypothesisId:'D',location:'game.js:tickShopSwatches',message:'animation loop running',data:{swatchCount:shopAnimSwatches.length,ids:shopAnimSwatches.map((e)=>e.item.id)},timestamp:Date.now()})}).catch(()=>{});
+  }
+  // #endregion
   for (const entry of shopAnimSwatches) {
     if (!entry.el.isConnected) continue;
     entry.ctx.clearRect(0, 0, entry.canvas.width, entry.canvas.height);
@@ -616,8 +639,11 @@ function tickShopSwatches() {
 function renderShop() {
   if (!ui.shopGrid) return;
   shopAnimSwatches.length = 0;
+  tickShopSwatches._logged = false;
   const kind = save.shopTab;
   ui.shopGrid.innerHTML = "";
+  let epicCount = 0;
+  let cantAffordEpic = 0;
   for (const item of SHOP[kind]) {
     const owned = save.owned[kind].includes(item.id);
     const equipped = save.equipped[kind] === item.id;
@@ -627,7 +653,12 @@ function renderShop() {
     if (item.epic) btn.classList.add("epic");
     if (equipped) btn.classList.add("equipped");
     const free = isAdmin() && save.abilities.freeShop;
-    if (!owned && !free && save.points < item.price) btn.classList.add("cant-afford");
+    const cantAfford = !owned && !free && save.points < item.price;
+    if (cantAfford) btn.classList.add("cant-afford");
+    if (item.epic) {
+      epicCount += 1;
+      if (cantAfford) cantAffordEpic += 1;
+    }
     const swatch = document.createElement("div");
     swatch.className = "shop-swatch";
     if (item.epic) swatch.classList.add("epic-swatch");
@@ -674,6 +705,12 @@ function renderShop() {
     });
     ui.shopGrid.appendChild(btn);
   }
+  // #region agent log
+  const firstEpic = ui.shopGrid.querySelector(".shop-item.epic");
+  const firstSwatch = firstEpic && firstEpic.querySelector(".shop-swatch");
+  const computed = firstEpic ? getComputedStyle(firstEpic) : null;
+  fetch('http://127.0.0.1:7263/ingest/7b680789-6fbf-44a7-9704-6ddeb5cf3ed6',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'38eb5e'},body:JSON.stringify({sessionId:'38eb5e',runId:'pre-fix',hypothesisId:'A',location:'game.js:renderShop',message:'shop rendered',data:{kind,points:save.points,epicCount,cantAffordEpic,animSwatches:shopAnimSwatches.length,shopAnimRunning,overlayHidden:!!(ui.customizeOverlay&&ui.customizeOverlay.classList.contains('hidden')),firstEpicOpacity:computed?computed.opacity:null,firstSwatchBgLen:firstSwatch&&firstSwatch.style.backgroundImage?firstSwatch.style.backgroundImage.length:0},timestamp:Date.now()})}).catch(()=>{});
+  // #endregion
   if (shopAnimSwatches.length && !shopAnimRunning) requestAnimationFrame(tickShopSwatches);
 }
 
@@ -692,6 +729,9 @@ function openCustomize() {
   showOverlay(ui.customizeOverlay);
   setStagePlaying(false);
   updatePointsUI();
+  // #region agent log
+  fetch('http://127.0.0.1:7263/ingest/7b680789-6fbf-44a7-9704-6ddeb5cf3ed6',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'38eb5e'},body:JSON.stringify({sessionId:'38eb5e',runId:'pre-fix',hypothesisId:'E',location:'game.js:openCustomize',message:'customize opened',data:{mode:s.mode,points:save.points,ownedPaddle:save.owned.paddle.length,overlayHidden:ui.customizeOverlay.classList.contains('hidden')},timestamp:Date.now()})}).catch(()=>{});
+  // #endregion
   setShopTab(save.shopTab);
   if (ui.shopMsg) ui.shopMsg.textContent = "Buy or equip a colour. Epic skins (50+) are animated.";
 }
@@ -1086,6 +1126,7 @@ const ui = {
   roomCodeInput: document.getElementById("roomCodeInput"),
   gameOver: document.getElementById("gameOver"),
   gameOverTitle: document.getElementById("gameOverTitle"),
+  gameOverReward: document.getElementById("gameOverReward"),
   gameOverScore: document.getElementById("gameOverScore"),
   playAgain: document.getElementById("playAgain"),
   backToMenu: document.getElementById("backToMenu"),
@@ -1646,6 +1687,17 @@ function scoreFx(who, opts = {}) {
   el.classList.add("score-pop");
 }
 
+function setGameOverReward(pts) {
+  if (!ui.gameOverReward) return;
+  if (pts > 0) {
+    ui.gameOverReward.textContent = `+${pts} POINTS`;
+    ui.gameOverReward.classList.remove("hidden");
+  } else {
+    ui.gameOverReward.textContent = "";
+    ui.gameOverReward.classList.add("hidden");
+  }
+}
+
 function endGame(winner, opts = {}) {
   const justEnded = !s.gameOver;
   s.gameOver = true;
@@ -1655,6 +1707,7 @@ function endGame(winner, opts = {}) {
   updateResignButton();
   resetAbility();
   if (ui.abilityBar) ui.abilityBar.classList.add("hidden");
+  setGameOverReward(0);
 
   let youWon = false;
   let clearBonus = 0;
@@ -1665,7 +1718,11 @@ function endGame(winner, opts = {}) {
       ui.gameOverTitle.textContent = "YOU RESIGNED";
     } else {
       youWon = !opts.resignedByMe;
-      ui.gameOverTitle.textContent = opts.resignedByMe ? "YOU RESIGNED" : "OPPONENT RESIGNED";
+      ui.gameOverTitle.textContent = opts.resignedByMe ? "YOU RESIGNED" : "OPPONENT RESIGNED — YOU WIN";
+      if (justEnded && youWon) {
+        winPts = awardWinPoints(winner || (net.player === 1 ? "p1" : "p2"));
+        setGameOverReward(winPts || POINTS_PER_WIN);
+      }
     }
   } else if (s.mode === "local") {
     youWon = winner === "p1";
@@ -1674,9 +1731,11 @@ function endGame(winner, opts = {}) {
       clearBonus = awardBotClear(s.botLevel);
       const total = winPts + clearBonus;
       if (clearBonus > 0) {
-        ui.gameOverTitle.textContent = `LEVEL ${s.botLevel} CLEARED (+${total} PTS)`;
+        ui.gameOverTitle.textContent = `LEVEL ${s.botLevel} CLEARED`;
+        setGameOverReward(total);
       } else {
-        ui.gameOverTitle.textContent = `YOU WIN (+${winPts || POINTS_PER_WIN} PTS)`;
+        ui.gameOverTitle.textContent = "YOU WIN";
+        setGameOverReward(winPts || POINTS_PER_WIN);
       }
     } else {
       ui.gameOverTitle.textContent = youWon ? "YOU WIN" : "BOT WINS";
@@ -1685,7 +1744,8 @@ function endGame(winner, opts = {}) {
     youWon = (winner === "p1" && net.player === 1) || (winner === "p2" && net.player === 2);
     if (justEnded && youWon) {
       winPts = awardWinPoints(winner);
-      ui.gameOverTitle.textContent = `YOU WIN (+${winPts || POINTS_PER_WIN} PTS)`;
+      ui.gameOverTitle.textContent = "YOU WIN";
+      setGameOverReward(winPts || POINTS_PER_WIN);
     } else {
       ui.gameOverTitle.textContent = youWon ? "YOU WIN" : "YOU LOSE";
     }

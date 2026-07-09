@@ -281,6 +281,35 @@ canvas {
   margin-bottom: 10px;
 }
 
+.overlay-reward {
+  font-weight: 900;
+  font-size: 22px;
+  letter-spacing: 0.18em;
+  color: #86efac;
+  margin: -2px 0 14px;
+  text-shadow: 0 0 18px rgba(134, 239, 172, 0.45);
+  animation: rewardPop 0.55s ease-out;
+}
+
+.overlay-reward.hidden {
+  display: none;
+}
+
+@keyframes rewardPop {
+  0% {
+    opacity: 0;
+    transform: scale(0.7);
+  }
+  55% {
+    opacity: 1;
+    transform: scale(1.12);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
 .overlay-score {
   font-size: 22px;
   letter-spacing: 0.16em;
@@ -884,6 +913,11 @@ canvas {
   .overlay-title {
     font-size: 22px;
     margin-bottom: 8px;
+  }
+
+  .overlay-reward {
+    font-size: 16px;
+    margin: -2px 0 10px;
   }
 
   .overlay-score {
