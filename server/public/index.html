@@ -4,11 +4,12 @@
     <meta charset="UTF-8" />
     <meta
       name="viewport"
-      content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover"
+      content="width=device-width, initial-scale=1, maximum-scale=1, minimum-scale=1, user-scalable=no, viewport-fit=cover"
     />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black" />
     <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="screen-orientation" content="landscape" />
     <title>PongMaster</title>
     <style>
       html,
@@ -21,9 +22,16 @@
         display: none !important;
       }
     </style>
-    <link rel="stylesheet" href="style.css?v=20260709c" />
+    <link rel="stylesheet" href="style.css?v=20260709e" />
   </head>
   <body>
+    <div id="rotateGate" class="rotate-gate hidden" aria-live="polite">
+      <div class="rotate-gate-card">
+        <div class="rotate-icon" aria-hidden="true">↻</div>
+        <div class="rotate-title">Rotate your phone</div>
+        <p class="rotate-text">PongMaster plays in landscape. Turn your device sideways.</p>
+      </div>
+    </div>
     <canvas id="menuBg" class="menu-bg" aria-hidden="true"></canvas>
     <main class="wrap">
       <header class="top">
@@ -71,7 +79,7 @@
               <span class="settings-label">Fullscreen</span>
               <button type="button" class="settings-toggle" id="btnFullscreen" aria-pressed="false">Off</button>
             </div>
-            <p class="settings-hint" id="fullscreenHint">Locks landscape on supported phones.</p>
+            <p class="settings-hint" id="fullscreenHint">Phones auto-use landscape. Toggle for fullscreen when supported.</p>
             <div class="settings-row">
               <span class="settings-label">Music</span>
               <button type="button" class="settings-toggle" id="btnMusicToggle" aria-pressed="true">On</button>
@@ -223,6 +231,6 @@
       window.PONG_ADMIN = null;
     </script>
     <script src="admin.local.js"></script>
-    <script src="game.js?v=20260709c" defer></script>
+    <script src="game.js?v=20260709e" defer></script>
   </body>
 </html>

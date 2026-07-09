@@ -1970,6 +1970,37 @@ const stageEl = document.querySelector(".stage");
 const isTouchDevice =
   "ontouchstart" in window || matchMedia("(pointer: coarse)").matches;
 
+function isIOSLike() {
+  const ua = navigator.userAgent || "";
+  return (
+    /iPad|iPhone|iPod/.test(ua) ||
+    (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1)
+  );
+}
+
+function isPhoneLike() {
+  if (typeof window.matchMedia === "function") {
+    if (matchMedia("(hover: none) and (pointer: coarse)").matches) {
+      const shortSide = Math.min(window.innerWidth, window.innerHeight);
+      const longSide = Math.max(window.innerWidth, window.innerHeight);
+      if (shortSide <= 520 || (shortSide <= 700 && longSide <= 980)) return true;
+    }
+  }
+  const ua = navigator.userAgent || "";
+  if (/Android.+Mobile|iPhone|iPod|Windows Phone|webOS|BlackBerry|IEMobile|Opera Mini/i.test(ua)) {
+    return true;
+  }
+  if (isIOSLike() && Math.min(window.screen.width, window.screen.height) <= 820) return true;
+  return isTouchDevice && Math.min(window.innerWidth, window.innerHeight) <= 520;
+}
+
+function isLandscapeNow() {
+  if (typeof window.matchMedia === "function" && matchMedia("(orientation: landscape)").matches) {
+    return true;
+  }
+  return window.innerWidth > window.innerHeight;
+}
+
 function serveHint() {
   return isTouchDevice ? "Tap to serve" : "Click to serve";
 }
@@ -2035,6 +2066,7 @@ const ui = {
   fullscreenHint: document.getElementById("fullscreenHint"),
   settingsMsg: document.getElementById("settingsMsg"),
   musicTrackGrid: document.getElementById("musicTrackGrid"),
+  rotateGate: document.getElementById("rotateGate"),
   btnRedeemCode: document.getElementById("btnRedeemCode"),
   redeemPanel: document.getElementById("redeemPanel"),
   redeemInput: document.getElementById("redeemInput"),
@@ -2688,27 +2720,105 @@ function isFullscreenActive() {
   return !!(document.fullscreenElement || document.webkitFullscreenElement);
 }
 
-function isIOSLike() {
-  const ua = navigator.userAgent || "";
-  return /iPad|iPhone|iPod/.test(ua) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
-}
-
 async function lockLandscapeIfPossible() {
   try {
-    if (screen.orientation && screen.orientation.lock) {
+    if (screen.orientation && typeof screen.orientation.lock === "function") {
       await screen.orientation.lock("landscape");
+      return true;
     }
   } catch {
-    /* iOS often blocks orientation.lock */
+    /* iOS Safari usually blocks orientation.lock outside installed PWAs */
   }
+  return false;
 }
 
 function unlockOrientationIfPossible() {
   try {
-    if (screen.orientation && screen.orientation.unlock) screen.orientation.unlock();
+    if (screen.orientation && typeof screen.orientation.unlock === "function") {
+      screen.orientation.unlock();
+    }
   } catch {
     /* ignore */
   }
+}
+
+function fitGameStage() {
+  if (!stageEl || !canvas) return;
+  const phone = document.body.classList.contains("phone-mode");
+  if (!phone) {
+    stageEl.style.width = "";
+    stageEl.style.height = "";
+    canvas.style.width = "";
+    canvas.style.height = "";
+    canvas.style.maxWidth = "";
+    canvas.style.maxHeight = "";
+    return;
+  }
+
+  const wrap = document.querySelector(".wrap");
+  const top = document.querySelector(".top");
+  const bottom = document.querySelector(".bottom");
+  const wrapStyle = wrap ? getComputedStyle(wrap) : null;
+  const gap = wrapStyle ? parseFloat(wrapStyle.rowGap || wrapStyle.gap || "0") || 0 : 0;
+  const padY = wrapStyle
+    ? (parseFloat(wrapStyle.paddingTop) || 0) + (parseFloat(wrapStyle.paddingBottom) || 0)
+    : 0;
+  const availW = Math.max(
+    160,
+    (wrap ? wrap.clientWidth : window.innerWidth) -
+      (wrapStyle
+        ? (parseFloat(wrapStyle.paddingLeft) || 0) + (parseFloat(wrapStyle.paddingRight) || 0)
+        : 0)
+  );
+  const chromeH =
+    (top ? top.offsetHeight : 0) +
+    (bottom ? bottom.offsetHeight : 0) +
+    gap * 2 +
+    padY +
+    8;
+  const availH = Math.max(120, window.innerHeight - chromeH);
+  const scale = Math.min(availW / W, availH / H);
+  const drawW = Math.max(1, Math.floor(W * scale));
+  const drawH = Math.max(1, Math.floor(H * scale));
+  canvas.style.width = `${drawW}px`;
+  canvas.style.height = `${drawH}px`;
+  canvas.style.maxWidth = "100%";
+  canvas.style.maxHeight = "100%";
+  stageEl.style.width = `${drawW}px`;
+  stageEl.style.height = "auto";
+}
+
+function updatePhoneLayout() {
+  const phone = isPhoneLike();
+  const landscape = isLandscapeNow();
+  document.body.classList.toggle("phone-mode", phone);
+  document.body.classList.toggle("phone-landscape", phone && landscape);
+  document.body.classList.toggle("phone-portrait", phone && !landscape);
+  if (ui.rotateGate) {
+    ui.rotateGate.classList.toggle("hidden", !(phone && !landscape));
+  }
+  if (phone && landscape) {
+    lockLandscapeIfPossible();
+  }
+  fitGameStage();
+  if (menuBg.active) resizeMenuBg();
+}
+
+function initPhoneExperience() {
+  updatePhoneLayout();
+  const onOrient = () => {
+    updatePhoneLayout();
+  };
+  window.addEventListener("orientationchange", onOrient);
+  if (screen.orientation && screen.orientation.addEventListener) {
+    screen.orientation.addEventListener("change", onOrient);
+  }
+  // Try lock after first user gesture (required on many browsers)
+  const tryLockOnce = () => {
+    if (isPhoneLike()) lockLandscapeIfPossible();
+  };
+  document.addEventListener("pointerdown", tryLockOnce, { once: true, passive: true });
+  document.addEventListener("touchstart", tryLockOnce, { once: true, passive: true });
 }
 
 async function enterFullscreenMode() {
@@ -2720,20 +2830,22 @@ async function enterFullscreenMode() {
     /* ignore */
   }
   await lockLandscapeIfPossible();
-  if (isIOSLike() && !isFullscreenActive()) {
+  if (isPhoneLike() && !isFullscreenActive()) {
     document.body.classList.add("ios-landscape-hint");
     if (ui.fullscreenHint) {
-      ui.fullscreenHint.textContent =
-        "iPhone: rotate to landscape. Add to Home Screen for a fuller display.";
+      ui.fullscreenHint.textContent = isIOSLike()
+        ? "iPhone: rotate to landscape. Add to Home Screen for a fuller display."
+        : "Rotate to landscape for the best phone layout.";
     }
   }
   settings.fullscreen = isFullscreenActive() || document.body.classList.contains("ios-landscape-hint");
+  updatePhoneLayout();
   refreshSettingsUI();
 }
 
 async function exitFullscreenMode() {
   document.body.classList.remove("ios-landscape-hint");
-  unlockOrientationIfPossible();
+  if (!isPhoneLike()) unlockOrientationIfPossible();
   try {
     if (document.exitFullscreen && isFullscreenActive()) await document.exitFullscreen();
     else if (document.webkitExitFullscreen && document.webkitFullscreenElement) {
@@ -2744,8 +2856,10 @@ async function exitFullscreenMode() {
   }
   settings.fullscreen = false;
   if (ui.fullscreenHint) {
-    ui.fullscreenHint.textContent = "Locks landscape on supported phones.";
+    ui.fullscreenHint.textContent =
+      "Phones auto-use landscape. Toggle for fullscreen when supported.";
   }
+  updatePhoneLayout();
   refreshSettingsUI();
 }
 
@@ -2767,6 +2881,10 @@ function refreshSettingsUI() {
   if (ui.btnFullscreen) {
     ui.btnFullscreen.setAttribute("aria-pressed", fsOn ? "true" : "false");
     ui.btnFullscreen.textContent = fsOn ? "On" : "Off";
+  }
+  if (ui.fullscreenHint && isPhoneLike() && !fsOn) {
+    ui.fullscreenHint.textContent =
+      "Phones auto-use landscape. Toggle for fullscreen when supported.";
   }
   document.querySelectorAll(".music-track-btn").forEach((btn) => {
     btn.classList.toggle("active", btn.dataset.track === settings.musicTrack);
@@ -4262,6 +4380,7 @@ function stopMenuBg() {
 }
 
 window.addEventListener("resize", () => {
+  updatePhoneLayout();
   if (menuBg.active) resizeMenuBg();
 });
 
@@ -4271,6 +4390,7 @@ async function boot() {
   updatePointsUI();
   initAdminUi();
   bindUi();
+  initPhoneExperience();
   refreshSettingsUI();
   if (hasValidName()) {
     hideOverlay(ui.nameOverlay);
@@ -4285,6 +4405,7 @@ async function boot() {
     startMenuBg();
   }
   if (stageEl) stageEl.classList.add("menu-open");
+  updatePhoneLayout();
   requestAnimationFrame(frame);
 }
 
