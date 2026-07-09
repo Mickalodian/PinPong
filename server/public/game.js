@@ -2067,6 +2067,10 @@ const ui = {
   settingsMsg: document.getElementById("settingsMsg"),
   musicTrackGrid: document.getElementById("musicTrackGrid"),
   rotateGate: document.getElementById("rotateGate"),
+  phoneZoomRow: document.getElementById("phoneZoomRow"),
+  phoneZoomValue: document.getElementById("phoneZoomValue"),
+  btnZoomOut: document.getElementById("btnZoomOut"),
+  btnZoomIn: document.getElementById("btnZoomIn"),
   btnRedeemCode: document.getElementById("btnRedeemCode"),
   redeemPanel: document.getElementById("redeemPanel"),
   redeemInput: document.getElementById("redeemInput"),
@@ -2159,11 +2163,22 @@ const MUSIC_TRACKS = {
   },
 };
 
+const PHONE_ZOOM_DEFAULT = 0.82;
+const PHONE_ZOOM_MIN = 0.55;
+const PHONE_ZOOM_MAX = 1.15;
+
 const settings = {
   musicOn: true,
   musicTrack: "arcade",
   fullscreen: false,
+  phoneZoom: PHONE_ZOOM_DEFAULT,
 };
+
+function clampPhoneZoom(v) {
+  const n = Number(v);
+  if (!Number.isFinite(n)) return PHONE_ZOOM_DEFAULT;
+  return Math.max(PHONE_ZOOM_MIN, Math.min(PHONE_ZOOM_MAX, n));
+}
 
 function loadSettings() {
   try {
@@ -2172,6 +2187,7 @@ function loadSettings() {
     const data = JSON.parse(raw);
     if (typeof data.musicOn === "boolean") settings.musicOn = data.musicOn;
     if (data.musicTrack && MUSIC_TRACKS[data.musicTrack]) settings.musicTrack = data.musicTrack;
+    if (typeof data.phoneZoom === "number") settings.phoneZoom = clampPhoneZoom(data.phoneZoom);
   } catch {
     /* ignore */
   }
@@ -2184,6 +2200,7 @@ function persistSettings() {
       JSON.stringify({
         musicOn: settings.musicOn,
         musicTrack: settings.musicTrack,
+        phoneZoom: clampPhoneZoom(settings.phoneZoom),
       })
     );
   } catch {
@@ -2775,9 +2792,12 @@ function fitGameStage() {
     (bottom ? bottom.offsetHeight : 0) +
     gap * 2 +
     padY +
-    8;
+    12;
   const availH = Math.max(120, window.innerHeight - chromeH);
-  const scale = Math.min(availW / W, availH / H);
+  const fitScale = Math.min(availW / W, availH / H);
+  // Default phone view is intentionally zoomed out; user can pinch/zoom further.
+  const zoom = clampPhoneZoom(settings.phoneZoom);
+  const scale = fitScale * zoom;
   const drawW = Math.max(1, Math.floor(W * scale));
   const drawH = Math.max(1, Math.floor(H * scale));
   canvas.style.width = `${drawW}px`;
@@ -2786,6 +2806,70 @@ function fitGameStage() {
   canvas.style.maxHeight = "100%";
   stageEl.style.width = `${drawW}px`;
   stageEl.style.height = "auto";
+}
+
+function refreshPhoneZoomUI() {
+  const zoom = clampPhoneZoom(settings.phoneZoom);
+  settings.phoneZoom = zoom;
+  if (ui.phoneZoomValue) ui.phoneZoomValue.textContent = `${Math.round(zoom * 100)}%`;
+  if (ui.btnZoomOut) ui.btnZoomOut.disabled = zoom <= PHONE_ZOOM_MIN + 0.001;
+  if (ui.btnZoomIn) ui.btnZoomIn.disabled = zoom >= PHONE_ZOOM_MAX - 0.001;
+}
+
+function setPhoneZoom(next, { persist = true } = {}) {
+  settings.phoneZoom = clampPhoneZoom(next);
+  refreshPhoneZoomUI();
+  fitGameStage();
+  if (persist) persistSettings();
+}
+
+function nudgePhoneZoom(delta) {
+  setPhoneZoom(settings.phoneZoom + delta);
+}
+
+function bindPhonePinchZoom() {
+  let pinchStartDist = 0;
+  let pinchStartZoom = PHONE_ZOOM_DEFAULT;
+
+  function touchDist(touches) {
+    const a = touches[0];
+    const b = touches[1];
+    return Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY);
+  }
+
+  canvas.addEventListener(
+    "touchstart",
+    (e) => {
+      if (!document.body.classList.contains("phone-mode") || e.touches.length !== 2) return;
+      pinchStartDist = touchDist(e.touches);
+      pinchStartZoom = settings.phoneZoom;
+    },
+    { passive: true }
+  );
+
+  canvas.addEventListener(
+    "touchmove",
+    (e) => {
+      if (!document.body.classList.contains("phone-mode") || e.touches.length !== 2) return;
+      if (!pinchStartDist) return;
+      e.preventDefault();
+      const dist = touchDist(e.touches);
+      const ratio = dist / pinchStartDist;
+      setPhoneZoom(pinchStartZoom * ratio, { persist: false });
+    },
+    { passive: false }
+  );
+
+  canvas.addEventListener(
+    "touchend",
+    () => {
+      if (pinchStartDist) {
+        pinchStartDist = 0;
+        persistSettings();
+      }
+    },
+    { passive: true }
+  );
 }
 
 function updatePhoneLayout() {
@@ -2806,6 +2890,8 @@ function updatePhoneLayout() {
 
 function initPhoneExperience() {
   updatePhoneLayout();
+  refreshPhoneZoomUI();
+  bindPhonePinchZoom();
   const onOrient = () => {
     updatePhoneLayout();
   };
@@ -2889,6 +2975,7 @@ function refreshSettingsUI() {
   document.querySelectorAll(".music-track-btn").forEach((btn) => {
     btn.classList.toggle("active", btn.dataset.track === settings.musicTrack);
   });
+  refreshPhoneZoomUI();
 }
 
 function openSettings() {
@@ -2907,6 +2994,80 @@ function openSettings() {
       ? `Preview: ${currentMusicTrack().name}`
       : `Preview: ${currentMusicTrack().name} (music stays off in matches until you turn it on)`;
   }
+  // #region agent log
+  requestAnimationFrame(() => {
+    const overlay = ui.settingsOverlay;
+    const card = overlay?.querySelector(".settings-card");
+    const body = overlay?.querySelector(".settings-body");
+    const title = overlay?.querySelector(".settings-title, .overlay-title");
+    if (!card || !title) return;
+    const tr = title.getBoundingClientRect();
+    const cr = card.getBoundingClientRect();
+    const or = overlay.getBoundingClientRect();
+    const cs = getComputedStyle(card);
+    const ts = getComputedStyle(title);
+    const ps = card.parentElement ? getComputedStyle(card.parentElement) : null;
+    const clippedX = tr.left < cr.left - 0.5 || tr.right > cr.right + 0.5;
+    const clippedY = tr.top < cr.top - 0.5 || tr.bottom > cr.bottom + 0.5;
+    const clippedByOverlayY = tr.top < or.top - 0.5 || tr.bottom > or.bottom + 0.5;
+    const titleFullyVisible = tr.top >= or.top - 0.5 && tr.bottom <= or.bottom + 0.5 && tr.height > 10;
+    const scrollNeeded = !!(body && body.scrollHeight > body.clientHeight + 1);
+    fetch("http://127.0.0.1:7263/ingest/7b680789-6fbf-44a7-9704-6ddeb5cf3ed6", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "38eb5e" },
+      body: JSON.stringify({
+        sessionId: "38eb5e",
+        runId: "post-fix",
+        hypothesisId: "A-E",
+        location: "game.js:openSettings",
+        message: "settings title geometry",
+        data: {
+          runTag: "post-fix",
+          titleText: title.textContent,
+          titleW: Math.round(tr.width),
+          titleH: Math.round(tr.height),
+          titleL: Math.round(tr.left),
+          titleR: Math.round(tr.right),
+          titleT: Math.round(tr.top),
+          titleB: Math.round(tr.bottom),
+          cardW: Math.round(cr.width),
+          cardH: Math.round(cr.height),
+          cardL: Math.round(cr.left),
+          cardR: Math.round(cr.right),
+          cardT: Math.round(cr.top),
+          cardB: Math.round(cr.bottom),
+          cardClientH: card.clientHeight,
+          cardScrollH: card.scrollHeight,
+          bodyClientH: body?.clientHeight ?? null,
+          bodyScrollH: body?.scrollHeight ?? null,
+          cardOverflowX: cs.overflowX,
+          cardOverflowY: cs.overflowY,
+          parentOverflowX: ps?.overflowX || null,
+          parentOverflowY: ps?.overflowY || null,
+          titleFontSize: ts.fontSize,
+          titleLetterSpacing: ts.letterSpacing,
+          titleWhiteSpace: ts.whiteSpace,
+          titleOverflow: ts.overflow,
+          titleMaxWidth: ts.maxWidth,
+          titleScrollW: title.scrollWidth,
+          titleClientW: title.clientWidth,
+          titleDeltaFromCard: Math.round(tr.top - cr.top),
+          clippedX,
+          clippedY,
+          clippedByOverlayY,
+          titleFullyVisible,
+          scrollNeeded,
+          phoneMode: document.body.classList.contains("phone-mode"),
+          landscape: document.body.classList.contains("phone-landscape"),
+          vw: window.innerWidth,
+          vh: window.innerHeight,
+          cssHref: [...document.styleSheets].map((s) => s.href).filter(Boolean).slice(-1)[0] || null,
+        },
+        timestamp: Date.now(),
+      }),
+    }).catch(() => {});
+  });
+  // #endregion
 }
 
 function closeSettings() {
@@ -4035,6 +4196,12 @@ function bindUi() {
   }
   bind(ui.btnFullscreen, () => {
     toggleFullscreenSetting();
+  });
+  bind(ui.btnZoomOut, () => {
+    nudgePhoneZoom(-0.06);
+  });
+  bind(ui.btnZoomIn, () => {
+    nudgePhoneZoom(0.06);
   });
   bind(ui.btnMusicToggle, () => {
     setMusicEnabled(!settings.musicOn);

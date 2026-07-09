@@ -86,8 +86,8 @@ body.phone-mode .wrap {
   min-height: 100dvh;
   max-height: 100dvh;
   height: 100dvh;
-  gap: 6px;
-  padding: 6px max(8px, env(safe-area-inset-right)) 6px max(8px, env(safe-area-inset-left));
+  gap: 4px;
+  padding: 4px max(10px, env(safe-area-inset-right)) 4px max(10px, env(safe-area-inset-left));
   overflow: hidden;
 }
 
@@ -106,6 +106,7 @@ body.phone-mode .stage {
   align-items: center;
   justify-content: center;
   min-height: 0;
+  transform-origin: center center;
 }
 
 body.phone-mode .stage > canvas#game {
@@ -114,6 +115,40 @@ body.phone-mode .stage > canvas#game {
   max-width: 100%;
   max-height: 100%;
   object-fit: contain;
+}
+
+.phone-only-row {
+  display: none;
+}
+
+body.phone-mode .phone-only-row {
+  display: flex;
+}
+
+body.phone-mode p.phone-only-row {
+  display: block;
+}
+
+.zoom-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.zoom-btn {
+  min-width: 44px;
+  padding: 8px 10px;
+  font-size: 18px;
+  line-height: 1;
+}
+
+.zoom-value {
+  min-width: 48px;
+  text-align: center;
+  font-size: 13px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  opacity: 0.85;
 }
 
 body.phone-mode .top {
@@ -156,29 +191,44 @@ body.phone-mode .meta {
 }
 
 body.phone-mode .overlay-card {
-  max-height: min(92dvh, 560px);
+  max-height: none;
   overflow-x: hidden;
-  overflow-y: auto;
+  overflow-y: visible;
   -webkit-overflow-scrolling: touch;
-  padding: 14px 14px;
+  padding: 14px 16px;
   width: min(420px, calc(100% - 12px));
 }
 
 body.phone-mode .overlay-title {
-  font-size: clamp(18px, 5.2vw, 22px);
-  letter-spacing: 0.08em;
+  font-size: clamp(17px, 4.6vw, 22px);
+  letter-spacing: 0.06em;
   margin-bottom: 8px;
-  line-height: 1.2;
+  line-height: 1.25;
+  padding: 2px 0.2em 4px;
+  overflow: visible;
+  white-space: nowrap;
 }
 
 body.phone-mode .settings-card {
-  padding-left: 16px;
-  padding-right: 16px;
+  max-height: min(80dvh, calc(100dvh - 24px));
+  overflow: hidden;
+  padding: 12px 14px 10px;
 }
 
-body.phone-mode .settings-card .overlay-title {
-  font-size: clamp(18px, 5vw, 24px);
-  letter-spacing: 0.09em;
+body.phone-mode .settings-card .overlay-title,
+body.phone-mode .settings-title {
+  font-size: clamp(17px, 4.4vw, 20px);
+  letter-spacing: 0.07em;
+  padding: 2px 0.18em 4px;
+  overflow: visible;
+  white-space: nowrap;
+  position: static;
+  background: transparent;
+}
+
+body.phone-mode .settings-body {
+  gap: 8px;
+  padding-bottom: 6px;
 }
 
 body.phone-mode .play-again {
@@ -428,12 +478,15 @@ canvas {
   inset: 0;
   z-index: 10;
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: center;
   background: rgba(0, 0, 0, 0.72);
   pointer-events: auto;
+  overflow-x: hidden;
   overflow-y: auto;
   -webkit-overflow-scrolling: touch;
+  padding: max(12px, env(safe-area-inset-top)) 12px max(12px, env(safe-area-inset-bottom));
+  box-sizing: border-box;
 }
 
 .stage.menu-open canvas {
@@ -459,6 +512,10 @@ canvas {
   background: #000;
   box-shadow: 0 0 28px rgba(255, 255, 255, 0.14);
   box-sizing: border-box;
+  margin: 0 auto;
+  flex: 0 0 auto;
+  max-width: min(520px, 100%);
+  width: 100%;
 }
 
 .overlay-title {
@@ -466,14 +523,15 @@ canvas {
   font-size: clamp(22px, 5.5vw, 34px);
   letter-spacing: 0.08em;
   margin-bottom: 10px;
-  line-height: 1.15;
+  line-height: 1.2;
   width: 100%;
   max-width: 100%;
-  padding: 0 4px;
+  /* letter-spacing adds space after the last glyph — pad so it isn't clipped */
+  padding: 2px 0.18em 4px;
   box-sizing: border-box;
-  overflow-wrap: anywhere;
-  word-break: break-word;
-  white-space: normal;
+  overflow: visible;
+  white-space: nowrap;
+  text-align: center;
 }
 
 .overlay-reward {
@@ -1133,18 +1191,48 @@ canvas {
 }
 
 .settings-card {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
   max-width: min(420px, calc(100vw - 24px));
   width: 100%;
-  overflow: visible;
-  padding-left: 18px;
-  padding-right: 18px;
+  max-height: min(82dvh, calc(100dvh - 32px));
+  overflow: hidden;
+  padding: 14px 18px 12px;
+  gap: 8px;
 }
 
-.settings-card .overlay-title {
-  font-size: clamp(20px, 6vw, 30px);
-  letter-spacing: 0.1em;
-  padding-inline: 2px;
+.settings-card .overlay-title,
+.settings-title {
+  font-size: clamp(18px, 4.6vw, 24px);
+  letter-spacing: 0.08em;
+  padding: 4px 0.2em 6px;
+  margin: 0;
   overflow: visible;
+  white-space: nowrap;
+  width: auto;
+  max-width: 100%;
+  align-self: center;
+  display: inline-block;
+  flex: 0 0 auto;
+  position: static;
+  background: transparent;
+}
+
+.settings-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  padding: 4px 2px 8px;
+  width: 100%;
+  box-sizing: border-box;
 }
 
 .settings-row {
@@ -1239,9 +1327,11 @@ body.ios-landscape-hint {
   (max-height: 520px) and (orientation: landscape) {
   body.phone-mode .wrap {
     grid-template-rows: auto minmax(0, 1fr) auto;
-    gap: 4px;
-    padding-top: max(4px, env(safe-area-inset-top));
-    padding-bottom: max(4px, env(safe-area-inset-bottom));
+    gap: 3px;
+    padding-top: max(3px, env(safe-area-inset-top));
+    padding-bottom: max(3px, env(safe-area-inset-bottom));
+    padding-left: max(12px, env(safe-area-inset-left));
+    padding-right: max(12px, env(safe-area-inset-right));
   }
 
   body.phone-mode .top .hint {
@@ -1261,8 +1351,20 @@ body.ios-landscape-hint {
   }
 
   body.phone-mode .overlay-card {
-    max-height: min(88dvh, 420px);
+    max-height: none;
     padding: 12px 10px;
+  }
+
+  body.phone-mode .settings-card {
+    max-height: min(78dvh, calc(100dvh - 20px));
+    overflow: hidden;
+  }
+
+  body.phone-mode .shop-card,
+  body.phone-mode .bot-level-card,
+  body.phone-mode .admin-card {
+    max-height: min(82dvh, calc(100dvh - 24px));
+    overflow-y: auto;
   }
 
   body.phone-mode .shop-grid {
