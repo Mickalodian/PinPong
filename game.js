@@ -630,6 +630,30 @@ function cancelMatchSearch() {
 const NET_INTERP_MS = 58;
 const NET_EXTRAP_MAX = 0.045;
 
+let dbgNearP2Last = 0;
+
+function dbgClient(hypothesisId, location, message, data) {
+  // #region agent log
+  fetch("http://127.0.0.1:7715/ingest/a7f8c61b-f68b-44f7-981d-52bb95ff3807", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "e4bbdd" },
+    body: JSON.stringify({
+      sessionId: "e4bbdd",
+      hypothesisId,
+      location,
+      message,
+      data,
+      timestamp: Date.now(),
+    }),
+  }).catch(() => {});
+  // #endregion
+}
+
+function paddleFaceX(side, px) {
+  if (side === "p1") return px + paddle.w + ballCfg.r;
+  return px - ballCfg.r;
+}
+
 function inCenterCourt(ballX) {
   const margin = 220;
   return ballX > table.x + margin && ballX < table.x + table.w - margin;
@@ -948,8 +972,26 @@ function tryLocalPaddleHit(p, side) {
     (side === "p1" && s.ball.vx < 0) || (side === "p2" && s.ball.vx > 0);
   if (!movingToward) return false;
   if (!ballOverlapsPaddleRect(s.ball.x, s.ball.y, p.x, p.y, paddle.w, h)) return false;
+  const ballXBefore = s.ball.x;
   if (side === "p1") s.ball.x = p.x + paddle.w + ballCfg.r;
   else s.ball.x = p.x - ballCfg.r;
+  const faceX = paddleFaceX(side, p.x);
+  // #region agent log
+  dbgClient("H4", "game.js:tryLocalPaddleHit", "local paddle hit", {
+    mode: s.mode,
+    side,
+    paddleX: p.x,
+    paddleY: p.y,
+    paddleH: h,
+    ballXBefore,
+    ballXAfter: s.ball.x,
+    faceX,
+    faceGapBefore: ballXBefore - faceX,
+    paddleLeft: p.x,
+    paddleRight: p.x + paddle.w,
+    vx: s.ball.vx,
+  });
+  // #endregion
   reflectFromPaddle(p, side);
   return true;
 }
@@ -1026,11 +1068,30 @@ function pushSnapshot(state, serverT) {
 function renderInterpolatedBall() {
   if (!net.snap?.ball) return;
 
+  const authX = net.snap.ball.x;
+  const p2Face = paddleFaceX("p2", s.p2.x);
+
   if (!inCenterCourt(net.snap.ball.x)) {
     s.ball.x = net.snap.ball.x;
     s.ball.y = net.snap.ball.y;
     s.ball.vx = net.snap.ball.vx;
     s.ball.vy = net.snap.ball.vy;
+    // #region agent log
+    if (s.mode === "online" && net.snap.ball.vx > 0 && net.snap.ball.x > p2Face - 50) {
+      const now = Date.now();
+      if (now - dbgNearP2Last > 300) {
+        dbgNearP2Last = now;
+        dbgClient("H11", "game.js:renderInterpolatedBall", "near-p2 snap path", {
+          authX,
+          visualX: s.ball.x,
+          p2Face,
+          forwardGap: s.ball.x - p2Face,
+          snapPrev: !!net.snapPrev,
+          player: net.player,
+        });
+      }
+    }
+    // #endregion
     return;
   }
 
@@ -1056,6 +1117,25 @@ function renderInterpolatedBall() {
     s.ball.x += s.ball.vx * extrap * 0.35;
     s.ball.y += s.ball.vy * extrap * 0.35;
   }
+
+  // #region agent log
+  if (s.mode === "online" && net.snap.ball.vx > 0 && s.ball.x > p2Face - 80) {
+    const now = Date.now();
+    if (now - dbgNearP2Last > 300) {
+      dbgNearP2Last = now;
+      dbgClient("H13", "game.js:renderInterpolatedBall", "near-p2 interp path", {
+        authX,
+        visualX: s.ball.x,
+        p2Face,
+        forwardGap: s.ball.x - p2Face,
+        alpha: net.snapPrev?.ball ? clamp((renderT - net.snapPrevAt) / (net.snapAt - net.snapPrevAt), 0, 1) : 1,
+        extrap: nearPaddleZone(s.ball.x) ? 0 : clamp((Date.now() - net.snapAt) / 1000, 0, NET_EXTRAP_MAX),
+        snapPrev: !!net.snapPrev,
+        player: net.player,
+      });
+    }
+  }
+  // #endregion
 }
 
 function applyServerState(state, serverT, forceSnap = false) {
@@ -1369,8 +1449,33 @@ function handleWsMessage(msg) {
 
   if (msg.type === "s" && msg.d) {
     const state = expandState(msg.d);
+    const visualBallXBefore = s.ball.x;
     applyServerState(state, state.t, msg.h === 1);
-    if (msg.h === 1) playPaddleHit();
+    if (msg.h === 1) {
+      const p1Face = paddleFaceX("p1", s.p1.x);
+      const p2Face = paddleFaceX("p2", s.p2.x);
+      const serverBallX = state.ball?.x ?? null;
+      // #region agent log
+      dbgClient("H3", "game.js:handleWsMessage", "online paddle hit", {
+        player: net.player,
+        visualBallXBefore,
+        visualBallXAfter: s.ball.x,
+        serverBallX,
+        p1x: s.p1.x,
+        p2x: s.p2.x,
+        p1y: s.p1.y,
+        p2y: s.p2.y,
+        p1Face,
+        p2Face,
+        visualGapP1: s.ball.x - p1Face,
+        visualGapP2: s.ball.x - p2Face,
+        serverGapP1: serverBallX != null ? serverBallX - p1Face : null,
+        serverGapP2: serverBallX != null ? serverBallX - p2Face : null,
+        ballVx: state.ball?.vx,
+      });
+      // #endregion
+      playPaddleHit();
+    }
     if (msg.g === 1) scoreFx("p1");
     if (msg.g === 2) scoreFx("p2");
     return;

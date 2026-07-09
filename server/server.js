@@ -10,6 +10,30 @@ const ROOT = [path.join(__dirname, "public"), path.join(__dirname, "..")].find((
 const SCORE_LIMIT = 5;
 const TICK_RATE = 60;
 const BROADCAST_RATE = 20;
+const DEBUG_LOG = [
+  path.resolve(__dirname, "..", "..", "Desktop", "debug-e4bbdd.log"),
+  path.resolve(__dirname, "..", "debug-e4bbdd.log"),
+].find((p) => {
+  try {
+    const dir = path.dirname(p);
+    return fs.existsSync(dir) || dir.endsWith("pong-bw");
+  } catch {
+    return false;
+  }
+}) || path.resolve(__dirname, "..", "..", "Desktop", "debug-e4bbdd.log");
+
+function dbgServer(hypothesisId, location, message, data) {
+  // #region agent log
+  try {
+    fs.appendFileSync(
+      DEBUG_LOG,
+      `${JSON.stringify({ sessionId: "e4bbdd", hypothesisId, location, message, data, timestamp: Date.now() })}\n`
+    );
+  } catch {
+    /* ignore */
+  }
+  // #endregion
+}
 
 const GAME = {
   W: 900,
@@ -290,8 +314,26 @@ function ballOverlapsPaddle(bx, by, px, py, pw, ph) {
 function resolvePaddleHit(state, side) {
   const { paddle, ball } = GAME;
   const px = paddleX(side);
+  const ballXBefore = state.ball.x;
   if (side === 1) state.ball.x = px + paddle.w + ball.r;
   else state.ball.x = px - ball.r;
+  const faceX = side === 1 ? px + paddle.w + ball.r : px - ball.r;
+  // #region agent log
+  dbgServer("H1", "server.js:resolvePaddleHit", "server paddle hit", {
+    side,
+    px,
+    paddleW: paddle.w,
+    ballR: ball.r,
+    py: side === 1 ? state.p1y : state.p2y,
+    ballXBefore,
+    ballXAfter: state.ball.x,
+    faceX,
+    faceGapBefore: ballXBefore - faceX,
+    paddleLeft: px,
+    paddleRight: px + paddle.w,
+    vx: state.ball.vx,
+  });
+  // #endregion
   reflectFromPaddle(state, side);
 }
 
