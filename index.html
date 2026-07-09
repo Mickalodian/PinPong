@@ -10,12 +10,23 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black" />
     <meta name="mobile-web-app-capable" content="yes" />
     <title>Pong (B/W)</title>
-    <link rel="stylesheet" href="/style.css" />
+    <style>
+      html,
+      body {
+        background: #000;
+        color: #fff;
+        margin: 0;
+      }
+      .overlay.hidden {
+        display: none !important;
+      }
+    </style>
+    <link rel="stylesheet" href="style.css" />
   </head>
   <body>
     <main class="wrap">
       <header class="top">
-        <div class="title">PONG (BLACK / WHITE)</div>
+        <div class="title" id="titleEl">PONG (BLACK / WHITE)</div>
         <div class="hint" id="hint">Choose a mode to start.</div>
       </header>
 
@@ -27,6 +38,59 @@
             <div class="overlay-title">SELECT MODE</div>
             <button type="button" class="play-again" id="btnLocal">Play vs Bot</button>
             <button type="button" class="play-again secondary" id="btnOnline">Online 1v1</button>
+            <button type="button" class="play-again secondary" id="btnCustomize">Customize</button>
+            <button type="button" class="play-again secondary" id="btnAdmin">Admin</button>
+          </div>
+        </div>
+
+        <div class="overlay hidden" id="passkeyOverlay" aria-hidden="true">
+          <div class="overlay-card menu-card">
+            <div class="overlay-title">OWNER ACCESS</div>
+            <p class="lobby-text">Enter owner passkey.</p>
+            <input id="passkeyInput" class="room-input" type="password" maxlength="8" placeholder="PASSKEY" autocomplete="off" />
+            <p class="shop-msg" id="passkeyMsg"></p>
+            <button type="button" class="play-again" id="btnPasskeySubmit">Unlock</button>
+            <button type="button" class="link-btn" id="btnPasskeyCancel">Cancel</button>
+          </div>
+        </div>
+
+        <div class="overlay hidden" id="adminOverlay" aria-hidden="true">
+          <div class="overlay-card menu-card admin-card">
+            <div class="overlay-title">ADMIN</div>
+            <p class="admin-welcome" id="adminWelcome">Owner panel</p>
+            <p class="shop-points">Points: <span id="adminPoints">0</span></p>
+            <div class="admin-row">
+              <input id="adminPointsInput" class="room-input admin-input" type="number" min="0" placeholder="Amount" />
+              <button type="button" class="play-again secondary admin-btn" id="btnAdminAddPts">Add</button>
+              <button type="button" class="play-again secondary admin-btn" id="btnAdminSetPts">Set</button>
+            </div>
+            <div class="admin-actions">
+              <button type="button" class="play-again secondary" id="btnAdminUnlockAll">Unlock all colours</button>
+              <button type="button" class="play-again secondary" id="btnAdminMaxPts">+999 points</button>
+            </div>
+            <p class="admin-section-label">Abilities (local games)</p>
+            <div class="admin-toggles">
+              <label class="admin-toggle"><input type="checkbox" id="abMegaPaddle" /> Mega paddle</label>
+              <label class="admin-toggle"><input type="checkbox" id="abFreeShop" /> Free shop</label>
+              <label class="admin-toggle"><input type="checkbox" id="abSlowBot" /> Slow bot</label>
+              <label class="admin-toggle"><input type="checkbox" id="abBonusPts" /> +10 pts per win</label>
+            </div>
+            <p class="shop-msg" id="adminMsg">Abilities are local. Points sync globally.</p>
+            <button type="button" class="link-btn" id="btnAdminBack">Back</button>
+          </div>
+        </div>
+
+        <div class="overlay hidden" id="customizeOverlay" aria-hidden="true">
+          <div class="overlay-card menu-card shop-card">
+            <div class="overlay-title">CUSTOMIZE</div>
+            <p class="shop-points">Points: <span id="shopPoints">0</span> <span class="shop-hint">(+2 per win · synced online)</span></p>
+            <div class="shop-tabs">
+              <button type="button" class="shop-tab active" data-tab="paddle">Paddle</button>
+              <button type="button" class="shop-tab" data-tab="table">Table side</button>
+            </div>
+            <div class="shop-grid" id="shopGrid"></div>
+            <p class="shop-msg" id="shopMsg">Buy or equip a colour.</p>
+            <button type="button" class="link-btn" id="btnCustomizeBack">Back</button>
           </div>
         </div>
 
@@ -70,6 +134,10 @@
       </footer>
     </main>
 
-    <script src="/game.js" defer></script>
+    <script>
+      window.PONG_ADMIN = null;
+    </script>
+    <script src="admin.local.js"></script>
+    <script src="game.js" defer></script>
   </body>
 </html>

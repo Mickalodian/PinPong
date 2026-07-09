@@ -29,6 +29,161 @@ const MIME = {
 
 const rooms = new Map();
 
+const PROFILES_PATH = path.join(__dirname, "profiles.json");
+const ADMIN_CODE = process.env.ADMIN_CODE || "4536";
+const adminSessions = new Map();
+
+function loadProfiles() {
+  try {
+    if (fs.existsSync(PROFILES_PATH)) {
+      return JSON.parse(fs.readFileSync(PROFILES_PATH, "utf8"));
+    }
+  } catch {
+    /* ignore */
+  }
+  return {};
+}
+
+function saveProfiles(db) {
+  fs.writeFileSync(PROFILES_PATH, JSON.stringify(db, null, 2));
+}
+
+function defaultProfile() {
+  return {
+    points: 0,
+    owned: { paddle: ["white"], table: ["classic"] },
+    equipped: { paddle: "white", table: "classic" },
+  };
+}
+
+const VALID_PADDLE = new Set([
+  "white", "blue", "pink", "orange", "red", "green", "yellow", "purple", "cyan",
+  "galaxy", "moon", "sunset", "neon", "lava", "ice", "rainbow", "aurora",
+]);
+const VALID_TABLE = new Set([
+  "classic", "blue", "pink", "orange", "red", "green", "yellow", "purple", "cyan",
+  "galaxy", "moon", "sunset", "neon", "lava", "ice", "rainbow", "aurora",
+]);
+
+function sanitizeCosmetics(cos) {
+  if (!cos) return null;
+  const paddle = VALID_PADDLE.has(cos.paddle) ? cos.paddle : "white";
+  const table = VALID_TABLE.has(cos.table) ? cos.table : "classic";
+  return { paddle, table };
+}
+
+function relayCosmetics(room, ws) {
+  const other = room.players[ws.playerSlot === 0 ? 1 : 0];
+  if (other && other.readyState === 1 && ws.cosmetics) {
+    other.send(JSON.stringify({ type: "oCos", paddle: ws.cosmetics.paddle, table: ws.cosmetics.table }));
+  }
+}
+
+function exchangeCosmetics(room) {
+  const p0 = room.players[0];
+  const p1 = room.players[1];
+  if (p0?.readyState === 1 && p1?.cosmetics) {
+    p0.send(JSON.stringify({ type: "oCos", paddle: p1.cosmetics.paddle, table: p1.cosmetics.table }));
+  }
+  if (p1?.readyState === 1 && p0?.cosmetics) {
+    p1.send(JSON.stringify({ type: "oCos", paddle: p0.cosmetics.paddle, table: p0.cosmetics.table }));
+  }
+}
+
+function readJsonBody(req) {
+  return new Promise((resolve, reject) => {
+    let data = "";
+    req.on("data", (chunk) => {
+      data += chunk;
+      if (data.length > 1e6) {
+        reject(new Error("Body too large"));
+        req.destroy();
+      }
+    });
+    req.on("end", () => {
+      try {
+        resolve(data ? JSON.parse(data) : {});
+      } catch {
+        reject(new Error("Invalid JSON"));
+      }
+    });
+    req.on("error", reject);
+  });
+}
+
+async function handleApi(req, res, urlPath) {
+  if (req.method !== "POST") {
+    res.writeHead(405);
+    res.end("Method not allowed");
+    return true;
+  }
+
+  let body;
+  try {
+    body = await readJsonBody(req);
+  } catch {
+    res.writeHead(400);
+    res.end("Bad request");
+    return true;
+  }
+
+  if (urlPath === "api/admin-auth") {
+    const code = String(body.code || "");
+    if (code !== ADMIN_CODE) {
+      res.writeHead(200, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ ok: false }));
+      return true;
+    }
+    const token = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    adminSessions.set(token, Date.now() + 24 * 60 * 60 * 1000);
+    res.writeHead(200, { "Content-Type": "application/json" });
+    res.end(JSON.stringify({ ok: true, token, expiresIn: 86400 }));
+    return true;
+  }
+
+  if (urlPath === "api/profile") {
+    const playerId = String(body.playerId || "").trim();
+    if (!playerId || playerId.length < 8) {
+      res.writeHead(400, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ error: "Invalid player id" }));
+      return true;
+    }
+    const db = loadProfiles();
+    if (body.action === "get") {
+      const profile = db[playerId] || defaultProfile();
+      res.writeHead(200, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ profile }));
+      return true;
+    }
+    if (body.action === "save" && body.profile) {
+      const p = body.profile;
+      db[playerId] = {
+        points: Math.max(0, Number(p.points) || 0),
+        owned: {
+          paddle: Array.isArray(p.owned?.paddle) ? p.owned.paddle : ["white"],
+          table: Array.isArray(p.owned?.table) ? p.owned.table : ["classic"],
+        },
+        equipped: {
+          paddle: String(p.equipped?.paddle || "white"),
+          table: String(p.equipped?.table || "classic"),
+        },
+        updatedAt: Date.now(),
+      };
+      if (!db[playerId].owned.paddle.includes("white")) db[playerId].owned.paddle.unshift("white");
+      if (!db[playerId].owned.table.includes("classic")) db[playerId].owned.table.unshift("classic");
+      saveProfiles(db);
+      res.writeHead(200, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ ok: true }));
+      return true;
+    }
+    res.writeHead(400, { "Content-Type": "application/json" });
+    res.end(JSON.stringify({ error: "Unknown action" }));
+    return true;
+  }
+
+  return false;
+}
+
 function clamp(v, a, b) {
   return Math.max(a, Math.min(b, v));
 }
@@ -368,12 +523,41 @@ function serveStatic(req, res) {
   if (urlPath === "/") urlPath = "index.html";
   urlPath = urlPath.replace(/^\/+/, "");
 
-  const filePath = path.resolve(ROOT, urlPath);
-  const rootResolved = path.resolve(ROOT);
-  if (!filePath.startsWith(rootResolved)) {
-    res.writeHead(403);
-    res.end("Forbidden");
+  if (urlPath.startsWith("api/")) {
+    handleApi(req, res, urlPath)
+      .then((handled) => {
+        if (!handled) {
+          res.writeHead(404);
+          res.end("Not found");
+        }
+      })
+      .catch(() => {
+        res.writeHead(500);
+        res.end("Server error");
+      });
     return;
+  }
+
+  let filePath;
+  const rootResolved = path.resolve(ROOT);
+
+  // Serve owner admin key from repo root only (never copied to public/)
+  if (urlPath === "admin.local.js") {
+    const adminPath = path.resolve(ROOT, "..", "admin.local.js");
+    const parentDir = path.resolve(ROOT, "..");
+    if (!adminPath.startsWith(parentDir) || !fs.existsSync(adminPath)) {
+      res.writeHead(404);
+      res.end("Not found");
+      return;
+    }
+    filePath = adminPath;
+  } else {
+    filePath = path.resolve(ROOT, urlPath);
+    if (!filePath.startsWith(rootResolved)) {
+      res.writeHead(403);
+      res.end("Forbidden");
+      return;
+    }
   }
 
   fs.readFile(filePath, (err, data) => {
@@ -414,6 +598,7 @@ wss.on("connection", (ws) => {
       attachPlayer(room, ws, 0);
       ws.send(JSON.stringify({ type: "roomCreated", code, player: 1 }));
       ws.send(JSON.stringify(roomStatus(room)));
+      if (ws.cosmetics) relayCosmetics(room, ws);
       return;
     }
 
@@ -432,8 +617,10 @@ wss.on("connection", (ws) => {
       attachPlayer(room, ws, slot);
       ws.send(JSON.stringify({ type: "joined", code, player: slot + 1 }));
       broadcast(room, roomStatus(room));
+      if (ws.cosmetics) relayCosmetics(room, ws);
       if (room.players[0] && room.players[1]) {
         resetBall(room.state, true);
+        exchangeCosmetics(room);
         broadcast(room, { type: "matchReady" });
         sendState(room);
         startLoop(room);
@@ -441,7 +628,41 @@ wss.on("connection", (ws) => {
       return;
     }
 
+    if (msg.type === "profileGet" && msg.playerId) {
+      const db = loadProfiles();
+      const profile = db[msg.playerId] || defaultProfile();
+      ws.send(JSON.stringify({ type: "profile", profile }));
+      return;
+    }
+
+    if (msg.type === "profileSave" && msg.playerId && msg.profile) {
+      const db = loadProfiles();
+      const p = msg.profile;
+      db[msg.playerId] = {
+        points: Math.max(0, Number(p.points) || 0),
+        owned: {
+          paddle: Array.isArray(p.owned?.paddle) ? p.owned.paddle : ["white"],
+          table: Array.isArray(p.owned?.table) ? p.owned.table : ["classic"],
+        },
+        equipped: {
+          paddle: String(p.equipped?.paddle || "white"),
+          table: String(p.equipped?.table || "classic"),
+        },
+        updatedAt: Date.now(),
+      };
+      saveProfiles(db);
+      ws.send(JSON.stringify({ type: "profileSaved", ok: true }));
+      return;
+    }
+
     const room = ws.roomCode ? rooms.get(ws.roomCode) : null;
+
+    if (msg.type === "cosmetics" && msg.paddle && msg.table) {
+      ws.cosmetics = sanitizeCosmetics({ paddle: String(msg.paddle), table: String(msg.table) });
+      if (room) relayCosmetics(room, ws);
+      return;
+    }
+
     if (!room) return;
 
     if (msg.type === "paddle" && typeof msg.y === "number") {

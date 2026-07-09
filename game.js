@@ -10,22 +10,455 @@ const table = { x: 38, y: 26, w: W - 76, h: H - 52 };
 const paddle = { w: 14, h: 110, inset: 18, aiSpeed: 560 };
 const ballCfg = { r: 8, speed0: 430, speedMax: 1000 };
 
-function dbgLog(hypothesisId, location, message, data = {}) {
-  // #region agent log
-  fetch("http://127.0.0.1:7715/ingest/a7f8c61b-f68b-44f7-981d-52bb95ff3807", {
-    method: "POST",
-    headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "e4bbdd" },
-    body: JSON.stringify({
-      sessionId: "e4bbdd",
-      runId: "pre-fix",
-      hypothesisId,
-      location,
-      message,
-      data,
-      timestamp: Date.now(),
-    }),
-  }).catch(() => {});
-  // #endregion
+const SAVE_CACHE_KEY = "pong-bw-save";
+const PLAYER_ID_KEY = "pong-player-id";
+const ADMIN_SESSION_KEY = "pong-admin-until";
+const ADMIN_PASSKEY = "4536";
+const ABILITIES_KEY = "pong-bw-abilities";
+const POINTS_PER_WIN = 2;
+
+const SHOP = {
+  paddle: [
+    { id: "white", name: "Classic", price: 0, style: "solid", color: "#ffffff" },
+    { id: "blue", name: "Blue", price: 4, style: "solid", color: "#3b82f6" },
+    { id: "pink", name: "Pink", price: 4, style: "solid", color: "#ec4899" },
+    { id: "orange", name: "Orange", price: 4, style: "solid", color: "#f97316" },
+    { id: "red", name: "Red", price: 4, style: "solid", color: "#ef4444" },
+    { id: "green", name: "Green", price: 4, style: "solid", color: "#22c55e" },
+    { id: "yellow", name: "Yellow", price: 4, style: "solid", color: "#eab308" },
+    { id: "purple", name: "Purple", price: 4, style: "solid", color: "#a855f7" },
+    { id: "cyan", name: "Cyan", price: 4, style: "solid", color: "#06b6d4" },
+    { id: "galaxy", name: "Galaxy", price: 20, style: "galaxy" },
+    { id: "moon", name: "Moon", price: 22, style: "moon" },
+    { id: "sunset", name: "Sunset", price: 24, style: "sunset" },
+    { id: "neon", name: "Neon", price: 26, style: "neon" },
+    { id: "lava", name: "Lava", price: 24, style: "lava" },
+    { id: "ice", name: "Ice", price: 22, style: "ice" },
+    { id: "rainbow", name: "Rainbow", price: 28, style: "rainbow" },
+    { id: "aurora", name: "Aurora", price: 26, style: "aurora" },
+  ],
+  table: [
+    { id: "classic", name: "Classic", price: 0, style: "solid", color: "#000000" },
+    { id: "blue", name: "Blue", price: 4, style: "solid", color: "#1e3a8a" },
+    { id: "pink", name: "Pink", price: 4, style: "solid", color: "#9d174d" },
+    { id: "orange", name: "Orange", price: 4, style: "solid", color: "#9a3412" },
+    { id: "red", name: "Red", price: 4, style: "solid", color: "#991b1b" },
+    { id: "green", name: "Green", price: 4, style: "solid", color: "#14532d" },
+    { id: "yellow", name: "Yellow", price: 4, style: "solid", color: "#854d0e" },
+    { id: "purple", name: "Purple", price: 4, style: "solid", color: "#581c87" },
+    { id: "cyan", name: "Cyan", price: 4, style: "solid", color: "#155e75" },
+    { id: "galaxy", name: "Galaxy", price: 20, style: "galaxy" },
+    { id: "moon", name: "Moon", price: 22, style: "moon" },
+    { id: "sunset", name: "Sunset", price: 24, style: "sunset" },
+    { id: "neon", name: "Neon", price: 26, style: "neon" },
+    { id: "lava", name: "Lava", price: 24, style: "lava" },
+    { id: "ice", name: "Ice", price: 22, style: "ice" },
+    { id: "rainbow", name: "Rainbow", price: 28, style: "rainbow" },
+    { id: "aurora", name: "Aurora", price: 26, style: "aurora" },
+  ],
+};
+
+const save = {
+  points: 0,
+  owned: { paddle: ["white"], table: ["classic"] },
+  equipped: { paddle: "white", table: "classic" },
+  shopTab: "paddle",
+  abilities: { megaPaddle: false, freeShop: false, slowBot: false, bonusPts: false },
+};
+
+function isAdmin() {
+  const until = parseInt(sessionStorage.getItem(ADMIN_SESSION_KEY) || "0", 10);
+  return Date.now() < until;
+}
+
+function getPlayerId() {
+  let id = localStorage.getItem(PLAYER_ID_KEY);
+  if (!id) {
+    id = crypto.randomUUID();
+    localStorage.setItem(PLAYER_ID_KEY, id);
+  }
+  return id;
+}
+
+function applyProfile(data) {
+  if (typeof data.points === "number") save.points = data.points;
+  if (data.owned?.paddle) save.owned.paddle = data.owned.paddle;
+  if (data.owned?.table) save.owned.table = data.owned.table;
+  if (data.equipped?.paddle) save.equipped.paddle = data.equipped.paddle;
+  if (data.equipped?.table) save.equipped.table = data.equipped.table;
+  if (!save.owned.paddle.includes("white")) save.owned.paddle.unshift("white");
+  if (!save.owned.table.includes("classic")) save.owned.table.unshift("classic");
+}
+
+function loadAbilities() {
+  if (!isAdmin()) return;
+  try {
+    const raw = localStorage.getItem(ABILITIES_KEY);
+    if (raw) Object.assign(save.abilities, JSON.parse(raw));
+  } catch {
+    /* ignore */
+  }
+}
+
+function persistAbilities() {
+  if (!isAdmin()) return;
+  try {
+    localStorage.setItem(ABILITIES_KEY, JSON.stringify(save.abilities));
+  } catch {
+    /* ignore */
+  }
+}
+
+async function syncProfileFromServer() {
+  if (!location.host) return;
+  try {
+    const res = await fetch("/api/profile", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "get", playerId: getPlayerId() }),
+    });
+    if (!res.ok) return;
+    const data = await res.json();
+    if (data.profile) {
+      applyProfile(data.profile);
+      localStorage.setItem(
+        SAVE_CACHE_KEY,
+        JSON.stringify({ points: save.points, owned: save.owned, equipped: save.equipped })
+      );
+    }
+  } catch {
+    /* offline */
+  }
+}
+
+let profileSyncTimer = null;
+async function syncProfileToServer() {
+  if (!location.host) return;
+  try {
+    await fetch("/api/profile", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        action: "save",
+        playerId: getPlayerId(),
+        profile: { points: save.points, owned: save.owned, equipped: save.equipped },
+      }),
+    });
+  } catch {
+    /* offline */
+  }
+}
+
+async function loadSave() {
+  loadAbilities();
+  try {
+    const raw = localStorage.getItem(SAVE_CACHE_KEY);
+    if (raw) applyProfile(JSON.parse(raw));
+  } catch {
+    /* ignore */
+  }
+  await syncProfileFromServer();
+}
+
+function persistSave() {
+  try {
+    const payload = { points: save.points, owned: save.owned, equipped: save.equipped };
+    localStorage.setItem(SAVE_CACHE_KEY, JSON.stringify(payload));
+    persistAbilities();
+    clearTimeout(profileSyncTimer);
+    profileSyncTimer = setTimeout(syncProfileToServer, 300);
+    if (s.mode === "online" && net.connected) sendCosmetics();
+  } catch {
+    /* ignore */
+  }
+}
+
+function shopItem(kind, id) {
+  return SHOP[kind].find((i) => i.id === id) || SHOP[kind][0];
+}
+
+function updatePointsUI() {
+  if (ui.shopPoints) ui.shopPoints.textContent = String(save.points);
+}
+
+function awardWinPoints(winner) {
+  const won =
+    s.mode === "local"
+      ? winner === "p1"
+      : (winner === "p1" && net.player === 1) || (winner === "p2" && net.player === 2);
+  if (!won) return;
+  const gain = isAdmin() && save.abilities.bonusPts ? 10 : POINTS_PER_WIN;
+  save.points += gain;
+  persistSave();
+  updatePointsUI();
+}
+
+function effectivePaddleH(side) {
+  if (side === mySide() && isAdmin() && save.abilities.megaPaddle) {
+    return Math.round(paddle.h * 1.55);
+  }
+  return paddle.h;
+}
+
+function mySide() {
+  if (s.mode === "local") return "p1";
+  if (s.mode === "online" && net.player === 1) return "p1";
+  if (s.mode === "online" && net.player === 2) return "p2";
+  return null;
+}
+
+function applyFillStyle(c, item, x, y, w, h, alpha) {
+  const t = performance.now() * 0.001;
+  if (item.style === "solid") {
+    c.globalAlpha = alpha;
+    c.fillStyle = item.color;
+    return;
+  }
+  let g;
+  if (item.style === "galaxy") {
+    g = c.createLinearGradient(x, y, x + w, y + h);
+    g.addColorStop(0, "#0b0320");
+    g.addColorStop(0.4, "#4c1d95");
+    g.addColorStop(0.7, "#7c3aed");
+    g.addColorStop(1, "#0ea5e9");
+  } else if (item.style === "moon") {
+    g = c.createLinearGradient(x, y, x, y + h);
+    g.addColorStop(0, "#1e293b");
+    g.addColorStop(0.45, "#94a3b8");
+    g.addColorStop(1, "#e2e8f0");
+  } else if (item.style === "sunset") {
+    g = c.createLinearGradient(x, y, x, y + h);
+    g.addColorStop(0, "#f97316");
+    g.addColorStop(0.5, "#ec4899");
+    g.addColorStop(1, "#7c3aed");
+  } else if (item.style === "neon") {
+    g = c.createLinearGradient(x, y, x + w, y + h);
+    g.addColorStop(0, "#22c55e");
+    g.addColorStop(0.5, "#06b6d4");
+    g.addColorStop(1, "#a855f7");
+  } else if (item.style === "lava") {
+    g = c.createLinearGradient(x, y, x, y + h);
+    g.addColorStop(0, "#fef08a");
+    g.addColorStop(0.4, "#f97316");
+    g.addColorStop(1, "#991b1b");
+  } else if (item.style === "ice") {
+    g = c.createLinearGradient(x, y, x + w, y + h);
+    g.addColorStop(0, "#e0f2fe");
+    g.addColorStop(0.5, "#38bdf8");
+    g.addColorStop(1, "#1e3a8a");
+  } else if (item.style === "rainbow") {
+    g = c.createLinearGradient(x, y, x + w, y);
+    g.addColorStop(0, "#ef4444");
+    g.addColorStop(0.25, "#eab308");
+    g.addColorStop(0.5, "#22c55e");
+    g.addColorStop(0.75, "#3b82f6");
+    g.addColorStop(1, "#a855f7");
+  } else if (item.style === "aurora") {
+    g = c.createLinearGradient(x, y, x + w, y + h);
+    g.addColorStop(0, "#064e3b");
+    g.addColorStop(0.4 + Math.sin(t) * 0.06, "#10b981");
+    g.addColorStop(0.75, "#6366f1");
+    g.addColorStop(1, "#312e81");
+  } else {
+    c.globalAlpha = alpha;
+    c.fillStyle = item.color || "#fff";
+    return;
+  }
+  c.globalAlpha = alpha;
+  c.fillStyle = g;
+}
+
+function drawSwatch(item, el) {
+  const c = document.createElement("canvas");
+  c.width = 100;
+  c.height = 40;
+  const cctx = c.getContext("2d");
+  applyFillStyle(cctx, item, 0, 0, c.width, c.height, 1);
+  cctx.fillRect(0, 0, c.width, c.height);
+  el.style.backgroundImage = `url(${c.toDataURL()})`;
+  el.style.backgroundSize = "cover";
+}
+
+function renderShop() {
+  if (!ui.shopGrid) return;
+  const kind = save.shopTab;
+  ui.shopGrid.innerHTML = "";
+  for (const item of SHOP[kind]) {
+    const owned = save.owned[kind].includes(item.id);
+    const equipped = save.equipped[kind] === item.id;
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "shop-item";
+    if (equipped) btn.classList.add("equipped");
+    const free = isAdmin() && save.abilities.freeShop;
+    if (!owned && !free && save.points < item.price) btn.classList.add("cant-afford");
+    const swatch = document.createElement("div");
+    swatch.className = "shop-swatch";
+    drawSwatch(item, swatch);
+    const name = document.createElement("div");
+    name.className = "shop-name";
+    name.textContent = item.name;
+    const price = document.createElement("div");
+    price.className = "shop-price";
+    price.textContent = item.price === 0 ? "Free" : `${item.price} pts`;
+    btn.append(swatch, name, price);
+    if (equipped) {
+      const b = document.createElement("span");
+      b.className = "shop-badge";
+      b.textContent = "ON";
+      btn.appendChild(b);
+    }
+    btn.addEventListener("click", () => {
+      if (owned) {
+        save.equipped[kind] = item.id;
+        persistSave();
+        if (ui.shopMsg) ui.shopMsg.textContent = `Equipped ${item.name}.`;
+        renderShop();
+        return;
+      }
+      if (save.points < item.price && !(isAdmin() && save.abilities.freeShop)) {
+        if (ui.shopMsg) ui.shopMsg.textContent = `Need ${item.price - save.points} more pts. Win games for +2.`;
+        return;
+      }
+      if (!(isAdmin() && save.abilities.freeShop)) save.points -= item.price;
+      save.owned[kind].push(item.id);
+      save.equipped[kind] = item.id;
+      persistSave();
+      updatePointsUI();
+      if (ui.shopMsg) ui.shopMsg.textContent = `Bought ${item.name}!`;
+      renderShop();
+    });
+    ui.shopGrid.appendChild(btn);
+  }
+}
+
+function setShopTab(tab) {
+  save.shopTab = tab;
+  document.querySelectorAll(".shop-tab").forEach((el) => {
+    el.classList.toggle("active", el.dataset.tab === tab);
+  });
+  renderShop();
+}
+
+function openCustomize() {
+  hideOverlay(ui.menuOverlay);
+  hideOverlay(ui.lobbyOverlay);
+  showOverlay(ui.customizeOverlay);
+  setStagePlaying(false);
+  updatePointsUI();
+  setShopTab(save.shopTab);
+  if (ui.shopMsg) ui.shopMsg.textContent = "Buy or equip a colour.";
+}
+
+function closeCustomize() {
+  hideOverlay(ui.customizeOverlay);
+  showOverlay(ui.menuOverlay);
+  setStagePlaying(false);
+}
+
+function openAdmin() {
+  if (!isAdmin()) {
+    openPasskeyOverlay();
+    return;
+  }
+  hideOverlay(ui.menuOverlay);
+  hideOverlay(ui.customizeOverlay);
+  hideOverlay(ui.lobbyOverlay);
+  showOverlay(ui.adminOverlay);
+  setStagePlaying(false);
+  refreshAdminPanel();
+}
+
+function closeAdmin() {
+  hideOverlay(ui.adminOverlay);
+  showOverlay(ui.menuOverlay);
+  setStagePlaying(false);
+}
+
+function refreshAdminPanel() {
+  if (!isAdmin()) return;
+  if (ui.adminWelcome) ui.adminWelcome.textContent = "Welcome, Owner";
+  if (ui.adminPoints) ui.adminPoints.textContent = String(save.points);
+  if (ui.abMegaPaddle) ui.abMegaPaddle.checked = save.abilities.megaPaddle;
+  if (ui.abFreeShop) ui.abFreeShop.checked = save.abilities.freeShop;
+  if (ui.abSlowBot) ui.abSlowBot.checked = save.abilities.slowBot;
+  if (ui.abBonusPts) ui.abBonusPts.checked = save.abilities.bonusPts;
+}
+
+function adminAddPoints(n) {
+  if (!isAdmin()) return;
+  save.points += Math.max(0, n);
+  persistSave();
+  updatePointsUI();
+  refreshAdminPanel();
+  if (ui.adminMsg) ui.adminMsg.textContent = `Added ${n} points.`;
+}
+
+function adminSetPoints(n) {
+  if (!isAdmin()) return;
+  save.points = Math.max(0, n);
+  persistSave();
+  updatePointsUI();
+  refreshAdminPanel();
+  if (ui.adminMsg) ui.adminMsg.textContent = `Points set to ${save.points}.`;
+}
+
+function adminUnlockAll() {
+  if (!isAdmin()) return;
+  for (const item of SHOP.paddle) {
+    if (!save.owned.paddle.includes(item.id)) save.owned.paddle.push(item.id);
+  }
+  for (const item of SHOP.table) {
+    if (!save.owned.table.includes(item.id)) save.owned.table.push(item.id);
+  }
+  persistSave();
+  if (ui.adminMsg) ui.adminMsg.textContent = "All colours unlocked.";
+  refreshAdminPanel();
+}
+
+function setAdminAbility(key, on) {
+  if (!isAdmin()) return;
+  save.abilities[key] = on;
+  persistSave();
+  if (ui.adminMsg) ui.adminMsg.textContent = on ? "Ability enabled." : "Ability disabled.";
+}
+
+function initAdminUi() {
+  if (!ui.btnAdmin) return;
+  ui.btnAdmin.classList.remove("hidden");
+}
+
+function openAdminOrPasskey() {
+  if (isAdmin()) openAdmin();
+  else openPasskeyOverlay();
+}
+
+function equippedForSide(side) {
+  const mine = mySide();
+  if (side === mine) return save.equipped;
+  if (net.opponentCosmetics) return net.opponentCosmetics;
+  return { paddle: "white", table: "classic" };
+}
+
+function drawTableHalf(side) {
+  const eq = equippedForSide(side);
+  const style = shopItem("table", eq.table);
+  if (style.id === "classic") return;
+  const halfW = table.w / 2;
+  const x = side === "p1" ? table.x : table.x + halfW;
+  const alpha = style.price >= 20 ? 0.5 : 0.38;
+  applyFillStyle(ctx, style, x, table.y, halfW, table.h, alpha);
+  ctx.fillRect(x, table.y, halfW, table.h);
+  ctx.globalAlpha = 1;
+}
+
+function drawPaddleRect(p, side) {
+  const h = effectivePaddleH(side);
+  const eq = equippedForSide(side);
+  const style = shopItem("paddle", eq.paddle);
+  applyFillStyle(ctx, style, p.x, p.y, paddle.w, h, 1);
+  ctx.fillRect(p.x, p.y, paddle.w, h);
+  ctx.globalAlpha = 1;
 }
 
 const stageEl = document.querySelector(".stage");
@@ -63,6 +496,33 @@ const ui = {
   btnCreateRoom: document.getElementById("btnCreateRoom"),
   btnJoinRoom: document.getElementById("btnJoinRoom"),
   btnBackMenu: document.getElementById("btnBackMenu"),
+  btnCustomize: document.getElementById("btnCustomize"),
+  btnCustomizeBack: document.getElementById("btnCustomizeBack"),
+  customizeOverlay: document.getElementById("customizeOverlay"),
+  shopPoints: document.getElementById("shopPoints"),
+  shopGrid: document.getElementById("shopGrid"),
+  shopMsg: document.getElementById("shopMsg"),
+  btnAdmin: document.getElementById("btnAdmin"),
+  btnAdminBack: document.getElementById("btnAdminBack"),
+  adminOverlay: document.getElementById("adminOverlay"),
+  adminWelcome: document.getElementById("adminWelcome"),
+  adminPoints: document.getElementById("adminPoints"),
+  adminPointsInput: document.getElementById("adminPointsInput"),
+  btnAdminAddPts: document.getElementById("btnAdminAddPts"),
+  btnAdminSetPts: document.getElementById("btnAdminSetPts"),
+  btnAdminUnlockAll: document.getElementById("btnAdminUnlockAll"),
+  btnAdminMaxPts: document.getElementById("btnAdminMaxPts"),
+  adminMsg: document.getElementById("adminMsg"),
+  abMegaPaddle: document.getElementById("abMegaPaddle"),
+  abFreeShop: document.getElementById("abFreeShop"),
+  abSlowBot: document.getElementById("abSlowBot"),
+  abBonusPts: document.getElementById("abBonusPts"),
+  titleEl: document.getElementById("titleEl"),
+  passkeyOverlay: document.getElementById("passkeyOverlay"),
+  passkeyInput: document.getElementById("passkeyInput"),
+  passkeyMsg: document.getElementById("passkeyMsg"),
+  btnPasskeySubmit: document.getElementById("btnPasskeySubmit"),
+  btnPasskeyCancel: document.getElementById("btnPasskeyCancel"),
 };
 
 let audioCtx = null;
@@ -79,9 +539,11 @@ const net = {
   remotePaddleY: null,
   lastPaddleSend: 0,
   lastPaddleSentY: -1,
+  opponentCosmetics: null,
 };
 
-const NET_INTERP_MS = 70;
+const NET_INTERP_MS = 58;
+const NET_EXTRAP_MAX = 0.045;
 
 function inCenterCourt(ballX) {
   const margin = 220;
@@ -183,7 +645,7 @@ function playPaddleHit() {
 function showOverlay(el) {
   el.classList.remove("hidden");
   el.setAttribute("aria-hidden", "false");
-  if (stageEl && (el === ui.menuOverlay || el === ui.lobbyOverlay)) {
+  if (stageEl && (el === ui.menuOverlay || el === ui.lobbyOverlay || el === ui.customizeOverlay || el === ui.adminOverlay || el === ui.passkeyOverlay)) {
     stageEl.classList.add("menu-open");
   }
 }
@@ -191,7 +653,7 @@ function showOverlay(el) {
 function hideOverlay(el) {
   el.classList.add("hidden");
   el.setAttribute("aria-hidden", "true");
-  if (stageEl && (el === ui.menuOverlay || el === ui.lobbyOverlay)) {
+  if (stageEl && (el === ui.menuOverlay || el === ui.lobbyOverlay || el === ui.customizeOverlay || el === ui.adminOverlay || el === ui.passkeyOverlay)) {
     stageEl.classList.remove("menu-open");
   }
 }
@@ -248,18 +710,22 @@ function scoreFx(who) {
 }
 
 function endGame(winner) {
+  const justEnded = !s.gameOver;
   s.gameOver = true;
   s.running = false;
   ui.status.textContent = "Game over";
 
+  let youWon = false;
   if (s.mode === "local") {
-    ui.gameOverTitle.textContent = winner === "p1" ? "YOU WIN" : "BOT WINS";
+    youWon = winner === "p1";
+    ui.gameOverTitle.textContent = youWon ? "YOU WIN (+2 PTS)" : "BOT WINS";
   } else {
-    const youWon = (winner === "p1" && net.player === 1) || (winner === "p2" && net.player === 2);
-    ui.gameOverTitle.textContent = youWon ? "YOU WIN" : "YOU LOSE";
+    youWon = (winner === "p1" && net.player === 1) || (winner === "p2" && net.player === 2);
+    ui.gameOverTitle.textContent = youWon ? "YOU WIN (+2 PTS)" : "YOU LOSE";
   }
 
   ui.gameOverScore.textContent = `${s.p1.score} : ${s.p2.score}`;
+  if (justEnded) awardWinPoints(winner);
   showOverlay(ui.gameOver);
 }
 
@@ -309,9 +775,11 @@ function reflectFromPaddle(p) {
 }
 
 function updateLocal(dt) {
-  s.p1.y = clamp(s.mouseY - paddle.h / 2, table.y + 6, table.y + table.h - paddle.h - 6);
+  const p1h = effectivePaddleH("p1");
+  s.p1.y = clamp(s.mouseY - p1h / 2, table.y + 6, table.y + table.h - p1h - 6);
 
   if (!s.gameOver) {
+    const botSpeed = isAdmin() && save.abilities.slowBot ? paddle.aiSpeed * 0.45 : paddle.aiSpeed;
     s.ai.timer -= dt;
     if (s.ai.timer <= 0) {
       s.ai.timer = s.ai.interval + (Math.random() * 0.05 - 0.02);
@@ -319,7 +787,7 @@ function updateLocal(dt) {
       s.ai.targetY = s.ball.y - paddle.h / 2 + err;
     }
     const dy = s.ai.targetY - s.p2.y;
-    const maxStep = paddle.aiSpeed * dt;
+    const maxStep = botSpeed * dt;
     s.p2.y = clamp(
       s.p2.y + clamp(dy * 0.75, -maxStep, maxStep),
       table.y + 6,
@@ -378,7 +846,9 @@ function updateLocal(dt) {
 }
 
 function myPaddleY() {
-  return clamp(s.mouseY - paddle.h / 2, table.y + 6, table.y + table.h - paddle.h - 6);
+  const side = mySide();
+  const h = effectivePaddleH(side || "p1");
+  return clamp(s.mouseY - h / 2, table.y + 6, table.y + table.h - h - 6);
 }
 
 function pushSnapshot(state, serverT) {
@@ -417,6 +887,10 @@ function renderInterpolatedBall() {
 
   s.ball.vx = net.snap.ball.vx;
   s.ball.vy = net.snap.ball.vy;
+
+  const extrap = clamp((Date.now() - net.snapAt) / 1000, 0, NET_EXTRAP_MAX);
+  s.ball.x += s.ball.vx * extrap * 0.35;
+  s.ball.y += s.ball.vy * extrap * 0.35;
 }
 
 function applyServerState(state, serverT, forceSnap = false) {
@@ -471,7 +945,7 @@ function updateOnline(dt) {
     if (ballNear) {
       remote.y = net.remotePaddleY;
     } else {
-      remote.y += (net.remotePaddleY - remote.y) * Math.min(1, dt * 24);
+      remote.y += (net.remotePaddleY - remote.y) * Math.min(1, dt * 18);
     }
   }
 
@@ -508,6 +982,11 @@ function draw() {
   ctx.fillStyle = "#000";
   ctx.fillRect(0, 0, W, H);
 
+  if (s.mode === "local" || s.mode === "online") {
+    drawTableHalf("p1");
+    drawTableHalf("p2");
+  }
+
   ctx.strokeStyle = "#fff";
   ctx.lineWidth = 2;
   ctx.strokeRect(table.x, table.y, table.w, table.h);
@@ -516,9 +995,10 @@ function draw() {
   ctx.lineTo(table.x + table.w / 2, table.y + table.h);
   ctx.stroke();
 
+  ctx.globalAlpha = 1;
+  drawPaddleRect(s.p1, "p1");
+  drawPaddleRect(s.p2, "p2");
   ctx.fillStyle = "#fff";
-  ctx.fillRect(s.p1.x, s.p1.y, paddle.w, paddle.h);
-  ctx.fillRect(s.p2.x, s.p2.y, paddle.w, paddle.h);
   ctx.beginPath();
   ctx.arc(s.ball.x, s.ball.y, ballCfg.r, 0, Math.PI * 2);
   ctx.fill();
@@ -591,6 +1071,15 @@ function closeWs() {
   net.snapAt = 0;
   net.snapPrevAt = 0;
   net.remotePaddleY = null;
+  net.opponentCosmetics = null;
+}
+
+function sendCosmetics() {
+  sendWs({
+    type: "cosmetics",
+    paddle: save.equipped.paddle,
+    table: save.equipped.table,
+  });
 }
 
 function sendWs(payload) {
@@ -630,16 +1119,25 @@ function handleWsMessage(msg) {
   if (msg.type === "roomCreated") {
     net.code = msg.code;
     net.player = msg.player;
+    s.mode = "online";
     ui.lobbyStatus.textContent = `Room code: ${msg.code} — waiting for opponent...`;
     setOnlineLabels();
+    sendCosmetics();
     return;
   }
 
   if (msg.type === "joined") {
     net.code = msg.code;
     net.player = msg.player;
+    s.mode = "online";
     ui.lobbyStatus.textContent = `Joined room ${msg.code}. Waiting for match...`;
     setOnlineLabels();
+    sendCosmetics();
+    return;
+  }
+
+  if (msg.type === "oCos") {
+    net.opponentCosmetics = { paddle: msg.paddle || "white", table: msg.table || "classic" };
     return;
   }
 
@@ -727,6 +1225,8 @@ function startLocalMode() {
   s.mode = "local";
   hideOverlay(ui.menuOverlay);
   hideOverlay(ui.lobbyOverlay);
+  hideOverlay(ui.customizeOverlay);
+  hideOverlay(ui.adminOverlay);
   hideOverlay(ui.gameOver);
   setScoreboardLabels("YOU", "BOT");
   ui.hint.textContent = controlHint() + " First to 5 wins.";
@@ -734,8 +1234,10 @@ function startLocalMode() {
 }
 
 function openLobby() {
-  s.mode = "online";
   hideOverlay(ui.menuOverlay);
+  hideOverlay(ui.customizeOverlay);
+  hideOverlay(ui.adminOverlay);
+  hideOverlay(ui.gameOver);
   showOverlay(ui.lobbyOverlay);
   setStagePlaying(false);
   ui.lobbyStatus.textContent = "Create or join a room.";
@@ -749,6 +1251,9 @@ function backToMenu() {
   s.running = false;
   hideOverlay(ui.gameOver);
   hideOverlay(ui.lobbyOverlay);
+  hideOverlay(ui.customizeOverlay);
+  hideOverlay(ui.adminOverlay);
+  hideOverlay(ui.passkeyOverlay);
   showOverlay(ui.menuOverlay);
   setStagePlaying(false);
   setScoreboardLabels("LEFT", "RIGHT");
@@ -756,29 +1261,93 @@ function backToMenu() {
   ui.p2.textContent = "0";
   ui.status.textContent = "Ready";
   ui.hint.textContent = "Choose a mode to start.";
+  updatePointsUI();
+}
+
+let adminBound = false;
+
+function bindAdminControls() {
+  if (adminBound || !isAdmin()) return;
+  adminBound = true;
+  const bind = (el, handler) => {
+    if (!el) return;
+    el.addEventListener("click", handler);
+  };
+  bind(ui.btnAdminAddPts, () => {
+    const n = parseInt(ui.adminPointsInput?.value, 10);
+    adminAddPoints(Number.isFinite(n) ? n : 10);
+  });
+  bind(ui.btnAdminSetPts, () => {
+    const n = parseInt(ui.adminPointsInput?.value, 10);
+    adminSetPoints(Number.isFinite(n) ? n : 0);
+  });
+  bind(ui.btnAdminUnlockAll, adminUnlockAll);
+  bind(ui.btnAdminMaxPts, () => adminAddPoints(999));
+  const bindToggle = (el, key) => {
+    if (!el) return;
+    el.addEventListener("change", (e) => setAdminAbility(key, e.target.checked));
+  };
+  bindToggle(ui.abMegaPaddle, "megaPaddle");
+  bindToggle(ui.abFreeShop, "freeShop");
+  bindToggle(ui.abSlowBot, "slowBot");
+  bindToggle(ui.abBonusPts, "bonusPts");
+}
+
+function unlockAdminSession(hours = 24) {
+  sessionStorage.setItem(ADMIN_SESSION_KEY, String(Date.now() + hours * 3600000));
+  loadAbilities();
+  initAdminUi();
+  bindAdminControls();
+}
+
+function submitPasskey() {
+  const code = ui.passkeyInput?.value || "";
+  if (!code) {
+    if (ui.passkeyMsg) ui.passkeyMsg.textContent = "Enter passkey.";
+    return;
+  }
+  if (code !== ADMIN_PASSKEY) {
+    if (ui.passkeyMsg) ui.passkeyMsg.textContent = "Wrong passkey.";
+    return;
+  }
+  unlockAdminSession();
+  hideOverlay(ui.passkeyOverlay);
+  if (ui.passkeyMsg) ui.passkeyMsg.textContent = "";
+  if (ui.passkeyInput) ui.passkeyInput.value = "";
+  openAdmin();
+}
+
+function openPasskeyOverlay() {
+  hideOverlay(ui.menuOverlay);
+  showOverlay(ui.passkeyOverlay);
+  if (ui.passkeyMsg) ui.passkeyMsg.textContent = "";
+  if (ui.passkeyInput) {
+    ui.passkeyInput.value = "";
+    ui.passkeyInput.focus();
+  }
+}
+
+function closePasskeyOverlay() {
+  hideOverlay(ui.passkeyOverlay);
+  showOverlay(ui.menuOverlay);
 }
 
 function bindUi() {
-  const missing = Object.entries(ui).filter(([, el]) => !el).map(([key]) => key);
-  dbgLog("H2", "game.js:bindUi", "ui elements resolved", { missing, missingCount: missing.length });
-
-  const bind = (el, label, handler) => {
-    if (!el) {
-      dbgLog("H2", "game.js:bindUi", "missing button element", { label });
-      return;
-    }
-    el.addEventListener("click", (...args) => {
-      dbgLog("H5", "game.js:click", "button clicked", { label, mode: s.mode });
-      handler(...args);
-    });
+  const bind = (el, handler) => {
+    if (!el) return;
+    el.addEventListener("click", handler);
   };
 
-  bind(ui.btnLocal, "btnLocal", startLocalMode);
-  bind(ui.btnOnline, "btnOnline", openLobby);
-  bind(ui.btnBackMenu, "btnBackMenu", backToMenu);
-  bind(ui.backToMenu, "backToMenu", backToMenu);
-  bind(ui.btnCreateRoom, "btnCreateRoom", () => connectWs(() => sendWs({ type: "create" })));
-  bind(ui.btnJoinRoom, "btnJoinRoom", () => {
+  bind(ui.btnLocal, startLocalMode);
+  bind(ui.btnOnline, openLobby);
+  bind(ui.btnCustomize, openCustomize);
+  bind(ui.btnCustomizeBack, closeCustomize);
+  bind(ui.btnAdmin, openAdminOrPasskey);
+  bind(ui.btnAdminBack, closeAdmin);
+  bind(ui.btnBackMenu, backToMenu);
+  bind(ui.backToMenu, backToMenu);
+  bind(ui.btnCreateRoom, () => connectWs(() => sendWs({ type: "create" })));
+  bind(ui.btnJoinRoom, () => {
     const code = ui.roomCodeInput.value.trim().toUpperCase();
     if (code.length !== 4) {
       ui.lobbyStatus.textContent = "Enter a 4-letter room code.";
@@ -786,7 +1355,7 @@ function bindUi() {
     }
     connectWs(() => sendWs({ type: "join", code }));
   });
-  bind(ui.playAgain, "playAgain", () => {
+  bind(ui.playAgain, () => {
     if (s.mode === "online") {
       sendWs({ type: "rematch" });
       hideOverlay(ui.gameOver);
@@ -797,7 +1366,37 @@ function bindUi() {
     resetLocalMatch();
   });
 
-  dbgLog("H4", "game.js:bindUi", "ui bindings complete", { bound: true });
+  document.querySelectorAll(".shop-tab").forEach((tab) => {
+    tab.addEventListener("click", () => setShopTab(tab.dataset.tab));
+  });
+
+  bindAdminControls();
+
+  bind(ui.btnPasskeySubmit, submitPasskey);
+  bind(ui.btnPasskeyCancel, closePasskeyOverlay);
+  if (ui.passkeyInput) {
+    ui.passkeyInput.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") submitPasskey();
+    });
+  }
+
+  let titleClicks = 0;
+  let titleClickTimer = null;
+  if (ui.titleEl) {
+    ui.titleEl.style.cursor = "default";
+    ui.titleEl.addEventListener("click", () => {
+      titleClicks += 1;
+      clearTimeout(titleClickTimer);
+      titleClickTimer = setTimeout(() => {
+        titleClicks = 0;
+      }, 700);
+      if (titleClicks >= 3) {
+        titleClicks = 0;
+        if (isAdmin()) openAdmin();
+        else openPasskeyOverlay();
+      }
+    });
+  }
 }
 
 function setPaddleFromClientY(clientY) {
@@ -844,23 +1443,17 @@ function bindCanvasInput() {
 
 bindCanvasInput();
 
-function boot() {
-  try {
-    if (stageEl) stageEl.classList.add("menu-open");
-    bindUi();
-    ui.hint.textContent = isTouchDevice
-      ? "Choose a mode. Works on iPhone, Android, and PC."
-      : "Choose a mode to start.";
-    dbgLog("H1", "game.js:boot", "game booted", {
-      href: location.href,
-      host: location.host,
-      protocol: location.protocol,
-    });
-    requestAnimationFrame(frame);
-  } catch (err) {
-    dbgLog("H3", "game.js:boot", "boot failed", { error: String(err) });
-    throw err;
-  }
+async function boot() {
+  await loadSave();
+  updatePointsUI();
+  initAdminUi();
+  bindAdminControls();
+  if (stageEl) stageEl.classList.add("menu-open");
+  bindUi();
+  ui.hint.textContent = isTouchDevice
+    ? "Choose a mode. Works on iPhone, Android, and PC."
+    : "Choose a mode to start.";
+  requestAnimationFrame(frame);
 }
 
 boot();

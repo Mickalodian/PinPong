@@ -1,0 +1,8 @@
+// OWNER ADMIN KEY — copy to admin.local.js (optional, gitignored).
+// Admin panel unlock: click Admin → enter passkey (default 4536, set ADMIN_CODE on server).
+
+window.PONG_ADMIN = {
+  enabled: true,
+  key: "CHANGE-ME-to-your-secret-key",
+  name: "Owner",
+};
