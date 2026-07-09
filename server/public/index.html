@@ -34,13 +34,24 @@
         <canvas id="game" width="900" height="520" aria-label="Pong game"></canvas>
         <button type="button" class="resign-btn hidden" id="btnResign">Resign</button>
 
-        <div class="overlay" id="menuOverlay">
+        <div class="overlay" id="nameOverlay">
+          <div class="overlay-card menu-card">
+            <div class="overlay-title">ENTER NAME</div>
+            <p class="lobby-text">Pick a name to play. Saved on this device.</p>
+            <input id="nameInput" class="room-input name-input" maxlength="16" placeholder="YOUR NAME" autocomplete="nickname" />
+            <p class="shop-msg" id="nameMsg"></p>
+            <button type="button" class="play-again" id="btnNameSubmit">Play</button>
+          </div>
+        </div>
+
+        <div class="overlay hidden" id="menuOverlay">
           <div class="overlay-card menu-card">
             <div class="overlay-title">SELECT MODE</div>
             <button type="button" class="play-again" id="btnLocal">Play vs Bot</button>
             <button type="button" class="play-again secondary" id="btnOnline">Online 1v1</button>
             <button type="button" class="play-again secondary" id="btnCustomize">Customize</button>
             <button type="button" class="play-again secondary" id="btnAdmin">Admin</button>
+            <button type="button" class="link-btn" id="btnChangeName">Change name</button>
           </div>
         </div>
 

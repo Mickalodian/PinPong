@@ -427,6 +427,13 @@ canvas {
   font-size: 16px;
 }
 
+.name-input {
+  width: 100%;
+  box-sizing: border-box;
+  letter-spacing: 0.12em;
+  margin-bottom: 4px;
+}
+
 .link-btn {
   appearance: none;
   border: none;

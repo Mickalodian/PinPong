@@ -10,43 +10,6 @@ const ROOT = [path.join(__dirname, "public"), path.join(__dirname, "..")].find((
 const SCORE_LIMIT = 5;
 const TICK_RATE = 60;
 const BROADCAST_RATE = 20;
-const DEBUG_LOG = [
-  path.resolve(__dirname, "..", "..", "Desktop", "debug-e4bbdd.log"),
-  path.resolve(__dirname, "..", "debug-e4bbdd.log"),
-].find((p) => {
-  try {
-    const dir = path.dirname(p);
-    return fs.existsSync(dir) || dir.endsWith("pong-bw");
-  } catch {
-    return false;
-  }
-}) || path.resolve(__dirname, "..", "..", "Desktop", "debug-e4bbdd.log");
-
-function dbgServer(hypothesisId, location, message, data) {
-  // #region agent log
-  try {
-    fs.appendFileSync(
-      DEBUG_LOG,
-      `${JSON.stringify({ sessionId: "e4bbdd", hypothesisId, location, message, data, timestamp: Date.now(), runId: data?.runId || "pre-fix" })}\n`
-    );
-  } catch {
-    /* ignore */
-  }
-  // #endregion
-}
-
-function logTableAlignment() {
-  const px2 = paddleX(2);
-  // #region agent log
-  dbgServer("H14", "server.js:GAME", "table alignment check", {
-    serverTableW: GAME.table.w,
-    serverP1x: paddleX(1),
-    serverP2x: px2,
-    serverP2Face: px2 - GAME.ball.r,
-    runId: "post-fix",
-  });
-  // #endregion
-}
 
 const GAME = {
   W: 900,
@@ -88,10 +51,19 @@ function saveProfiles(db) {
 
 function defaultProfile() {
   return {
+    name: "",
     points: 0,
     owned: { paddle: ["white"], table: ["classic"] },
     equipped: { paddle: "white", table: "classic" },
   };
+}
+
+function sanitizeName(name) {
+  const clean = String(name || "")
+    .trim()
+    .replace(/[^\w\s\-'.]/g, "")
+    .slice(0, 16);
+  return clean.length >= 1 ? clean : "Player";
 }
 
 const VALID_PADDLE = new Set([
@@ -112,19 +84,34 @@ function sanitizeCosmetics(cos) {
 
 function relayCosmetics(room, ws) {
   const other = room.players[ws.playerSlot === 0 ? 1 : 0];
-  if (other && other.readyState === 1 && ws.cosmetics) {
-    other.send(JSON.stringify({ type: "oCos", paddle: ws.cosmetics.paddle, table: ws.cosmetics.table }));
+  if (other && other.readyState === 1) {
+    other.send(JSON.stringify({
+      type: "oCos",
+      paddle: ws.cosmetics?.paddle || "white",
+      table: ws.cosmetics?.table || "classic",
+      name: ws.displayName || "Opponent",
+    }));
   }
 }
 
 function exchangeCosmetics(room) {
   const p0 = room.players[0];
   const p1 = room.players[1];
-  if (p0?.readyState === 1 && p1?.cosmetics) {
-    p0.send(JSON.stringify({ type: "oCos", paddle: p1.cosmetics.paddle, table: p1.cosmetics.table }));
+  if (p0?.readyState === 1 && p1) {
+    p0.send(JSON.stringify({
+      type: "oCos",
+      paddle: p1.cosmetics?.paddle || "white",
+      table: p1.cosmetics?.table || "classic",
+      name: p1.displayName || "Opponent",
+    }));
   }
-  if (p1?.readyState === 1 && p0?.cosmetics) {
-    p1.send(JSON.stringify({ type: "oCos", paddle: p0.cosmetics.paddle, table: p0.cosmetics.table }));
+  if (p1?.readyState === 1 && p0) {
+    p1.send(JSON.stringify({
+      type: "oCos",
+      paddle: p0.cosmetics?.paddle || "white",
+      table: p0.cosmetics?.table || "classic",
+      name: p0.displayName || "Opponent",
+    }));
   }
 }
 
@@ -196,6 +183,7 @@ async function handleApi(req, res, urlPath) {
     if (body.action === "save" && body.profile) {
       const p = body.profile;
       db[playerId] = {
+        name: sanitizeName(p.name || db[playerId]?.name || ""),
         points: Math.max(0, Number(p.points) || 0),
         owned: {
           paddle: Array.isArray(p.owned?.paddle) ? p.owned.paddle : ["white"],
@@ -327,26 +315,8 @@ function ballOverlapsPaddle(bx, by, px, py, pw, ph) {
 function resolvePaddleHit(state, side) {
   const { paddle, ball } = GAME;
   const px = paddleX(side);
-  const ballXBefore = state.ball.x;
   if (side === 1) state.ball.x = px + paddle.w + ball.r;
   else state.ball.x = px - ball.r;
-  const faceX = side === 1 ? px + paddle.w + ball.r : px - ball.r;
-  // #region agent log
-  dbgServer("H1", "server.js:resolvePaddleHit", "server paddle hit", {
-    side,
-    px,
-    paddleW: paddle.w,
-    ballR: ball.r,
-    py: side === 1 ? state.p1y : state.p2y,
-    ballXBefore,
-    ballXAfter: state.ball.x,
-    faceX,
-    faceGapBefore: ballXBefore - faceX,
-    paddleLeft: px,
-    paddleRight: px + paddle.w,
-    vx: state.ball.vx,
-  });
-  // #endregion
   reflectFromPaddle(state, side);
 }
 
@@ -756,6 +726,7 @@ wss.on("connection", (ws) => {
       const db = loadProfiles();
       const p = msg.profile;
       db[msg.playerId] = {
+        name: sanitizeName(p.name || db[msg.playerId]?.name || ""),
         points: Math.max(0, Number(p.points) || 0),
         owned: {
           paddle: Array.isArray(p.owned?.paddle) ? p.owned.paddle : ["white"],
@@ -776,6 +747,7 @@ wss.on("connection", (ws) => {
 
     if (msg.type === "cosmetics" && msg.paddle && msg.table) {
       ws.cosmetics = sanitizeCosmetics({ paddle: String(msg.paddle), table: String(msg.table) });
+      if (msg.name) ws.displayName = sanitizeName(msg.name);
       if (room) relayCosmetics(room, ws);
       return;
     }
@@ -822,6 +794,5 @@ wss.on("connection", (ws) => {
 });
 
 server.listen(PORT, "0.0.0.0", () => {
-  logTableAlignment();
   console.log(`Pong server running on port ${PORT}`);
 });

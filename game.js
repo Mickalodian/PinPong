@@ -12,6 +12,7 @@ const ballCfg = { r: 8, speed0: 430, speedMax: 1000 };
 
 const SAVE_CACHE_KEY = "pong-bw-save";
 const PLAYER_ID_KEY = "pong-player-id";
+const PLAYER_NAME_KEY = "pong-player-name";
 const ADMIN_SESSION_KEY = "pong-admin-until";
 const ADMIN_PASSKEY = "4536";
 const ABILITIES_KEY = "pong-bw-abilities";
@@ -59,6 +60,7 @@ const SHOP = {
 };
 
 const save = {
+  name: "",
   points: 0,
   owned: { paddle: ["white"], table: ["classic"] },
   equipped: { paddle: "white", table: "classic" },
@@ -71,6 +73,36 @@ function isAdmin() {
   return Date.now() < until;
 }
 
+function sanitizeName(name) {
+  const clean = String(name || "")
+    .trim()
+    .replace(/[^\w\s\-'.]/g, "")
+    .slice(0, 16);
+  return clean;
+}
+
+function getPlayerName() {
+  return sanitizeName(save.name || localStorage.getItem(PLAYER_NAME_KEY) || "");
+}
+
+function hasValidName() {
+  return getPlayerName().length >= 1;
+}
+
+function setPlayerName(name) {
+  const clean = sanitizeName(name);
+  if (!clean) return false;
+  save.name = clean;
+  try {
+    localStorage.setItem(PLAYER_NAME_KEY, clean);
+  } catch {
+    /* ignore */
+  }
+  persistSave();
+  updateNameUI();
+  return true;
+}
+
 function getPlayerId() {
   let id = localStorage.getItem(PLAYER_ID_KEY);
   if (!id) {
@@ -81,6 +113,7 @@ function getPlayerId() {
 }
 
 function applyProfile(data) {
+  if (typeof data.name === "string" && sanitizeName(data.name)) save.name = sanitizeName(data.name);
   if (typeof data.points === "number") save.points = data.points;
   if (data.owned?.paddle) save.owned.paddle = data.owned.paddle;
   if (data.owned?.table) save.owned.table = data.owned.table;
@@ -123,7 +156,7 @@ async function syncProfileFromServer() {
       applyProfile(data.profile);
       localStorage.setItem(
         SAVE_CACHE_KEY,
-        JSON.stringify({ points: save.points, owned: save.owned, equipped: save.equipped })
+        JSON.stringify({ name: save.name, points: save.points, owned: save.owned, equipped: save.equipped })
       );
     }
   } catch {
@@ -141,7 +174,12 @@ async function syncProfileToServer() {
       body: JSON.stringify({
         action: "save",
         playerId: getPlayerId(),
-        profile: { points: save.points, owned: save.owned, equipped: save.equipped },
+        profile: {
+          name: getPlayerName(),
+          points: save.points,
+          owned: save.owned,
+          equipped: save.equipped,
+        },
       }),
     });
   } catch {
@@ -152,18 +190,36 @@ async function syncProfileToServer() {
 async function loadSave() {
   loadAbilities();
   try {
+    const raw = localStorage.getItem(PLAYER_NAME_KEY);
+    if (raw) save.name = sanitizeName(raw);
+  } catch {
+    /* ignore */
+  }
+  try {
     const raw = localStorage.getItem(SAVE_CACHE_KEY);
-    if (raw) applyProfile(JSON.parse(raw));
+    if (raw) {
+      const data = JSON.parse(raw);
+      if (data.name) save.name = sanitizeName(data.name);
+      applyProfile(data);
+    }
   } catch {
     /* ignore */
   }
   await syncProfileFromServer();
+  if (save.name) {
+    try {
+      localStorage.setItem(PLAYER_NAME_KEY, save.name);
+    } catch {
+      /* ignore */
+    }
+  }
 }
 
 function persistSave() {
   try {
-    const payload = { points: save.points, owned: save.owned, equipped: save.equipped };
+    const payload = { name: save.name, points: save.points, owned: save.owned, equipped: save.equipped };
     localStorage.setItem(SAVE_CACHE_KEY, JSON.stringify(payload));
+    if (save.name) localStorage.setItem(PLAYER_NAME_KEY, save.name);
     persistAbilities();
     clearTimeout(profileSyncTimer);
     profileSyncTimer = setTimeout(syncProfileToServer, 300);
@@ -477,6 +533,12 @@ function controlHint() {
 
 const ui = {
   hint: document.getElementById("hint"),
+  titleEl: document.getElementById("titleEl"),
+  nameOverlay: document.getElementById("nameOverlay"),
+  nameInput: document.getElementById("nameInput"),
+  nameMsg: document.getElementById("nameMsg"),
+  btnNameSubmit: document.getElementById("btnNameSubmit"),
+  btnChangeName: document.getElementById("btnChangeName"),
   p1: document.getElementById("p1"),
   p2: document.getElementById("p2"),
   p1Label: document.getElementById("p1Label"),
@@ -524,7 +586,6 @@ const ui = {
   abFreeShop: document.getElementById("abFreeShop"),
   abSlowBot: document.getElementById("abSlowBot"),
   abBonusPts: document.getElementById("abBonusPts"),
-  titleEl: document.getElementById("titleEl"),
   passkeyOverlay: document.getElementById("passkeyOverlay"),
   passkeyInput: document.getElementById("passkeyInput"),
   passkeyMsg: document.getElementById("passkeyMsg"),
@@ -552,6 +613,7 @@ const net = {
   lastPaddleSend: 0,
   lastPaddleSentY: -1,
   opponentCosmetics: null,
+  opponentName: "",
   searching: false,
   searchStartedAt: 0,
 };
@@ -629,30 +691,6 @@ function cancelMatchSearch() {
 
 const NET_INTERP_MS = 58;
 const NET_EXTRAP_MAX = 0.045;
-
-let dbgNearP2Last = 0;
-
-function dbgClient(hypothesisId, location, message, data) {
-  // #region agent log
-  fetch("http://127.0.0.1:7715/ingest/a7f8c61b-f68b-44f7-981d-52bb95ff3807", {
-    method: "POST",
-    headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "e4bbdd" },
-    body: JSON.stringify({
-      sessionId: "e4bbdd",
-      hypothesisId,
-      location,
-      message,
-      data,
-      timestamp: Date.now(),
-    }),
-  }).catch(() => {});
-  // #endregion
-}
-
-function paddleFaceX(side, px) {
-  if (side === "p1") return px + paddle.w + ballCfg.r;
-  return px - ballCfg.r;
-}
 
 function inCenterCourt(ballX) {
   const margin = 220;
@@ -816,10 +854,59 @@ function resignMatch() {
   sendWs({ type: "resign" });
 }
 
+function updateNameUI() {
+  const name = getPlayerName();
+  if (ui.hint && hasValidName()) {
+    ui.hint.textContent = `Playing as ${name}`;
+  }
+}
+
+function openNameOverlay(fromMenu = false) {
+  hideOverlay(ui.menuOverlay);
+  hideOverlay(ui.lobbyOverlay);
+  hideOverlay(ui.customizeOverlay);
+  hideOverlay(ui.adminOverlay);
+  hideOverlay(ui.passkeyOverlay);
+  showOverlay(ui.nameOverlay);
+  if (ui.nameInput) {
+    ui.nameInput.value = getPlayerName();
+    ui.nameInput.focus();
+    ui.nameInput.select();
+  }
+  if (ui.nameMsg) ui.nameMsg.textContent = fromMenu ? "Update your name." : "Name is required to play.";
+}
+
+function closeNameOverlay() {
+  hideOverlay(ui.nameOverlay);
+  if (hasValidName()) {
+    showOverlay(ui.menuOverlay);
+    updateNameUI();
+  }
+}
+
+function submitName() {
+  const raw = ui.nameInput?.value || "";
+  if (!sanitizeName(raw)) {
+    if (ui.nameMsg) ui.nameMsg.textContent = "Enter a name (letters/numbers).";
+    return;
+  }
+  setPlayerName(raw);
+  if (ui.nameMsg) ui.nameMsg.textContent = "";
+  closeNameOverlay();
+}
+
+function requireName(action) {
+  if (!hasValidName()) {
+    openNameOverlay();
+    return;
+  }
+  action();
+}
+
 function showOverlay(el) {
   el.classList.remove("hidden");
   el.setAttribute("aria-hidden", "false");
-  if (stageEl && (el === ui.menuOverlay || el === ui.lobbyOverlay || el === ui.customizeOverlay || el === ui.adminOverlay || el === ui.passkeyOverlay)) {
+  if (stageEl && (el === ui.nameOverlay || el === ui.menuOverlay || el === ui.lobbyOverlay || el === ui.customizeOverlay || el === ui.adminOverlay || el === ui.passkeyOverlay)) {
     stageEl.classList.add("menu-open");
   }
 }
@@ -827,14 +914,18 @@ function showOverlay(el) {
 function hideOverlay(el) {
   el.classList.add("hidden");
   el.setAttribute("aria-hidden", "true");
-  if (stageEl && (el === ui.menuOverlay || el === ui.lobbyOverlay || el === ui.customizeOverlay || el === ui.adminOverlay || el === ui.passkeyOverlay)) {
+  if (stageEl && (el === ui.nameOverlay || el === ui.menuOverlay || el === ui.lobbyOverlay || el === ui.customizeOverlay || el === ui.adminOverlay || el === ui.passkeyOverlay)) {
     stageEl.classList.remove("menu-open");
   }
 }
 
 function setScoreboardLabels(left, right) {
-  ui.p1Label.textContent = left;
-  ui.p2Label.textContent = right;
+  const trim = (s) => {
+    const t = String(s || "");
+    return t.length > 14 ? `${t.slice(0, 13)}…` : t;
+  };
+  ui.p1Label.textContent = trim(left);
+  ui.p2Label.textContent = trim(right);
 }
 
 function normalizedMouseY() {
@@ -972,26 +1063,8 @@ function tryLocalPaddleHit(p, side) {
     (side === "p1" && s.ball.vx < 0) || (side === "p2" && s.ball.vx > 0);
   if (!movingToward) return false;
   if (!ballOverlapsPaddleRect(s.ball.x, s.ball.y, p.x, p.y, paddle.w, h)) return false;
-  const ballXBefore = s.ball.x;
   if (side === "p1") s.ball.x = p.x + paddle.w + ballCfg.r;
   else s.ball.x = p.x - ballCfg.r;
-  const faceX = paddleFaceX(side, p.x);
-  // #region agent log
-  dbgClient("H4", "game.js:tryLocalPaddleHit", "local paddle hit", {
-    mode: s.mode,
-    side,
-    paddleX: p.x,
-    paddleY: p.y,
-    paddleH: h,
-    ballXBefore,
-    ballXAfter: s.ball.x,
-    faceX,
-    faceGapBefore: ballXBefore - faceX,
-    paddleLeft: p.x,
-    paddleRight: p.x + paddle.w,
-    vx: s.ball.vx,
-  });
-  // #endregion
   reflectFromPaddle(p, side);
   return true;
 }
@@ -1068,30 +1141,11 @@ function pushSnapshot(state, serverT) {
 function renderInterpolatedBall() {
   if (!net.snap?.ball) return;
 
-  const authX = net.snap.ball.x;
-  const p2Face = paddleFaceX("p2", s.p2.x);
-
   if (!inCenterCourt(net.snap.ball.x)) {
     s.ball.x = net.snap.ball.x;
     s.ball.y = net.snap.ball.y;
     s.ball.vx = net.snap.ball.vx;
     s.ball.vy = net.snap.ball.vy;
-    // #region agent log
-    if (s.mode === "online" && net.snap.ball.vx > 0 && net.snap.ball.x > p2Face - 50) {
-      const now = Date.now();
-      if (now - dbgNearP2Last > 300) {
-        dbgNearP2Last = now;
-        dbgClient("H11", "game.js:renderInterpolatedBall", "near-p2 snap path", {
-          authX,
-          visualX: s.ball.x,
-          p2Face,
-          forwardGap: s.ball.x - p2Face,
-          snapPrev: !!net.snapPrev,
-          player: net.player,
-        });
-      }
-    }
-    // #endregion
     return;
   }
 
@@ -1117,25 +1171,6 @@ function renderInterpolatedBall() {
     s.ball.x += s.ball.vx * extrap * 0.35;
     s.ball.y += s.ball.vy * extrap * 0.35;
   }
-
-  // #region agent log
-  if (s.mode === "online" && net.snap.ball.vx > 0 && s.ball.x > p2Face - 80) {
-    const now = Date.now();
-    if (now - dbgNearP2Last > 300) {
-      dbgNearP2Last = now;
-      dbgClient("H13", "game.js:renderInterpolatedBall", "near-p2 interp path", {
-        authX,
-        visualX: s.ball.x,
-        p2Face,
-        forwardGap: s.ball.x - p2Face,
-        alpha: net.snapPrev?.ball ? clamp((renderT - net.snapPrevAt) / (net.snapAt - net.snapPrevAt), 0, 1) : 1,
-        extrap: nearPaddleZone(s.ball.x) ? 0 : clamp((Date.now() - net.snapAt) / 1000, 0, NET_EXTRAP_MAX),
-        snapPrev: !!net.snapPrev,
-        player: net.player,
-      });
-    }
-  }
-  // #endregion
 }
 
 function applyServerState(state, serverT, forceSnap = false) {
@@ -1238,6 +1273,20 @@ function draw() {
   ctx.globalAlpha = 1;
   drawPaddleRect(s.p1, "p1");
   drawPaddleRect(s.p2, "p2");
+
+  if (s.mode === "local" || s.mode === "online") {
+    const p1Name = ui.p1Label?.textContent || "";
+    const p2Name = ui.p2Label?.textContent || "";
+    ctx.font = `bold ${isTouchDevice ? 11 : 13}px system-ui, -apple-system, Segoe UI, Arial`;
+    ctx.textAlign = "center";
+    ctx.textBaseline = "bottom";
+    ctx.fillStyle = "#fff";
+    ctx.globalAlpha = 0.92;
+    ctx.fillText(p1Name, table.x + table.w * 0.25, table.y - 4);
+    ctx.fillText(p2Name, table.x + table.w * 0.75, table.y - 4);
+    ctx.globalAlpha = 1;
+  }
+
   ctx.fillStyle = "#fff";
   ctx.beginPath();
   ctx.arc(s.ball.x, s.ball.y, ballCfg.r, 0, Math.PI * 2);
@@ -1314,6 +1363,7 @@ function closeWs() {
   net.snapPrevAt = 0;
   net.remotePaddleY = null;
   net.opponentCosmetics = null;
+  net.opponentName = "";
 }
 
 function sendCosmetics() {
@@ -1321,6 +1371,7 @@ function sendCosmetics() {
     type: "cosmetics",
     paddle: save.equipped.paddle,
     table: save.equipped.table,
+    name: getPlayerName(),
   });
 }
 
@@ -1402,6 +1453,8 @@ function handleWsMessage(msg) {
 
   if (msg.type === "oCos") {
     net.opponentCosmetics = { paddle: msg.paddle || "white", table: msg.table || "classic" };
+    if (msg.name) net.opponentName = sanitizeName(msg.name) || "Opponent";
+    setOnlineLabels();
     return;
   }
 
@@ -1414,21 +1467,13 @@ function handleWsMessage(msg) {
   }
 
   if (msg.type === "matchReady") {
-    // #region agent log
-    dbgClient("H14", "game.js:matchReady", "table alignment check", {
-      clientTableW: table.w,
-      clientP1x: s.p1.x,
-      clientP2x: s.p2.x,
-      clientP2Face: paddleFaceX("p2", s.p2.x),
-      player: net.player,
-      runId: "post-fix",
-    });
-    // #endregion
     stopSearchUI();
     hideOverlay(ui.lobbyOverlay);
     s.gameOver = false;
     hideOverlay(ui.gameOver);
-    ui.hint.textContent = "Online 1v1. " + controlHint().replace("paddle. ", "your paddle. ");
+    setOnlineLabels();
+    updateNameUI();
+    ui.hint.textContent = `Online 1v1 as ${getPlayerName()}. ` + controlHint().replace("paddle. ", "your paddle. ");
     ui.status.textContent = serveHint();
     setStagePlaying(true);
     startGameMusic();
@@ -1459,33 +1504,8 @@ function handleWsMessage(msg) {
 
   if (msg.type === "s" && msg.d) {
     const state = expandState(msg.d);
-    const visualBallXBefore = s.ball.x;
     applyServerState(state, state.t, msg.h === 1);
-    if (msg.h === 1) {
-      const p1Face = paddleFaceX("p1", s.p1.x);
-      const p2Face = paddleFaceX("p2", s.p2.x);
-      const serverBallX = state.ball?.x ?? null;
-      // #region agent log
-      dbgClient("H3", "game.js:handleWsMessage", "online paddle hit", {
-        player: net.player,
-        visualBallXBefore,
-        visualBallXAfter: s.ball.x,
-        serverBallX,
-        p1x: s.p1.x,
-        p2x: s.p2.x,
-        p1y: s.p1.y,
-        p2y: s.p2.y,
-        p1Face,
-        p2Face,
-        visualGapP1: s.ball.x - p1Face,
-        visualGapP2: s.ball.x - p2Face,
-        serverGapP1: serverBallX != null ? serverBallX - p1Face : null,
-        serverGapP2: serverBallX != null ? serverBallX - p2Face : null,
-        ballVx: state.ball?.vx,
-      });
-      // #endregion
-      playPaddleHit();
-    }
+    if (msg.h === 1) playPaddleHit();
     if (msg.g === 1) scoreFx("p1");
     if (msg.g === 2) scoreFx("p2");
     return;
@@ -1528,10 +1548,12 @@ function handleWsMessage(msg) {
 }
 
 function setOnlineLabels() {
+  const myName = getPlayerName() || "You";
+  const oppName = net.opponentName || "Opponent";
   if (net.player === 1) {
-    setScoreboardLabels("YOU", "OPPONENT");
+    setScoreboardLabels(myName, oppName);
   } else if (net.player === 2) {
-    setScoreboardLabels("OPPONENT", "YOU");
+    setScoreboardLabels(oppName, myName);
   } else {
     setScoreboardLabels("LEFT", "RIGHT");
   }
@@ -1544,8 +1566,8 @@ function startLocalMode() {
   hideOverlay(ui.customizeOverlay);
   hideOverlay(ui.adminOverlay);
   hideOverlay(ui.gameOver);
-  setScoreboardLabels("YOU", "BOT");
-  ui.hint.textContent = controlHint() + " First to 5 wins.";
+  setScoreboardLabels(getPlayerName() || "You", "BOT");
+  ui.hint.textContent = `${getPlayerName()} vs BOT — ` + controlHint() + " First to 5 wins.";
   resetLocalMatch();
 }
 
@@ -1578,7 +1600,8 @@ function backToMenu() {
   ui.p1.textContent = "0";
   ui.p2.textContent = "0";
   ui.status.textContent = "Ready";
-  ui.hint.textContent = "Choose a mode to start.";
+  updateNameUI();
+  if (!hasValidName()) ui.hint.textContent = "Enter your name to start.";
   updatePointsUI();
   updateResignButton();
 }
@@ -1657,9 +1680,16 @@ function bindUi() {
     el.addEventListener("click", handler);
   };
 
-  bind(ui.btnLocal, startLocalMode);
-  bind(ui.btnOnline, openLobby);
-  bind(ui.btnCustomize, openCustomize);
+  bind(ui.btnLocal, () => requireName(startLocalMode));
+  bind(ui.btnOnline, () => requireName(openLobby));
+  bind(ui.btnCustomize, () => requireName(openCustomize));
+  bind(ui.btnNameSubmit, submitName);
+  bind(ui.btnChangeName, () => openNameOverlay(true));
+  if (ui.nameInput) {
+    ui.nameInput.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") submitName();
+    });
+  }
   bind(ui.btnCustomizeBack, closeCustomize);
   bind(ui.btnAdmin, openAdminOrPasskey);
   bind(ui.btnAdminBack, closeAdmin);
@@ -1772,12 +1802,18 @@ async function boot() {
   await loadSave();
   updatePointsUI();
   initAdminUi();
-  bindAdminControls();
-  if (stageEl) stageEl.classList.add("menu-open");
   bindUi();
-  ui.hint.textContent = isTouchDevice
-    ? "Choose a mode. Works on iPhone, Android, and PC."
-    : "Choose a mode to start.";
+  if (hasValidName()) {
+    hideOverlay(ui.nameOverlay);
+    showOverlay(ui.menuOverlay);
+    updateNameUI();
+  } else {
+    hideOverlay(ui.menuOverlay);
+    showOverlay(ui.nameOverlay);
+    if (ui.nameInput) ui.nameInput.focus();
+    ui.hint.textContent = "Enter your name to start.";
+  }
+  if (stageEl) stageEl.classList.add("menu-open");
   requestAnimationFrame(frame);
 }
 
