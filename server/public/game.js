@@ -370,6 +370,14 @@ function mySide() {
   return null;
 }
 
+function clamp01(v) {
+  return Math.max(0, Math.min(1, v));
+}
+
+function safeColorStop(g, offset, color) {
+  g.addColorStop(clamp01(offset), color);
+}
+
 function applyFillStyle(c, item, x, y, w, h, alpha) {
   const t = performance.now() * 0.001;
   if (item.style === "solid") {
@@ -380,115 +388,115 @@ function applyFillStyle(c, item, x, y, w, h, alpha) {
   let g;
   if (item.style === "galaxy") {
     g = c.createLinearGradient(x, y, x + w, y + h);
-    g.addColorStop(0, "#0b0320");
-    g.addColorStop(0.4, "#4c1d95");
-    g.addColorStop(0.7, "#7c3aed");
-    g.addColorStop(1, "#0ea5e9");
+    safeColorStop(g, 0, "#0b0320");
+    safeColorStop(g, 0.4, "#4c1d95");
+    safeColorStop(g, 0.7, "#7c3aed");
+    safeColorStop(g, 1, "#0ea5e9");
   } else if (item.style === "moon") {
     g = c.createLinearGradient(x, y, x, y + h);
-    g.addColorStop(0, "#1e293b");
-    g.addColorStop(0.45, "#94a3b8");
-    g.addColorStop(1, "#e2e8f0");
+    safeColorStop(g, 0, "#1e293b");
+    safeColorStop(g, 0.45, "#94a3b8");
+    safeColorStop(g, 1, "#e2e8f0");
   } else if (item.style === "sunset") {
     g = c.createLinearGradient(x, y, x, y + h);
-    g.addColorStop(0, "#f97316");
-    g.addColorStop(0.5, "#ec4899");
-    g.addColorStop(1, "#7c3aed");
+    safeColorStop(g, 0, "#f97316");
+    safeColorStop(g, 0.5, "#ec4899");
+    safeColorStop(g, 1, "#7c3aed");
   } else if (item.style === "neon") {
     g = c.createLinearGradient(x, y, x + w, y + h);
-    g.addColorStop(0, "#22c55e");
-    g.addColorStop(0.5, "#06b6d4");
-    g.addColorStop(1, "#a855f7");
+    safeColorStop(g, 0, "#22c55e");
+    safeColorStop(g, 0.5, "#06b6d4");
+    safeColorStop(g, 1, "#a855f7");
   } else if (item.style === "lava") {
     g = c.createLinearGradient(x, y, x, y + h);
-    g.addColorStop(0, "#fef08a");
-    g.addColorStop(0.4, "#f97316");
-    g.addColorStop(1, "#991b1b");
+    safeColorStop(g, 0, "#fef08a");
+    safeColorStop(g, 0.4, "#f97316");
+    safeColorStop(g, 1, "#991b1b");
   } else if (item.style === "ice") {
     g = c.createLinearGradient(x, y, x + w, y + h);
-    g.addColorStop(0, "#e0f2fe");
-    g.addColorStop(0.5, "#38bdf8");
-    g.addColorStop(1, "#1e3a8a");
+    safeColorStop(g, 0, "#e0f2fe");
+    safeColorStop(g, 0.5, "#38bdf8");
+    safeColorStop(g, 1, "#1e3a8a");
   } else if (item.style === "rainbow") {
     g = c.createLinearGradient(x, y, x + w, y);
-    g.addColorStop(0, "#ef4444");
-    g.addColorStop(0.25, "#eab308");
-    g.addColorStop(0.5, "#22c55e");
-    g.addColorStop(0.75, "#3b82f6");
-    g.addColorStop(1, "#a855f7");
+    safeColorStop(g, 0, "#ef4444");
+    safeColorStop(g, 0.25, "#eab308");
+    safeColorStop(g, 0.5, "#22c55e");
+    safeColorStop(g, 0.75, "#3b82f6");
+    safeColorStop(g, 1, "#a855f7");
   } else if (item.style === "aurora") {
     g = c.createLinearGradient(x, y, x + w, y + h);
-    g.addColorStop(0, "#064e3b");
-    g.addColorStop(0.4 + Math.sin(t) * 0.06, "#10b981");
-    g.addColorStop(0.75, "#6366f1");
-    g.addColorStop(1, "#312e81");
+    safeColorStop(g, 0, "#064e3b");
+    safeColorStop(g, 0.4 + Math.sin(t) * 0.06, "#10b981");
+    safeColorStop(g, 0.75, "#6366f1");
+    safeColorStop(g, 1, "#312e81");
   } else if (item.style === "nebula") {
     const ox = Math.sin(t * 0.7) * w * 0.35;
     const oy = Math.cos(t * 0.55) * h * 0.25;
     g = c.createLinearGradient(x + ox, y + oy, x + w - ox, y + h - oy);
-    g.addColorStop(0, "#12002b");
-    g.addColorStop(0.25 + Math.sin(t) * 0.05, "#7c3aed");
-    g.addColorStop(0.55, "#ec4899");
-    g.addColorStop(0.8, "#38bdf8");
-    g.addColorStop(1, "#0b0320");
+    safeColorStop(g, 0, "#12002b");
+    safeColorStop(g, 0.25 + Math.sin(t) * 0.05, "#7c3aed");
+    safeColorStop(g, 0.55, "#ec4899");
+    safeColorStop(g, 0.8, "#38bdf8");
+    safeColorStop(g, 1, "#0b0320");
   } else if (item.style === "interstellar") {
     const shift = ((t * 0.18) % 1);
     g = c.createLinearGradient(x - w * shift, y, x + w * (1.4 - shift), y + h);
-    g.addColorStop(0, "#020617");
-    g.addColorStop(0.2, "#1e3a8a");
-    g.addColorStop(0.45, "#67e8f9");
-    g.addColorStop(0.65, "#c084fc");
-    g.addColorStop(0.85, "#f472b6");
-    g.addColorStop(1, "#020617");
+    safeColorStop(g, 0, "#020617");
+    safeColorStop(g, 0.2, "#1e3a8a");
+    safeColorStop(g, 0.45, "#67e8f9");
+    safeColorStop(g, 0.65, "#c084fc");
+    safeColorStop(g, 0.85, "#f472b6");
+    safeColorStop(g, 1, "#020617");
   } else if (item.style === "voidpulse") {
     const pulse = 0.35 + Math.sin(t * 2.2) * 0.2;
     g = c.createRadialGradient(x + w * 0.5, y + h * 0.5, 1, x + w * 0.5, y + h * 0.5, Math.max(w, h) * 0.9);
-    g.addColorStop(0, "#f0abfc");
-    g.addColorStop(pulse * 0.45, "#7c3aed");
-    g.addColorStop(0.7, "#1e1b4b");
-    g.addColorStop(1, "#02010a");
+    safeColorStop(g, 0, "#f0abfc");
+    safeColorStop(g, pulse * 0.45, "#7c3aed");
+    safeColorStop(g, 0.7, "#1e1b4b");
+    safeColorStop(g, 1, "#02010a");
   } else if (item.style === "solarflare") {
     const ox = Math.sin(t * 1.4) * w * 0.4;
     g = c.createLinearGradient(x + ox, y, x + w - ox, y + h);
-    g.addColorStop(0, "#450a0a");
-    g.addColorStop(0.25, "#ea580c");
-    g.addColorStop(0.5 + Math.sin(t * 2) * 0.08, "#fde047");
-    g.addColorStop(0.75, "#fb7185");
-    g.addColorStop(1, "#7f1d1d");
+    safeColorStop(g, 0, "#450a0a");
+    safeColorStop(g, 0.25, "#ea580c");
+    safeColorStop(g, 0.5 + Math.sin(t * 2) * 0.08, "#fde047");
+    safeColorStop(g, 0.75, "#fb7185");
+    safeColorStop(g, 1, "#7f1d1d");
   } else if (item.style === "plasma") {
     const a = t * 1.1;
     g = c.createLinearGradient(x + Math.cos(a) * w * 0.3, y + Math.sin(a) * h * 0.3, x + w, y + h);
-    g.addColorStop(0, "#022c22");
-    g.addColorStop(0.3, "#22d3ee");
-    g.addColorStop(0.55, "#a3e635");
-    g.addColorStop(0.8, "#f472b6");
-    g.addColorStop(1, "#312e81");
+    safeColorStop(g, 0, "#022c22");
+    safeColorStop(g, 0.3, "#22d3ee");
+    safeColorStop(g, 0.55, "#a3e635");
+    safeColorStop(g, 0.8, "#f472b6");
+    safeColorStop(g, 1, "#312e81");
   } else if (item.style === "quantum") {
     const s1 = (Math.sin(t * 1.3) + 1) * 0.5;
     g = c.createLinearGradient(x, y + h * s1, x + w, y + h * (1 - s1));
-    g.addColorStop(0, "#0f172a");
-    g.addColorStop(0.2, "#22d3ee");
-    g.addColorStop(0.45, "#ffffff");
-    g.addColorStop(0.7, "#818cf8");
-    g.addColorStop(1, "#0f172a");
+    safeColorStop(g, 0, "#0f172a");
+    safeColorStop(g, 0.2, "#22d3ee");
+    safeColorStop(g, 0.45, "#ffffff");
+    safeColorStop(g, 0.7, "#818cf8");
+    safeColorStop(g, 1, "#0f172a");
   } else if (item.style === "darkmatter") {
     const ox = Math.cos(t * 0.8) * w * 0.5;
     const oy = Math.sin(t * 0.6) * h * 0.4;
     g = c.createRadialGradient(x + w * 0.5 + ox * 0.2, y + h * 0.5 + oy * 0.2, 2, x + w * 0.5, y + h * 0.5, Math.max(w, h));
-    g.addColorStop(0, "#f5d0fe");
-    g.addColorStop(0.25, "#581c87");
-    g.addColorStop(0.55, "#111827");
-    g.addColorStop(0.8, "#4c1d95");
-    g.addColorStop(1, "#000000");
+    safeColorStop(g, 0, "#f5d0fe");
+    safeColorStop(g, 0.25, "#581c87");
+    safeColorStop(g, 0.55, "#111827");
+    safeColorStop(g, 0.8, "#4c1d95");
+    safeColorStop(g, 1, "#000000");
   } else if (item.style === "hypernova") {
     const shift = ((t * 0.35) % 1);
     g = c.createLinearGradient(x, y - h * shift, x + w, y + h * (1.2 - shift));
-    g.addColorStop(0, "#3b0764");
-    g.addColorStop(0.2, "#ef4444");
-    g.addColorStop(0.4, "#fbbf24");
-    g.addColorStop(0.6, "#22d3ee");
-    g.addColorStop(0.8, "#a855f7");
-    g.addColorStop(1, "#3b0764");
+    safeColorStop(g, 0, "#3b0764");
+    safeColorStop(g, 0.2, "#ef4444");
+    safeColorStop(g, 0.4, "#fbbf24");
+    safeColorStop(g, 0.6, "#22d3ee");
+    safeColorStop(g, 0.8, "#a855f7");
+    safeColorStop(g, 1, "#3b0764");
   } else {
     c.globalAlpha = alpha;
     c.fillStyle = item.color || "#fff";
@@ -582,56 +590,108 @@ function drawCosmeticFill(c, item, x, y, w, h, alpha) {
 const shopAnimSwatches = [];
 let shopAnimRunning = false;
 
+function agentLog(hypothesisId, location, message, data = {}, runId = "post-fix") {
+  const payload = {
+    sessionId: "38eb5e",
+    runId,
+    hypothesisId,
+    location,
+    message,
+    data,
+    timestamp: Date.now(),
+  };
+  // #region agent log
+  fetch("http://127.0.0.1:7263/ingest/7b680789-6fbf-44a7-9704-6ddeb5cf3ed6", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "38eb5e" },
+    body: JSON.stringify(payload),
+  }).catch(() => {});
+  fetch("/api/debug-log", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  }).catch(() => {});
+  // #endregion
+}
+
+function paintSwatchCanvas(entry) {
+  const { canvas, ctx, item } = entry;
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  drawCosmeticFill(ctx, item, 0, 0, canvas.width, canvas.height, 1);
+}
+
 function drawSwatch(item, el) {
+  el.innerHTML = "";
   const c = document.createElement("canvas");
   c.width = 120;
   c.height = 48;
+  c.setAttribute("aria-hidden", "true");
   const cctx = c.getContext("2d");
-  drawCosmeticFill(cctx, item, 0, 0, c.width, c.height, 1);
-  let dataUrl = "";
+  el.appendChild(c);
+  const entry = { el, item, canvas: c, ctx: cctx };
+  let drawErr = null;
   try {
-    dataUrl = c.toDataURL();
-    el.style.backgroundImage = `url(${dataUrl})`;
+    paintSwatchCanvas(entry);
   } catch (err) {
-    // #region agent log
-    fetch('http://127.0.0.1:7263/ingest/7b680789-6fbf-44a7-9704-6ddeb5cf3ed6',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'38eb5e'},body:JSON.stringify({sessionId:'38eb5e',runId:'pre-fix',hypothesisId:'C',location:'game.js:drawSwatch',message:'toDataURL failed',data:{id:item.id,epic:!!item.epic,err:String(err&&err.message||err)},timestamp:Date.now()})}).catch(()=>{});
-    // #endregion
+    drawErr = String(err && err.message ? err.message : err);
+    cctx.fillStyle = item.color || "#7c3aed";
+    cctx.fillRect(0, 0, c.width, c.height);
   }
-  el.style.backgroundSize = "cover";
   if (item.epic) {
     el.dataset.epicStyle = item.style;
-    shopAnimSwatches.push({ el, item, canvas: c, ctx: cctx });
-    // #region agent log
-    if (shopAnimSwatches.length <= 2) {
-      const sample = cctx.getImageData(60, 24, 1, 1).data;
-      fetch('http://127.0.0.1:7263/ingest/7b680789-6fbf-44a7-9704-6ddeb5cf3ed6',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'38eb5e'},body:JSON.stringify({sessionId:'38eb5e',runId:'pre-fix',hypothesisId:'C',location:'game.js:drawSwatch',message:'epic swatch drawn',data:{id:item.id,style:item.style,dataUrlLen:dataUrl.length,px:[sample[0],sample[1],sample[2],sample[3]]},timestamp:Date.now()})}).catch(()=>{});
+    shopAnimSwatches.push(entry);
+    if (shopAnimSwatches.length <= 3) {
+      let sample = [0, 0, 0, 0];
+      try {
+        sample = Array.from(cctx.getImageData(60, 24, 1, 1).data);
+      } catch {
+        /* ignore */
+      }
+      agentLog("C", "game.js:drawSwatch", "epic swatch canvas painted", {
+        id: item.id,
+        style: item.style,
+        drawErr,
+        mode: "canvas-element",
+        px: sample,
+        hasChildCanvas: el.querySelector("canvas") != null,
+      });
     }
-    // #endregion
   }
 }
 
 function tickShopSwatches() {
   shopAnimRunning = false;
   if (!ui.customizeOverlay || ui.customizeOverlay.classList.contains("hidden")) {
-    // #region agent log
-    fetch('http://127.0.0.1:7263/ingest/7b680789-6fbf-44a7-9704-6ddeb5cf3ed6',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'38eb5e'},body:JSON.stringify({sessionId:'38eb5e',runId:'pre-fix',hypothesisId:'B',location:'game.js:tickShopSwatches',message:'tick aborted overlay hidden',data:{hasOverlay:!!ui.customizeOverlay,hidden:!!(ui.customizeOverlay&&ui.customizeOverlay.classList.contains('hidden')),swatchCount:shopAnimSwatches.length},timestamp:Date.now()})}).catch(()=>{});
-    // #endregion
+    agentLog("B", "game.js:tickShopSwatches", "tick aborted overlay hidden", {
+      hasOverlay: !!ui.customizeOverlay,
+      hidden: !!(ui.customizeOverlay && ui.customizeOverlay.classList.contains("hidden")),
+      swatchCount: shopAnimSwatches.length,
+    });
     shopAnimSwatches.length = 0;
     return;
   }
   if (!shopAnimSwatches.length) return;
   shopAnimRunning = true;
-  // #region agent log
   if (!tickShopSwatches._logged) {
     tickShopSwatches._logged = true;
-    fetch('http://127.0.0.1:7263/ingest/7b680789-6fbf-44a7-9704-6ddeb5cf3ed6',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'38eb5e'},body:JSON.stringify({sessionId:'38eb5e',runId:'pre-fix',hypothesisId:'D',location:'game.js:tickShopSwatches',message:'animation loop running',data:{swatchCount:shopAnimSwatches.length,ids:shopAnimSwatches.map((e)=>e.item.id)},timestamp:Date.now()})}).catch(()=>{});
+    agentLog("D", "game.js:tickShopSwatches", "animation loop running", {
+      swatchCount: shopAnimSwatches.length,
+      ids: shopAnimSwatches.map((e) => e.item.id),
+      mode: "canvas-element",
+    });
   }
-  // #endregion
+  let tickErr = null;
   for (const entry of shopAnimSwatches) {
     if (!entry.el.isConnected) continue;
-    entry.ctx.clearRect(0, 0, entry.canvas.width, entry.canvas.height);
-    drawCosmeticFill(entry.ctx, entry.item, 0, 0, entry.canvas.width, entry.canvas.height, 1);
-    entry.el.style.backgroundImage = `url(${entry.canvas.toDataURL()})`;
+    try {
+      paintSwatchCanvas(entry);
+    } catch (err) {
+      tickErr = String(err && err.message ? err.message : err);
+    }
+  }
+  if (tickErr && !tickShopSwatches._errLogged) {
+    tickShopSwatches._errLogged = true;
+    agentLog("C", "game.js:tickShopSwatches", "tick draw error", { tickErr });
   }
   requestAnimationFrame(tickShopSwatches);
 }
@@ -640,6 +700,7 @@ function renderShop() {
   if (!ui.shopGrid) return;
   shopAnimSwatches.length = 0;
   tickShopSwatches._logged = false;
+  tickShopSwatches._errLogged = false;
   const kind = save.shopTab;
   ui.shopGrid.innerHTML = "";
   let epicCount = 0;
@@ -705,12 +766,31 @@ function renderShop() {
     });
     ui.shopGrid.appendChild(btn);
   }
-  // #region agent log
   const firstEpic = ui.shopGrid.querySelector(".shop-item.epic");
   const firstSwatch = firstEpic && firstEpic.querySelector(".shop-swatch");
+  const firstCanvas = firstSwatch && firstSwatch.querySelector("canvas");
   const computed = firstEpic ? getComputedStyle(firstEpic) : null;
-  fetch('http://127.0.0.1:7263/ingest/7b680789-6fbf-44a7-9704-6ddeb5cf3ed6',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'38eb5e'},body:JSON.stringify({sessionId:'38eb5e',runId:'pre-fix',hypothesisId:'A',location:'game.js:renderShop',message:'shop rendered',data:{kind,points:save.points,epicCount,cantAffordEpic,animSwatches:shopAnimSwatches.length,shopAnimRunning,overlayHidden:!!(ui.customizeOverlay&&ui.customizeOverlay.classList.contains('hidden')),firstEpicOpacity:computed?computed.opacity:null,firstSwatchBgLen:firstSwatch&&firstSwatch.style.backgroundImage?firstSwatch.style.backgroundImage.length:0},timestamp:Date.now()})}).catch(()=>{});
-  // #endregion
+  let sample = null;
+  if (firstCanvas) {
+    try {
+      sample = Array.from(firstCanvas.getContext("2d").getImageData(60, 24, 1, 1).data);
+    } catch {
+      sample = null;
+    }
+  }
+  agentLog("A", "game.js:renderShop", "shop rendered", {
+    kind,
+    points: save.points,
+    epicCount,
+    cantAffordEpic,
+    animSwatches: shopAnimSwatches.length,
+    shopAnimRunning,
+    overlayHidden: !!(ui.customizeOverlay && ui.customizeOverlay.classList.contains("hidden")),
+    firstEpicOpacity: computed ? computed.opacity : null,
+    hasLiveCanvas: !!firstCanvas,
+    samplePx: sample,
+    ua: navigator.userAgent.slice(0, 120),
+  });
   if (shopAnimSwatches.length && !shopAnimRunning) requestAnimationFrame(tickShopSwatches);
 }
 
@@ -729,9 +809,12 @@ function openCustomize() {
   showOverlay(ui.customizeOverlay);
   setStagePlaying(false);
   updatePointsUI();
-  // #region agent log
-  fetch('http://127.0.0.1:7263/ingest/7b680789-6fbf-44a7-9704-6ddeb5cf3ed6',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'38eb5e'},body:JSON.stringify({sessionId:'38eb5e',runId:'pre-fix',hypothesisId:'E',location:'game.js:openCustomize',message:'customize opened',data:{mode:s.mode,points:save.points,ownedPaddle:save.owned.paddle.length,overlayHidden:ui.customizeOverlay.classList.contains('hidden')},timestamp:Date.now()})}).catch(()=>{});
-  // #endregion
+  agentLog("E", "game.js:openCustomize", "customize opened", {
+    mode: s.mode,
+    points: save.points,
+    ownedPaddle: save.owned.paddle.length,
+    overlayHidden: ui.customizeOverlay.classList.contains("hidden"),
+  });
   setShopTab(save.shopTab);
   if (ui.shopMsg) ui.shopMsg.textContent = "Buy or equip a colour. Epic skins (50+) are animated.";
 }

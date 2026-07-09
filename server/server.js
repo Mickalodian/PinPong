@@ -217,6 +217,23 @@ async function handleApi(req, res, urlPath) {
     return true;
   }
 
+  if (urlPath === "api/debug-log") {
+    try {
+      const line = JSON.stringify({
+        sessionId: "38eb5e",
+        ...body,
+        timestamp: body.timestamp || Date.now(),
+        receivedAt: Date.now(),
+      });
+      fs.appendFileSync(path.join(__dirname, "..", "debug-38eb5e.log"), line + "\n");
+    } catch {
+      /* ignore */
+    }
+    res.writeHead(204);
+    res.end();
+    return true;
+  }
+
   return false;
 }
 

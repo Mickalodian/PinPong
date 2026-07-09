@@ -1,0 +1,20 @@
+{
+  "9732f19b-faee-49a9-9a6c-929874a817c8": {
+    "name": "Tester",
+    "points": 0,
+    "maxBotCleared": 0,
+    "owned": {
+      "paddle": [
+        "white"
+      ],
+      "table": [
+        "classic"
+      ]
+    },
+    "equipped": {
+      "paddle": "white",
+      "table": "classic"
+    },
+    "updatedAt": 1783628512250
+  }
+}
