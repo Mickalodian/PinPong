@@ -71,11 +71,13 @@ const VALID_PADDLE = new Set([
   "white", "blue", "pink", "orange", "red", "green", "yellow", "purple", "cyan",
   "galaxy", "moon", "sunset", "neon", "lava", "ice", "rainbow", "aurora",
   "nebula", "interstellar", "voidpulse", "solarflare", "plasma", "quantum", "darkmatter", "hypernova",
+  "rosegold",
 ]);
 const VALID_TABLE = new Set([
   "classic", "blue", "pink", "orange", "red", "green", "yellow", "purple", "cyan",
   "galaxy", "moon", "sunset", "neon", "lava", "ice", "rainbow", "aurora",
   "nebula", "interstellar", "voidpulse", "solarflare", "plasma", "quantum", "darkmatter", "hypernova",
+  "rosegold",
 ]);
 
 function sanitizeCosmetics(cos) {

@@ -48,6 +48,14 @@ const SHOP = {
     { id: "quantum", name: "Quantum Drift", price: 65, style: "quantum", epic: true },
     { id: "darkmatter", name: "Dark Matter", price: 70, style: "darkmatter", epic: true },
     { id: "hypernova", name: "Hypernova", price: 75, style: "hypernova", epic: true },
+    {
+      id: "rosegold",
+      name: "Rose Gold",
+      price: 0,
+      style: "rosegold",
+      legendary: true,
+      requireLevel: 20,
+    },
   ],
   table: [
     { id: "classic", name: "Classic", price: 0, style: "solid", color: "#000000" },
@@ -75,6 +83,14 @@ const SHOP = {
     { id: "quantum", name: "Quantum Drift", price: 65, style: "quantum", epic: true },
     { id: "darkmatter", name: "Dark Matter", price: 70, style: "darkmatter", epic: true },
     { id: "hypernova", name: "Hypernova", price: 75, style: "hypernova", epic: true },
+    {
+      id: "rosegold",
+      name: "Rose Gold",
+      price: 0,
+      style: "rosegold",
+      legendary: true,
+      requireLevel: 20,
+    },
   ],
 };
 
@@ -144,10 +160,33 @@ function applyProfile(data) {
   if (data.equipped?.table) save.equipped.table = data.equipped.table;
   if (!save.owned.paddle.includes("white")) save.owned.paddle.unshift("white");
   if (!save.owned.table.includes("classic")) save.owned.table.unshift("classic");
+  sanitizeEquippedCosmetics();
 }
 
 function getPlayerLevel() {
   return Math.max(0, Math.min(100, save.maxBotCleared || 0));
+}
+
+function itemUnlocked(item) {
+  if (!item || !item.requireLevel) return true;
+  if (isAdmin() && save.abilities.freeShop) return true;
+  return getPlayerLevel() >= item.requireLevel;
+}
+
+function sanitizeEquippedCosmetics() {
+  let changed = false;
+  for (const kind of ["paddle", "table"]) {
+    const item = shopItem(kind, save.equipped[kind]);
+    if (!itemUnlocked(item)) {
+      save.equipped[kind] = kind === "paddle" ? "white" : "classic";
+      changed = true;
+    }
+    if (itemUnlocked(item) && item.requireLevel && !save.owned[kind].includes(item.id)) {
+      save.owned[kind].push(item.id);
+      changed = true;
+    }
+  }
+  return changed;
 }
 
 function isBotLevelUnlocked(level) {
@@ -222,6 +261,7 @@ function awardBotClear(level) {
   if (lv <= save.maxBotCleared) return 0;
   save.maxBotCleared = lv;
   save.points += POINTS_PER_BOT_CLEAR;
+  sanitizeEquippedCosmetics();
   persistSave();
   updatePointsUI();
   updateNameUI();
@@ -497,6 +537,17 @@ function applyFillStyle(c, item, x, y, w, h, alpha) {
     safeColorStop(g, 0.6, "#22d3ee");
     safeColorStop(g, 0.8, "#a855f7");
     safeColorStop(g, 1, "#3b0764");
+  } else if (item.style === "rosegold") {
+    const ox = Math.sin(t * 0.55) * w * 0.2;
+    const oy = Math.cos(t * 0.4) * h * 0.12;
+    g = c.createLinearGradient(x + ox, y + oy, x + w - ox * 0.5, y + h - oy);
+    safeColorStop(g, 0, "#6b2f2a");
+    safeColorStop(g, 0.22, "#b76e79");
+    safeColorStop(g, 0.42, "#e8b4b8");
+    safeColorStop(g, 0.55 + Math.sin(t * 1.2) * 0.04, "#fff1f2");
+    safeColorStop(g, 0.72, "#d4a574");
+    safeColorStop(g, 0.88, "#c97b84");
+    safeColorStop(g, 1, "#8b3a3a");
   } else {
     c.globalAlpha = alpha;
     c.fillStyle = item.color || "#fff";
@@ -506,8 +557,22 @@ function applyFillStyle(c, item, x, y, w, h, alpha) {
   c.fillStyle = g;
 }
 
+function drawStar(c, cx, cy, spikes, outerR, innerR) {
+  c.beginPath();
+  for (let i = 0; i < spikes * 2; i++) {
+    const r = i % 2 === 0 ? outerR : innerR;
+    const a = (i * Math.PI) / spikes - Math.PI / 2;
+    const px = cx + Math.cos(a) * r;
+    const py = cy + Math.sin(a) * r;
+    if (i === 0) c.moveTo(px, py);
+    else c.lineTo(px, py);
+  }
+  c.closePath();
+  c.fill();
+}
+
 function drawEpicOverlay(c, item, x, y, w, h, alpha) {
-  if (!item.epic) return;
+  if (!item.epic && !item.legendary) return;
   const t = performance.now() * 0.001;
   c.save();
   c.beginPath();
@@ -576,6 +641,35 @@ function drawEpicOverlay(c, item, x, y, w, h, alpha) {
     c.fillRect(x, y, w, h);
   }
 
+  if (item.style === "rosegold") {
+    for (let i = 0; i < 28; i++) {
+      const px = x + ((Math.sin(t * 1.1 + i * 2.3) * 0.5 + 0.5) * w);
+      const py = y + ((Math.cos(t * 0.95 + i * 1.9) * 0.5 + 0.5) * h);
+      const twinkle = Math.sin(t * 6 + i * 1.4) * 0.5 + 0.5;
+      c.globalAlpha = alpha * (0.25 + twinkle * 0.65);
+      c.fillStyle = i % 3 === 0 ? "#ffffff" : i % 3 === 1 ? "#ffe4e6" : "#fde68a";
+      c.beginPath();
+      c.arc(px, py, 0.5 + (i % 4) * 0.35 * twinkle, 0, Math.PI * 2);
+      c.fill();
+    }
+    for (let i = 0; i < 7; i++) {
+      const sx = x + ((Math.sin(t * 0.45 + i * 1.8) * 0.5 + 0.5) * w);
+      const sy = y + ((Math.cos(t * 0.55 + i * 2.4) * 0.5 + 0.5) * h);
+      const pulse = 0.55 + Math.sin(t * 3.2 + i) * 0.35;
+      c.globalAlpha = alpha * (0.35 + pulse * 0.45);
+      c.fillStyle = i % 2 === 0 ? "#fff7ed" : "#fecdd3";
+      drawStar(c, sx, sy, 4, 2.2 + pulse * 1.6, 0.9 + pulse * 0.5);
+    }
+    const sheen = c.createLinearGradient(x, y, x + w, y + h);
+    const sheenPos = (Math.sin(t * 0.8) * 0.5 + 0.5) * 0.5;
+    sheen.addColorStop(Math.max(0, sheenPos - 0.08), "rgba(255,255,255,0)");
+    sheen.addColorStop(sheenPos, `rgba(255,241,242,${0.18 + Math.sin(t * 2) * 0.06})`);
+    sheen.addColorStop(Math.min(1, sheenPos + 0.08), "rgba(255,255,255,0)");
+    c.globalAlpha = alpha;
+    c.fillStyle = sheen;
+    c.fillRect(x, y, w, h);
+  }
+
   c.restore();
   c.globalAlpha = 1;
 }
@@ -637,7 +731,7 @@ function drawSwatch(item, el) {
     cctx.fillStyle = item.color || "#7c3aed";
     cctx.fillRect(0, 0, c.width, c.height);
   }
-  if (item.epic) {
+  if (item.epic || item.legendary) {
     el.dataset.epicStyle = item.style;
     shopAnimSwatches.push(entry);
     if (shopAnimSwatches.length <= 3) {
@@ -708,36 +802,52 @@ function renderShop() {
   for (const item of SHOP[kind]) {
     const owned = save.owned[kind].includes(item.id);
     const equipped = save.equipped[kind] === item.id;
+    const unlocked = itemUnlocked(item);
     const btn = document.createElement("button");
     btn.type = "button";
     btn.className = "shop-item";
     if (item.epic) btn.classList.add("epic");
+    if (item.legendary) btn.classList.add("legendary");
     if (equipped) btn.classList.add("equipped");
     const free = isAdmin() && save.abilities.freeShop;
-    const cantAfford = !owned && !free && save.points < item.price;
-    if (cantAfford) btn.classList.add("cant-afford");
-    if (item.epic) {
+    const cantAfford = unlocked && !owned && !free && item.price > 0 && save.points < item.price;
+    if (!unlocked) btn.classList.add("level-locked");
+    else if (cantAfford) btn.classList.add("cant-afford");
+    if (item.epic || item.legendary) {
       epicCount += 1;
-      if (cantAfford) cantAffordEpic += 1;
+      if (cantAfford || !unlocked) cantAffordEpic += 1;
     }
     const swatch = document.createElement("div");
     swatch.className = "shop-swatch";
     if (item.epic) swatch.classList.add("epic-swatch");
+    if (item.legendary) swatch.classList.add("legendary-swatch");
     drawSwatch(item, swatch);
     const name = document.createElement("div");
     name.className = "shop-name";
     name.textContent = item.name;
     const price = document.createElement("div");
     price.className = "shop-price";
-    price.textContent = item.price === 0 ? "Free" : `${item.price} pts`;
+    if (!unlocked) price.textContent = `LVL ${item.requireLevel}`;
+    else if (item.price === 0) price.textContent = owned || item.legendary ? "Unlocked" : "Free";
+    else price.textContent = `${item.price} pts`;
     btn.append(swatch, name, price);
-    if (item.epic) {
+    if (item.legendary) {
+      const tag = document.createElement("span");
+      tag.className = "shop-legendary-tag";
+      tag.textContent = "LEGENDARY";
+      btn.appendChild(tag);
+    } else if (item.epic) {
       const tag = document.createElement("span");
       tag.className = "shop-epic-tag";
       tag.textContent = "EPIC";
       btn.appendChild(tag);
     }
-    if (equipped) {
+    if (!unlocked) {
+      const lock = document.createElement("span");
+      lock.className = "shop-lock-badge";
+      lock.textContent = `LOCKED · L${item.requireLevel}`;
+      btn.appendChild(lock);
+    } else if (equipped) {
       const b = document.createElement("span");
       b.className = "shop-badge";
       b.textContent = "ON";
@@ -745,6 +855,12 @@ function renderShop() {
     }
     btn.addEventListener("click", () => {
       playMenuClick();
+      if (!unlocked) {
+        if (ui.shopMsg) {
+          ui.shopMsg.textContent = `${item.name} unlocks at player level ${item.requireLevel}. Reach L${item.requireLevel} by clearing bots.`;
+        }
+        return;
+      }
       if (owned) {
         save.equipped[kind] = item.id;
         persistSave();
@@ -752,16 +868,19 @@ function renderShop() {
         renderShop();
         return;
       }
-      if (save.points < item.price && !(isAdmin() && save.abilities.freeShop)) {
+      if (item.price > 0 && save.points < item.price && !free) {
         if (ui.shopMsg) ui.shopMsg.textContent = `Need ${item.price - save.points} more pts. Win games for +2.`;
         return;
       }
-      if (!(isAdmin() && save.abilities.freeShop)) save.points -= item.price;
-      save.owned[kind].push(item.id);
+      if (item.price > 0 && !free) save.points -= item.price;
+      if (!save.owned[kind].includes(item.id)) save.owned[kind].push(item.id);
       save.equipped[kind] = item.id;
       persistSave();
       updatePointsUI();
-      if (ui.shopMsg) ui.shopMsg.textContent = `Bought ${item.name}!`;
+      if (ui.shopMsg) {
+        ui.shopMsg.textContent =
+          item.price === 0 ? `Unlocked & equipped ${item.name}!` : `Bought ${item.name}!`;
+      }
       renderShop();
     });
     ui.shopGrid.appendChild(btn);
@@ -816,7 +935,7 @@ function openCustomize() {
     overlayHidden: ui.customizeOverlay.classList.contains("hidden"),
   });
   setShopTab(save.shopTab);
-  if (ui.shopMsg) ui.shopMsg.textContent = "Buy or equip a colour. Epic skins (50+) are animated.";
+  if (ui.shopMsg) ui.shopMsg.textContent = "Buy or equip a colour. Epic skins animate. Rose Gold unlocks at L20.";
 }
 
 function closeCustomize() {
@@ -894,6 +1013,7 @@ function adminUnlockAll() {
 function adminUnlockAllLevels() {
   if (!isAdmin()) return;
   save.maxBotCleared = 100;
+  sanitizeEquippedCosmetics();
   persistSave();
   updateNameUI();
   refreshAdminPanel();
@@ -905,6 +1025,7 @@ function adminSetPlayerLevel(n) {
   if (!isAdmin()) return;
   const lv = Math.max(0, Math.min(100, Math.floor(Number(n) || 0)));
   save.maxBotCleared = lv;
+  sanitizeEquippedCosmetics();
   persistSave();
   updateNameUI();
   refreshAdminPanel();
@@ -943,7 +1064,7 @@ function drawTableHalf(side) {
   if (style.id === "classic") return;
   const halfW = table.w / 2;
   const x = side === "p1" ? table.x : table.x + halfW;
-  const alpha = style.epic ? 0.58 : style.price >= 20 ? 0.5 : 0.38;
+  const alpha = style.legendary ? 0.62 : style.epic ? 0.58 : style.price >= 20 ? 0.5 : 0.38;
   drawCosmeticFill(ctx, style, x, table.y, halfW, table.h, alpha);
 }
 
