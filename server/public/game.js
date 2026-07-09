@@ -58,6 +58,14 @@ const SHOP = {
       requireLevel: 20,
     },
     {
+      id: "voidstorm",
+      name: "Void Storm",
+      price: 0,
+      style: "voidstorm",
+      legendary: true,
+      requireLevel: 40,
+    },
+    {
       id: "heartbloom",
       name: "Heart Bloom",
       price: 0,
@@ -65,6 +73,17 @@ const SHOP = {
       secret: true,
       hidden: true,
       codeOnly: true,
+      limitedEdition: true,
+    },
+    {
+      id: "blushgarden",
+      name: "Blush Garden",
+      price: 0,
+      style: "blushgarden",
+      secret: true,
+      hidden: true,
+      codeOnly: true,
+      limitedEdition: true,
     },
   ],
   table: [
@@ -102,6 +121,14 @@ const SHOP = {
       requireLevel: 20,
     },
     {
+      id: "voidstorm",
+      name: "Void Storm",
+      price: 0,
+      style: "voidstorm",
+      legendary: true,
+      requireLevel: 40,
+    },
+    {
       id: "heartbloom",
       name: "Heart Bloom",
       price: 0,
@@ -109,17 +136,40 @@ const SHOP = {
       secret: true,
       hidden: true,
       codeOnly: true,
+      limitedEdition: true,
+    },
+    {
+      id: "blushgarden",
+      name: "Blush Garden",
+      price: 0,
+      style: "blushgarden",
+      secret: true,
+      hidden: true,
+      codeOnly: true,
+      limitedEdition: true,
     },
   ],
 };
 
+// expiresAt: ISO date string. After this time new redemptions fail,
+// but anyone who already redeemed keeps the rewards forever.
 const REDEEM_CODES = {
   "6767": {
     id: "6767",
     label: "Heart Bloom",
+    expiresAt: "2026-08-09T23:59:59.000Z",
     rewards: [
       { type: "cosmetic", kind: "paddle", id: "heartbloom" },
       { type: "cosmetic", kind: "table", id: "heartbloom" },
+    ],
+  },
+  "6967": {
+    id: "6967",
+    label: "Blush Garden",
+    expiresAt: "2026-08-09T23:59:59.000Z",
+    rewards: [
+      { type: "cosmetic", kind: "paddle", id: "blushgarden" },
+      { type: "cosmetic", kind: "table", id: "blushgarden" },
     ],
   },
 };
@@ -640,6 +690,14 @@ function applyFillStyle(c, item, x, y, w, h, alpha) {
     safeColorStop(g, 0.72, "#d4a574");
     safeColorStop(g, 0.88, "#c97b84");
     safeColorStop(g, 1, "#8b3a3a");
+  } else if (item.style === "voidstorm") {
+    const ox = Math.sin(t * 0.35) * w * 0.12;
+    g = c.createLinearGradient(x + ox, y, x + w - ox, y + h);
+    safeColorStop(g, 0, "#000000");
+    safeColorStop(g, 0.35, "#050816");
+    safeColorStop(g, 0.55, "#0b1224");
+    safeColorStop(g, 0.78, "#020617");
+    safeColorStop(g, 1, "#000000");
   } else if (item.style === "heartbloom") {
     const ox = Math.sin(t * 0.7) * w * 0.18;
     g = c.createLinearGradient(x + ox, y, x + w - ox, y + h);
@@ -648,6 +706,11 @@ function applyFillStyle(c, item, x, y, w, h, alpha) {
     safeColorStop(g, 0.52 + Math.sin(t * 1.4) * 0.05, "#f472b6");
     safeColorStop(g, 0.78, "#fda4d5");
     safeColorStop(g, 1, "#9d174d");
+  } else if (item.style === "blushgarden") {
+    g = c.createLinearGradient(x, y, x + w, y + h);
+    safeColorStop(g, 0, "#fadadd");
+    safeColorStop(g, 0.45, "#f9d5e5");
+    safeColorStop(g, 1, "#f6cfe0");
   } else {
     c.globalAlpha = alpha;
     c.fillStyle = item.color || "#fff";
@@ -681,6 +744,249 @@ function drawHeart(c, cx, cy, size) {
   c.bezierCurveTo(cx + s, cy, cx, cy, cx, cy + s * 0.35);
   c.closePath();
   c.fill();
+}
+
+function drawCosmosFlower(c, cx, cy, size, rot, petalColor, alpha) {
+  c.save();
+  c.translate(cx, cy);
+  c.rotate(rot);
+  c.globalAlpha = alpha;
+  const petals = 12;
+  for (let i = 0; i < petals; i++) {
+    const a = (i / petals) * Math.PI * 2;
+    c.save();
+    c.rotate(a);
+    c.beginPath();
+    c.ellipse(0, -size * 0.52, size * 0.18, size * 0.52, 0, 0, Math.PI * 2);
+    c.fillStyle = petalColor;
+    c.fill();
+    c.restore();
+  }
+  // Soft petal tips highlight
+  for (let i = 0; i < petals; i++) {
+    const a = (i / petals) * Math.PI * 2 + 0.08;
+    c.save();
+    c.rotate(a);
+    c.globalAlpha = alpha * 0.35;
+    c.beginPath();
+    c.ellipse(0, -size * 0.62, size * 0.08, size * 0.22, 0, 0, Math.PI * 2);
+    c.fillStyle = "#ffffff";
+    c.fill();
+    c.restore();
+  }
+  c.globalAlpha = alpha;
+  const center = c.createRadialGradient(0, 0, size * 0.05, 0, 0, size * 0.28);
+  center.addColorStop(0, "#fde047");
+  center.addColorStop(0.55, "#fbbf24");
+  center.addColorStop(1, "#f59e0b");
+  c.fillStyle = center;
+  c.beginPath();
+  c.arc(0, 0, size * 0.26, 0, Math.PI * 2);
+  c.fill();
+  // Textured disc florets
+  c.fillStyle = "#fef08a";
+  for (let i = 0; i < 10; i++) {
+    const a = (i / 10) * Math.PI * 2;
+    const r = size * (0.08 + (i % 3) * 0.04);
+    c.beginPath();
+    c.arc(Math.cos(a) * r, Math.sin(a) * r, size * 0.035, 0, Math.PI * 2);
+    c.fill();
+  }
+  c.restore();
+}
+
+function drawTinyBlossom(c, cx, cy, size, rot, color, alpha) {
+  c.save();
+  c.translate(cx, cy);
+  c.rotate(rot);
+  c.globalAlpha = alpha;
+  for (let i = 0; i < 5; i++) {
+    const a = (i / 5) * Math.PI * 2;
+    c.beginPath();
+    c.ellipse(
+      Math.cos(a) * size * 0.45,
+      Math.sin(a) * size * 0.45,
+      size * 0.32,
+      size * 0.22,
+      a,
+      0,
+      Math.PI * 2
+    );
+    c.fillStyle = color;
+    c.fill();
+  }
+  c.fillStyle = "#fde68a";
+  c.beginPath();
+  c.arc(0, 0, size * 0.18, 0, Math.PI * 2);
+  c.fill();
+  c.restore();
+}
+
+function drawPinkCluster(c, cx, cy, size, rot, alpha) {
+  c.save();
+  c.translate(cx, cy);
+  c.rotate(rot);
+  c.globalAlpha = alpha;
+  const dots = [
+    [0, 0, 1],
+    [-0.55, -0.35, 0.75],
+    [0.5, -0.4, 0.7],
+    [-0.35, 0.5, 0.65],
+    [0.45, 0.4, 0.7],
+    [0.05, -0.7, 0.55],
+    [-0.7, 0.15, 0.55],
+  ];
+  for (const [ox, oy, s] of dots) {
+    c.beginPath();
+    c.arc(ox * size, oy * size, size * 0.28 * s, 0, Math.PI * 2);
+    c.fillStyle = s > 0.8 ? "#ec4899" : s > 0.65 ? "#f472b6" : "#fb7185";
+    c.fill();
+  }
+  c.restore();
+}
+
+function drawLoosePetal(c, cx, cy, size, rot, color, alpha) {
+  c.save();
+  c.translate(cx, cy);
+  c.rotate(rot);
+  c.globalAlpha = alpha;
+  c.beginPath();
+  c.ellipse(0, 0, size * 0.28, size * 0.7, 0, 0, Math.PI * 2);
+  c.fillStyle = color;
+  c.fill();
+  c.restore();
+}
+
+function hashNoise(n) {
+  const x = Math.sin(n * 127.1 + 311.7) * 43758.5453;
+  return x - Math.floor(x);
+}
+
+function buildLightningPath(x0, y0, x1, y1, depth, jag, seed) {
+  function subdivide(ax, ay, bx, by, d, s) {
+    if (d <= 0) return [{ x: bx, y: by }];
+    const mx = (ax + bx) * 0.5;
+    const my = (ay + by) * 0.5;
+    const dx = bx - ax;
+    const dy = by - ay;
+    const len = Math.hypot(dx, dy) || 1;
+    const nx = -dy / len;
+    const ny = dx / len;
+    const offset = (hashNoise(s) * 2 - 1) * jag * (0.38 + d * 0.2);
+    const midX = mx + nx * offset;
+    const midY = my + ny * offset * 0.88;
+    return [
+      ...subdivide(ax, ay, midX, midY, d - 1, s + 1.7),
+      ...subdivide(midX, midY, bx, by, d - 1, s + 3.1),
+    ];
+  }
+  return [{ x: x0, y: y0 }, ...subdivide(x0, y0, x1, y1, depth, seed)];
+}
+
+function strokeLightningPath(c, pts, untilIndex) {
+  if (!pts || pts.length < 2) return;
+  const end = untilIndex == null ? pts.length - 1 : Math.max(1, Math.min(pts.length - 1, untilIndex));
+  c.beginPath();
+  c.moveTo(pts[0].x, pts[0].y);
+  for (let i = 1; i <= end; i++) c.lineTo(pts[i].x, pts[i].y);
+  c.stroke();
+}
+
+function pointAlongLightning(pts, progress) {
+  if (!pts || pts.length < 2) return { x: 0, y: 0, idx: 0 };
+  const p = Math.max(0, Math.min(1, progress));
+  const target = p * (pts.length - 1);
+  const i0 = Math.floor(target);
+  const i1 = Math.min(pts.length - 1, i0 + 1);
+  const f = target - i0;
+  return {
+    x: pts[i0].x + (pts[i1].x - pts[i0].x) * f,
+    y: pts[i0].y + (pts[i1].y - pts[i0].y) * f,
+    idx: i1,
+  };
+}
+
+function drawLightningBolt(c, x0, y0, x1, y1, segs, jag, seed) {
+  const depth = Math.max(3, Math.min(7, Math.round(Math.log2(Math.max(4, segs)) + 2)));
+  const pts = buildLightningPath(x0, y0, x1, y1, depth, jag, seed);
+  strokeLightningPath(c, pts);
+  return pts;
+}
+
+function drawLightningStrike(c, x0, y0, x1, y1, scale, seed, flash, alpha, progress) {
+  const len = Math.hypot(x1 - x0, y1 - y0);
+  const jag = Math.max(2.2, len * 0.07) * scale;
+  const depth = 5 + (Math.floor(seed) % 3);
+  const main = buildLightningPath(x0, y0, x1, y1, depth, jag, seed);
+  const prog = Math.max(0.02, Math.min(1, progress == null ? 1 : progress));
+  const head = pointAlongLightning(main, prog);
+  const until = head.idx;
+
+  c.lineCap = "round";
+  c.lineJoin = "round";
+
+  // Soft atmospheric bloom along revealed path
+  c.globalAlpha = alpha * flash * 0.14;
+  c.strokeStyle = "#3b82f6";
+  c.lineWidth = 10 * scale;
+  strokeLightningPath(c, main, until);
+
+  c.globalAlpha = alpha * flash * 0.26;
+  c.strokeStyle = "#60a5fa";
+  c.lineWidth = 5.8 * scale;
+  strokeLightningPath(c, main, until);
+
+  c.globalAlpha = alpha * flash * 0.55;
+  c.strokeStyle = "#bfdbfe";
+  c.lineWidth = 2.5 * scale;
+  strokeLightningPath(c, main, until);
+
+  c.globalAlpha = alpha * flash * 0.98;
+  c.strokeStyle = "#ffffff";
+  c.lineWidth = 1.1 * scale;
+  strokeLightningPath(c, main, until);
+
+  c.globalAlpha = alpha * flash * 0.85;
+  c.strokeStyle = "#f8fafc";
+  c.lineWidth = 0.45 * scale;
+  strokeLightningPath(c, main, until);
+
+  // Branches only appear once the ripple has passed their fork
+  const branchCount = 2 + (Math.floor(seed * 3) % 2);
+  for (let b = 0; b < branchCount; b++) {
+    const forkFrac = 0.28 + b * 0.22 + hashNoise(seed + b * 9) * 0.12;
+    if (prog < forkFrac + 0.04) continue;
+    const idx = Math.min(
+      main.length - 2,
+      Math.max(2, Math.floor(main.length * forkFrac))
+    );
+    if (idx > until) continue;
+    const origin = main[idx];
+    const dir = b % 2 === 0 ? 1 : -1;
+    const reach = Math.min(len * 0.12, Math.max(6, scale * 8)) * (0.7 + hashNoise(seed + b * 4.2) * 0.35);
+    const bx = origin.x + dir * reach * (0.55 + hashNoise(seed + b) * 0.35);
+    const by = origin.y + reach * (0.7 + hashNoise(seed + b * 2.1) * 0.45);
+    const branch = buildLightningPath(origin.x, origin.y, bx, by, 3, jag * 0.4, seed + b * 17.3);
+    const branchProg = Math.max(0, Math.min(1, (prog - forkFrac) / 0.35));
+    const bHead = pointAlongLightning(branch, branchProg);
+
+    c.globalAlpha = alpha * flash * 0.18;
+    c.strokeStyle = "#93c5fd";
+    c.lineWidth = 2.8 * scale;
+    strokeLightningPath(c, branch, bHead.idx);
+
+    c.globalAlpha = alpha * flash * 0.7;
+    c.strokeStyle = "#e0f2fe";
+    c.lineWidth = 1.0 * scale;
+    strokeLightningPath(c, branch, bHead.idx);
+
+    c.globalAlpha = alpha * flash * 0.9;
+    c.strokeStyle = "#ffffff";
+    c.lineWidth = 0.45 * scale;
+    strokeLightningPath(c, branch, bHead.idx);
+  }
+
+  return { main, head, progress: prog };
 }
 
 function drawEpicOverlay(c, item, x, y, w, h, alpha) {
@@ -782,6 +1088,151 @@ function drawEpicOverlay(c, item, x, y, w, h, alpha) {
     c.fillRect(x, y, w, h);
   }
 
+  if (item.style === "voidstorm") {
+    const scale = Math.max(0.55, Math.min(2.6, Math.min(w, h) / 32));
+    let peakFlash = 0;
+    let flashCx = x + w * 0.5;
+    let flashCy = y + h * 0.35;
+
+    // 4 staggered slow ripples every 2s; each travels top→bottom and stays until impact
+    const windowSec = 2;
+    const strikesPerWindow = 4;
+    const travelDur = 0.58;
+    const holdDur = 0.1;
+    const strikeLife = travelDur + holdDur;
+    const slotGap = windowSec / strikesPerWindow;
+    const windowIndex = Math.floor(t / windowSec);
+    const localT = t - windowIndex * windowSec;
+    const laneFracs = [0.14, 0.38, 0.62, 0.86];
+
+    for (let s = 0; s < strikesPerWindow; s++) {
+      const startAt = s * slotGap + 0.02;
+      const age = localT - startAt;
+      if (age < 0 || age > strikeLife) continue;
+
+      const progress = Math.min(1, age / travelDur);
+      const atBottom = progress >= 1;
+      const holdAge = Math.max(0, age - travelDur);
+      const fade = atBottom ? Math.max(0, 1 - holdAge / holdDur) : 1;
+      const flicker = 0.9 + hashNoise(Math.floor(t * 28) + s * 19) * 0.1;
+      const flash = Math.min(1, (0.55 + progress * 0.45) * fade * flicker);
+      if (flash < 0.04) continue;
+
+      const laneOrderSeed = windowIndex * 17.9 + 3.1;
+      const lanePick = (s + Math.floor(hashNoise(laneOrderSeed) * 4)) % 4;
+      const lane = laneFracs[lanePick];
+      const seedBase = windowIndex * 53.1 + s * 91.7 + lanePick * 13.3;
+
+      const laneHalf = w * 0.09;
+      const startX = x + lane * w + (hashNoise(seedBase) * 2 - 1) * laneHalf * 0.35;
+      const endX = x + lane * w + (hashNoise(seedBase + 2.4) * 2 - 1) * laneHalf;
+      const startY = y - h * 0.12;
+      const endY = y + h * 0.995;
+
+      const drawn = drawLightningStrike(
+        c,
+        startX,
+        startY,
+        endX,
+        endY,
+        scale,
+        seedBase,
+        flash,
+        alpha,
+        progress
+      );
+      const head = drawn.head;
+
+      // Bright ripple head traveling downward
+      const headR = (7 + progress * 5) * scale;
+      const tipGlow = c.createRadialGradient(head.x, head.y, 0, head.x, head.y, headR);
+      tipGlow.addColorStop(0, `rgba(255,255,255,${0.7 * flash})`);
+      tipGlow.addColorStop(0.3, `rgba(191,219,254,${0.35 * flash})`);
+      tipGlow.addColorStop(1, "rgba(59,130,246,0)");
+      c.globalAlpha = alpha;
+      c.fillStyle = tipGlow;
+      c.beginPath();
+      c.arc(head.x, head.y, headR, 0, Math.PI * 2);
+      c.fill();
+
+      // Soft light wash that follows the descending tip
+      const follow = c.createRadialGradient(
+        head.x,
+        head.y,
+        1,
+        head.x,
+        head.y,
+        Math.max(w, h) * (0.28 + progress * 0.2)
+      );
+      follow.addColorStop(0, `rgba(239,246,255,${0.16 * flash})`);
+      follow.addColorStop(0.45, `rgba(147,197,253,${0.08 * flash})`);
+      follow.addColorStop(1, "rgba(0,0,0,0)");
+      c.globalAlpha = alpha;
+      c.fillStyle = follow;
+      c.fillRect(x, y, w, h);
+
+      // Expanding ripple bloom once the strike reaches the bottom
+      if (atBottom) {
+        const impact = Math.sin(Math.min(1, holdAge / holdDur) * Math.PI);
+        const r1 = Math.min(w, h) * (0.2 + impact * 0.45);
+        const ring = c.createRadialGradient(head.x, head.y, 1, head.x, head.y, r1);
+        ring.addColorStop(0, `rgba(255,255,255,${0.28 * impact * fade})`);
+        ring.addColorStop(0.4, `rgba(147,197,253,${0.14 * impact * fade})`);
+        ring.addColorStop(1, "rgba(15,23,42,0)");
+        c.globalAlpha = alpha;
+        c.fillStyle = ring;
+        c.beginPath();
+        c.arc(head.x, head.y, r1, 0, Math.PI * 2);
+        c.fill();
+
+        c.globalAlpha = alpha * impact * fade * 0.6;
+        c.strokeStyle = "rgba(224,242,254,0.9)";
+        c.lineWidth = Math.max(0.6, 1.2 * scale * (1 - holdAge / holdDur));
+        c.beginPath();
+        c.arc(head.x, head.y, r1 * 0.9, 0, Math.PI * 2);
+        c.stroke();
+      }
+
+      if (flash > peakFlash) {
+        peakFlash = flash;
+        flashCx = head.x;
+        flashCy = head.y;
+      }
+    }
+
+    if (peakFlash > 0.35) {
+      const wash = c.createRadialGradient(
+        flashCx,
+        flashCy,
+        1,
+        flashCx,
+        flashCy,
+        Math.max(w, h) * 1.05
+      );
+      wash.addColorStop(0, `rgba(239,246,255,${0.1 * peakFlash})`);
+      wash.addColorStop(0.45, `rgba(147,197,253,${0.06 * peakFlash})`);
+      wash.addColorStop(1, "rgba(0,0,0,0)");
+      c.globalAlpha = alpha;
+      c.fillStyle = wash;
+      c.fillRect(x, y, w, h);
+    }
+
+    const glow = c.createRadialGradient(
+      x + w * 0.5,
+      y + h * 0.25,
+      1,
+      x + w * 0.5,
+      y + h * 0.55,
+      Math.max(w, h) * 0.9
+    );
+    glow.addColorStop(0, `rgba(96,165,250,${0.06 + Math.sin(t * 2.8) * 0.03})`);
+    glow.addColorStop(0.5, "rgba(30,64,175,0.04)");
+    glow.addColorStop(1, "rgba(0,0,0,0)");
+    c.globalAlpha = alpha;
+    c.fillStyle = glow;
+    c.fillRect(x, y, w, h);
+  }
+
   if (item.style === "heartbloom") {
     const scale = Math.max(0.7, Math.min(2.4, Math.min(w, h) / 28));
     for (let i = 0; i < 22; i++) {
@@ -801,6 +1252,76 @@ function drawEpicOverlay(c, item, x, y, w, h, alpha) {
       c.globalAlpha = alpha * (0.22 + fade * 0.7);
       c.fillStyle = i % 4 === 0 ? "#fff1f8" : i % 4 === 1 ? "#fda4d5" : i % 4 === 2 ? "#fb7185" : "#f9a8d4";
       drawHeart(c, hx, hy, size);
+    }
+  }
+
+  if (item.style === "blushgarden") {
+    const scale = Math.max(0.55, Math.min(2.8, Math.min(w, h) / 26));
+    // Soft drifting petals first (background layer)
+    for (let i = 0; i < 8; i++) {
+      const px =
+        x +
+        ((Math.sin(t * 0.11 + i * 1.9) * 0.5 + 0.5) * 0.9 + 0.05) * w;
+      const py =
+        y +
+        ((Math.cos(t * 0.09 + i * 2.3) * 0.5 + 0.5) * 0.9 + 0.05) * h;
+      const rot = t * (0.12 + (i % 3) * 0.04) + i;
+      const size = (1.1 + (i % 4) * 0.35) * scale;
+      drawLoosePetal(
+        c,
+        px,
+        py,
+        size,
+        rot,
+        i % 2 === 0 ? "#fbcfe8" : "#ffffff",
+        alpha * 0.55
+      );
+    }
+    // Tiny white blossoms
+    for (let i = 0; i < 10; i++) {
+      const bx =
+        x +
+        ((0.08 + hashNoise(i * 7.1) * 0.84) + Math.sin(t * 0.13 + i * 1.4) * 0.06) * w;
+      const by =
+        y +
+        ((0.1 + hashNoise(i * 11.3) * 0.8) + Math.cos(t * 0.11 + i * 1.7) * 0.06) * h;
+      const size = (0.9 + (i % 3) * 0.25) * scale;
+      const rot = t * 0.08 + i * 0.7;
+      drawTinyBlossom(c, bx, by, size, rot, "#ffffff", alpha * 0.85);
+    }
+    // Pink baby's-breath clusters
+    for (let i = 0; i < 7; i++) {
+      const cx =
+        x +
+        ((0.12 + hashNoise(i * 19.7) * 0.76) + Math.sin(t * 0.1 + i * 2.1) * 0.05) * w;
+      const cy =
+        y +
+        ((0.14 + hashNoise(i * 23.4) * 0.72) + Math.cos(t * 0.12 + i * 1.5) * 0.05) * h;
+      const size = (1.4 + (i % 3) * 0.4) * scale;
+      drawPinkCluster(c, cx, cy, size, t * 0.06 + i, alpha * 0.9);
+    }
+    // Large cosmos flowers drifting slowly
+    const blooms = [
+      { seed: 1.1, pink: true, size: 5.2 },
+      { seed: 2.4, pink: false, size: 4.6 },
+      { seed: 3.7, pink: true, size: 3.8 },
+      { seed: 5.0, pink: false, size: 5.0 },
+      { seed: 6.3, pink: true, size: 3.4 },
+      { seed: 7.8, pink: false, size: 4.2 },
+    ];
+    for (let i = 0; i < blooms.length; i++) {
+      const b = blooms[i];
+      const fx =
+        x +
+        ((0.1 + hashNoise(b.seed * 4.2) * 0.8) + Math.sin(t * 0.07 + b.seed) * 0.07) * w;
+      const fy =
+        y +
+        ((0.12 + hashNoise(b.seed * 8.6) * 0.76) + Math.cos(t * 0.06 + b.seed * 1.3) * 0.07) * h;
+      const breath = 1 + Math.sin(t * 0.55 + b.seed) * 0.03;
+      const size = b.size * scale * breath;
+      const rot = t * (0.05 + (i % 3) * 0.015) + b.seed;
+      const petal = b.pink ? "#f9a8d4" : "#ffffff";
+      drawCosmosFlower(c, fx, fy, size, rot, petal, alpha * 0.95);
     }
   }
 
@@ -944,12 +1465,13 @@ function renderShop() {
     if (item.epic) btn.classList.add("epic");
     if (item.legendary) btn.classList.add("legendary");
     if (item.secret) btn.classList.add("secret");
+    if (item.limitedEdition) btn.classList.add("limited");
     if (equipped) btn.classList.add("equipped");
     const free = isAdmin() && save.abilities.freeShop;
     const cantAfford = unlocked && !owned && !free && item.price > 0 && save.points < item.price;
     if (!unlocked) btn.classList.add("level-locked");
     else if (cantAfford) btn.classList.add("cant-afford");
-    if (item.epic || item.legendary || item.secret) {
+    if (item.epic || item.legendary || item.secret || item.limitedEdition) {
       epicCount += 1;
       if (cantAfford || !unlocked) cantAffordEpic += 1;
     }
@@ -958,6 +1480,7 @@ function renderShop() {
     if (item.epic) swatch.classList.add("epic-swatch");
     if (item.legendary) swatch.classList.add("legendary-swatch");
     if (item.secret) swatch.classList.add("secret-swatch");
+    if (item.limitedEdition) swatch.classList.add("limited-swatch");
     drawSwatch(item, swatch);
     const name = document.createElement("div");
     name.className = "shop-name";
@@ -965,26 +1488,33 @@ function renderShop() {
     const price = document.createElement("div");
     price.className = "shop-price";
     if (!unlocked) price.textContent = `LVL ${item.requireLevel}`;
+    else if (item.limitedEdition) price.textContent = owned ? "Limited edition" : "Hidden";
     else if (item.secret) price.textContent = owned ? "Code unlock" : "Hidden";
     else if (item.price === 0) price.textContent = owned || item.legendary ? "Unlocked" : "Free";
     else price.textContent = `${item.price} pts`;
-    btn.append(swatch, name, price);
-    if (item.secret) {
-      const tag = document.createElement("span");
-      tag.className = "shop-secret-tag";
-      tag.textContent = "SECRET";
-      btn.appendChild(tag);
+
+    let rarityTag = null;
+    if (item.limitedEdition) {
+      rarityTag = document.createElement("span");
+      rarityTag.className = "shop-rarity-tag shop-limited-tag";
+      rarityTag.textContent = "LIMITED";
+    } else if (item.secret) {
+      rarityTag = document.createElement("span");
+      rarityTag.className = "shop-rarity-tag shop-secret-tag";
+      rarityTag.textContent = "SECRET";
     } else if (item.legendary) {
-      const tag = document.createElement("span");
-      tag.className = "shop-legendary-tag";
-      tag.textContent = "LEGENDARY";
-      btn.appendChild(tag);
+      rarityTag = document.createElement("span");
+      rarityTag.className = "shop-rarity-tag shop-legendary-tag";
+      rarityTag.textContent = "LEGENDARY";
     } else if (item.epic) {
-      const tag = document.createElement("span");
-      tag.className = "shop-epic-tag";
-      tag.textContent = "EPIC";
-      btn.appendChild(tag);
+      rarityTag = document.createElement("span");
+      rarityTag.className = "shop-rarity-tag shop-epic-tag";
+      rarityTag.textContent = "EPIC";
     }
+
+    if (rarityTag) btn.append(rarityTag, swatch, name, price);
+    else btn.append(swatch, name, price);
+
     if (!unlocked) {
       const lock = document.createElement("span");
       lock.className = "shop-lock-badge";
@@ -2305,6 +2835,26 @@ function grantRedeemReward(reward) {
   return null;
 }
 
+function isRedeemCodeExpired(entry) {
+  if (!entry?.expiresAt) return false;
+  const end = Date.parse(entry.expiresAt);
+  if (!Number.isFinite(end)) return false;
+  return Date.now() > end;
+}
+
+function formatRedeemExpiry(entry) {
+  if (!entry?.expiresAt) return "";
+  const end = Date.parse(entry.expiresAt);
+  if (!Number.isFinite(end)) return "";
+  const ms = end - Date.now();
+  if (ms <= 0) return "expired";
+  const days = Math.ceil(ms / (24 * 60 * 60 * 1000));
+  if (days <= 1) return "expires today";
+  if (days < 14) return `expires in ${days} days`;
+  const d = new Date(end);
+  return `expires ${d.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" })}`;
+}
+
 function redeemCode(raw) {
   const code = normalizeRedeemCode(raw);
   if (!code) {
@@ -2318,7 +2868,14 @@ function redeemCode(raw) {
   }
   if (!Array.isArray(save.redeemedCodes)) save.redeemedCodes = [];
   if (save.redeemedCodes.includes(entry.id)) {
-    if (ui.redeemMsg) ui.redeemMsg.textContent = "Code already redeemed.";
+    if (ui.redeemMsg) ui.redeemMsg.textContent = "Code already redeemed — you keep your rewards.";
+    return false;
+  }
+  if (isRedeemCodeExpired(entry)) {
+    if (ui.redeemMsg) {
+      ui.redeemMsg.textContent =
+        "This code has expired. Players who already redeemed it keep their limited edition items.";
+    }
     return false;
   }
   const granted = [];
@@ -2330,9 +2887,10 @@ function redeemCode(raw) {
   persistSave();
   updatePointsUI();
   sanitizeEquippedCosmetics();
+  const expiryNote = formatRedeemExpiry(entry);
   if (ui.redeemMsg) {
     ui.redeemMsg.textContent = granted.length
-      ? `Unlocked: ${granted.join(" · ")}`
+      ? `Unlocked: ${granted.join(" · ")}${expiryNote ? ` · code ${expiryNote}` : ""}`
       : `Redeemed ${entry.label || entry.id}.`;
   }
   if (ui.settingsMsg) ui.settingsMsg.textContent = `Code ${entry.id} redeemed!`;
@@ -2343,7 +2901,10 @@ function toggleRedeemPanel() {
   if (!ui.redeemPanel) return;
   const open = ui.redeemPanel.classList.toggle("hidden") === false;
   if (open) {
-    if (ui.redeemMsg) ui.redeemMsg.textContent = "Enter a redeem code.";
+    if (ui.redeemMsg) {
+      ui.redeemMsg.textContent =
+        "Enter a redeem code. Codes can expire, but unlocked items stay yours.";
+    }
     if (ui.redeemInput) {
       ui.redeemInput.value = "";
       ui.redeemInput.focus();
