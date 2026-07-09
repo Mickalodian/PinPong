@@ -66,6 +66,32 @@ canvas {
   user-select: none;
 }
 
+.resign-btn {
+  display: block;
+  margin: 10px auto 0;
+  padding: 8px 22px;
+  appearance: none;
+  border: 2px solid #fff;
+  background: transparent;
+  color: #fff;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+
+.resign-btn:hover {
+  background: #fff;
+  color: #000;
+}
+
+.resign-btn.hidden {
+  display: none;
+}
+
 .overlay {
   position: absolute;
   inset: 0;

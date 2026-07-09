@@ -491,6 +491,7 @@ const ui = {
   gameOverScore: document.getElementById("gameOverScore"),
   playAgain: document.getElementById("playAgain"),
   backToMenu: document.getElementById("backToMenu"),
+  btnResign: document.getElementById("btnResign"),
   btnLocal: document.getElementById("btnLocal"),
   btnOnline: document.getElementById("btnOnline"),
   btnCreateRoom: document.getElementById("btnCreateRoom"),
@@ -526,6 +527,11 @@ const ui = {
 };
 
 let audioCtx = null;
+let musicPlaying = false;
+let musicTimer = null;
+let musicStep = 0;
+const MUSIC_NOTES = [261.63, 329.63, 392, 523.25, 392, 329.63, 293.66, 349.23];
+const MUSIC_BASS = [130.81, 130.81, 146.83, 146.83];
 let ws = null;
 
 const net = {
@@ -625,21 +631,94 @@ function ensureAudio() {
   if (audioCtx.state === "suspended") audioCtx.resume();
 }
 
+function playTone(freq, start, duration, type = "sine", peak = 0.18) {
+  const osc = audioCtx.createOscillator();
+  const gain = audioCtx.createGain();
+  osc.type = type;
+  osc.frequency.setValueAtTime(freq, start);
+  gain.gain.setValueAtTime(0.0001, start);
+  gain.gain.exponentialRampToValueAtTime(peak, start + 0.012);
+  gain.gain.exponentialRampToValueAtTime(0.0001, start + duration);
+  osc.connect(gain);
+  gain.connect(audioCtx.destination);
+  osc.start(start);
+  osc.stop(start + duration + 0.02);
+}
+
 function playPaddleHit() {
   ensureAudio();
   const t = audioCtx.currentTime;
-  const osc = audioCtx.createOscillator();
-  const gain = audioCtx.createGain();
-  osc.type = "triangle";
-  osc.frequency.setValueAtTime(920 + Math.random() * 120, t);
-  osc.frequency.exponentialRampToValueAtTime(360, t + 0.08);
-  gain.gain.setValueAtTime(0.0001, t);
-  gain.gain.exponentialRampToValueAtTime(0.22, t + 0.004);
-  gain.gain.exponentialRampToValueAtTime(0.0001, t + 0.09);
-  osc.connect(gain);
-  gain.connect(audioCtx.destination);
-  osc.start(t);
-  osc.stop(t + 0.1);
+  playTone(920 + Math.random() * 120, t, 0.09, "triangle", 0.22);
+  playTone(360, t + 0.02, 0.07, "triangle", 0.08);
+}
+
+function playScoreSound() {
+  ensureAudio();
+  const t = audioCtx.currentTime;
+  playTone(523.25, t, 0.1, "sine", 0.2);
+  playTone(659.25, t + 0.09, 0.14, "sine", 0.22);
+}
+
+function playWinSound() {
+  ensureAudio();
+  const t = audioCtx.currentTime;
+  [523.25, 659.25, 783.99, 1046.5].forEach((freq, i) => {
+    playTone(freq, t + i * 0.11, 0.2, "square", 0.14);
+  });
+}
+
+function playLossSound() {
+  ensureAudio();
+  const t = audioCtx.currentTime;
+  [392, 349.23, 293.66, 220].forEach((freq, i) => {
+    playTone(freq, t + i * 0.13, 0.22, "triangle", 0.16);
+  });
+}
+
+function scheduleMusicStep() {
+  if (!musicPlaying) return;
+  ensureAudio();
+  const t = audioCtx.currentTime;
+  const melody = MUSIC_NOTES[musicStep % MUSIC_NOTES.length];
+  playTone(melody, t, 0.16, "square", 0.045);
+  if (musicStep % 2 === 0) {
+    playTone(MUSIC_BASS[(musicStep / 2) % MUSIC_BASS.length], t, 0.22, "triangle", 0.035);
+  }
+  musicStep += 1;
+  musicTimer = setTimeout(scheduleMusicStep, 220);
+}
+
+function startGameMusic() {
+  if (musicPlaying) return;
+  musicPlaying = true;
+  musicStep = 0;
+  scheduleMusicStep();
+}
+
+function stopGameMusic() {
+  musicPlaying = false;
+  if (musicTimer) {
+    clearTimeout(musicTimer);
+    musicTimer = null;
+  }
+}
+
+function updateResignButton() {
+  if (!ui.btnResign) return;
+  const inMatch = (s.mode === "local" || s.mode === "online") && !s.gameOver;
+  const lobbyOpen = ui.lobbyOverlay && !ui.lobbyOverlay.classList.contains("hidden");
+  const menuOpen = ui.menuOverlay && !ui.menuOverlay.classList.contains("hidden");
+  ui.btnResign.classList.toggle("hidden", !(inMatch && !lobbyOpen && !menuOpen));
+}
+
+function resignMatch() {
+  if (s.gameOver || (s.mode !== "local" && s.mode !== "online")) return;
+  ensureAudio();
+  if (s.mode === "local") {
+    endGame("p2", { resigned: true, resignedByMe: true });
+    return;
+  }
+  sendWs({ type: "resign" });
 }
 
 function showOverlay(el) {
@@ -671,6 +750,7 @@ function setStagePlaying(on) {
   if (!stageEl) return;
   stageEl.classList.toggle("playing", on);
   stageEl.classList.toggle("menu-open", !on && s.mode === "menu");
+  updateResignButton();
 }
 
 function resetBall(servingToRight = true) {
@@ -689,6 +769,7 @@ function scoreFx(who) {
   s.fx.scoreT = 0.65;
   s.fx.who = who;
   s.fx.particles.length = 0;
+  playScoreSound();
   const cx = table.x + table.w / 2;
   const cy = table.y + table.h / 2;
   for (let i = 0; i < 26; i++) {
@@ -709,14 +790,24 @@ function scoreFx(who) {
   el.classList.add("score-pop");
 }
 
-function endGame(winner) {
+function endGame(winner, opts = {}) {
   const justEnded = !s.gameOver;
   s.gameOver = true;
   s.running = false;
   ui.status.textContent = "Game over";
+  stopGameMusic();
+  updateResignButton();
 
   let youWon = false;
-  if (s.mode === "local") {
+  if (opts.resigned) {
+    if (s.mode === "local") {
+      youWon = false;
+      ui.gameOverTitle.textContent = "YOU RESIGNED";
+    } else {
+      youWon = !opts.resignedByMe;
+      ui.gameOverTitle.textContent = opts.resignedByMe ? "YOU RESIGNED" : "OPPONENT RESIGNED";
+    }
+  } else if (s.mode === "local") {
     youWon = winner === "p1";
     ui.gameOverTitle.textContent = youWon ? "YOU WIN (+2 PTS)" : "BOT WINS";
   } else {
@@ -725,7 +816,11 @@ function endGame(winner) {
   }
 
   ui.gameOverScore.textContent = `${s.p1.score} : ${s.p2.score}`;
-  if (justEnded) awardWinPoints(winner);
+  if (justEnded) {
+    awardWinPoints(winner);
+    if (youWon) playWinSound();
+    else playLossSound();
+  }
   showOverlay(ui.gameOver);
 }
 
@@ -739,6 +834,7 @@ function resetLocalMatch() {
   resetBall(true);
   ui.status.textContent = serveHint();
   setStagePlaying(true);
+  startGameMusic();
 }
 
 function serve() {
@@ -1156,6 +1252,7 @@ function handleWsMessage(msg) {
     ui.hint.textContent = "Online 1v1. " + controlHint().replace("paddle. ", "your paddle. ");
     ui.status.textContent = serveHint();
     setStagePlaying(true);
+    startGameMusic();
     return;
   }
 
@@ -1198,7 +1295,21 @@ function handleWsMessage(msg) {
     return;
   }
 
+  if (msg.type === "resigned") {
+    if (Array.isArray(msg.score) && msg.score.length === 2) {
+      s.p1.score = msg.score[0];
+      s.p2.score = msg.score[1];
+      ui.p1.textContent = String(msg.score[0]);
+      ui.p2.textContent = String(msg.score[1]);
+    }
+    const winner = msg.by === 1 ? "p2" : "p1";
+    const resignedByMe = msg.by === net.player;
+    endGame(winner, { resigned: true, resignedByMe });
+    return;
+  }
+
   if (msg.type === "opponentLeft") {
+    stopGameMusic();
     ui.lobbyStatus.textContent = "Opponent left the game.";
     ui.status.textContent = "Opponent left";
     s.running = false;
@@ -1246,6 +1357,7 @@ function openLobby() {
 
 function backToMenu() {
   closeWs();
+  stopGameMusic();
   s.mode = "menu";
   s.gameOver = false;
   s.running = false;
@@ -1262,6 +1374,7 @@ function backToMenu() {
   ui.status.textContent = "Ready";
   ui.hint.textContent = "Choose a mode to start.";
   updatePointsUI();
+  updateResignButton();
 }
 
 let adminBound = false;
@@ -1361,10 +1474,14 @@ function bindUi() {
       hideOverlay(ui.gameOver);
       s.gameOver = false;
       ui.status.textContent = serveHint();
+      startGameMusic();
+      updateResignButton();
       return;
     }
     resetLocalMatch();
   });
+
+  bind(ui.btnResign, resignMatch);
 
   document.querySelectorAll(".shop-tab").forEach((tab) => {
     tab.addEventListener("click", () => setShopTab(tab.dataset.tab));

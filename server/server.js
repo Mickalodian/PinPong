@@ -685,6 +685,19 @@ wss.on("connection", (ws) => {
       resetBall(room.state, true);
       sendState(room);
       startLoop(room);
+      return;
+    }
+
+    if (msg.type === "resign" && room.state.running && !room.state.gameOver) {
+      const winner = ws.playerSlot === 0 ? "p2" : "p1";
+      room.state.gameOver = true;
+      room.state.winner = winner;
+      room.state.running = false;
+      broadcast(room, {
+        type: "resigned",
+        by: ws.playerSlot + 1,
+        score: [room.state.p1Score, room.state.p2Score],
+      });
     }
   });
 
