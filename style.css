@@ -223,6 +223,7 @@ body.phone-mode .chaos-level-card,
 body.phone-mode .survival-level-card,
 body.phone-mode .boss-level-card,
 body.phone-mode .profile-card,
+body.phone-mode .profile-view-card,
 body.phone-mode .updates-card {
   display: flex;
   flex-direction: column;
@@ -1221,6 +1222,20 @@ body[data-theme="light"] .level-up-unlock-item {
   margin-bottom: 22px;
 }
 
+.game-over-rematch-msg {
+  margin: -10px 0 16px;
+  max-width: 28ch;
+  text-align: center;
+  opacity: 0.85;
+  font-size: 13px;
+  line-height: 1.35;
+}
+
+.play-again:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
 .play-again {
   appearance: none;
   border: 2px solid #fff;
@@ -1705,27 +1720,135 @@ body[data-theme="light"] .level-up-unlock-item {
   100% { background-position: 200% 50%; }
 }
 
-body.phone-mode .profile-card {
+body.phone-mode .profile-card,
+body.phone-mode .profile-view-card {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
   width: min(96vw, 640px);
   max-width: min(96vw, calc(100vw - 16px));
   max-height: min(92dvh, calc(100% - 12px));
-  padding: 12px 14px 10px;
+  height: auto;
+  padding: 12px 12px 8px;
+  gap: 8px;
+  overflow: hidden;
+  overscroll-behavior: none;
+  box-sizing: border-box;
 }
 
-body.phone-mode .profile-view-card {
-  width: min(96vw, 520px);
-  max-width: min(96vw, calc(100vw - 16px));
-  max-height: min(90dvh, calc(100% - 12px));
-  padding: 12px 14px 10px;
+body.phone-mode .profile-card .menu-panel-header,
+body.phone-mode .profile-view-card .menu-panel-header {
+  flex: 0 0 auto;
 }
 
-body.phone-mode .profile-body {
+body.phone-mode .profile-card .menu-panel-header .lobby-text {
+  display: none;
+}
+
+body.phone-mode .profile-body,
+body.phone-mode .profile-view-body {
+  flex: 1 1 auto;
+  min-height: 0;
   max-height: none;
+  width: 100%;
   gap: 12px;
+  padding: 4px 10px 16px 2px;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  touch-action: pan-y;
+  scrollbar-gutter: stable;
+}
+
+body.phone-mode .profile-body::-webkit-scrollbar,
+body.phone-mode .profile-view-body::-webkit-scrollbar {
+  width: 5px;
+}
+
+body.phone-mode .profile-body::-webkit-scrollbar-thumb,
+body.phone-mode .profile-view-body::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.28);
+  border-radius: 999px;
+}
+
+body.phone-mode .profile-body::-webkit-scrollbar-track,
+body.phone-mode .profile-view-body::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+body.phone-mode .profile-card > .menu-panel-footer,
+body.phone-mode .profile-view-card > .menu-panel-footer {
+  flex: 0 0 auto;
+  padding-top: 6px;
+  padding-bottom: max(2px, env(safe-area-inset-bottom));
+}
+
+body.phone-mode .profile-hero,
+body.phone-mode .profile-view-hero {
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 10px;
+}
+
+body.phone-mode .profile-hero-meta,
+body.phone-mode .profile-view-meta {
+  width: 100%;
+  align-items: stretch;
+}
+
+body.phone-mode .profile-avatar,
+body.phone-mode .profile-view-hero .profile-avatar {
+  width: 64px;
+  height: 64px;
+  font-size: 24px;
+  flex: 0 0 auto;
+}
+
+body.phone-mode .profile-name-row {
+  flex-wrap: wrap;
+}
+
+body.phone-mode .profile-name-row .name-input {
+  flex: 1 1 140px;
+  min-width: 0;
+}
+
+body.phone-mode .profile-auth-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+body.phone-mode .profile-auth-actions .play-again {
+  min-height: 44px;
+  font-size: 13px;
+  padding: 10px 8px;
+}
+
+body.phone-mode .profile-section {
+  gap: 8px;
+}
+
+body.phone-mode .profile-section .lobby-text {
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+body.phone-mode .profile-title-preview {
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 6px;
 }
 
 body.phone-mode .profile-avatar-grid {
   grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+}
+
+body.phone-mode .profile-avatar-btn {
+  min-height: 52px;
 }
 
 body[data-theme="light"] .profile-avatar {
@@ -3308,7 +3431,9 @@ body.ios-landscape-hint {
     padding: 12px 10px;
   }
 
-  body.phone-mode .settings-card {
+  body.phone-mode .settings-card,
+  body.phone-mode .profile-card,
+  body.phone-mode .profile-view-card {
     max-height: min(92dvh, calc(100% - 12px));
     overflow: hidden;
   }
@@ -3320,10 +3445,14 @@ body.ios-landscape-hint {
   body.phone-mode .boss-level-card,
   body.phone-mode .admin-card,
   body.phone-mode .updates-card,
+  body.phone-mode .profile-card,
+  body.phone-mode .profile-view-card,
   .shop-card,
   .bot-level-card,
   .admin-card,
-  .updates-card {
+  .updates-card,
+  .profile-card,
+  .profile-view-card {
     max-height: min(92dvh, calc(100% - 12px));
     overflow: hidden;
   }
@@ -3761,11 +3890,31 @@ body.ios-landscape-hint {
   transition: background 120ms ease;
 }
 
+.online-score-row-btn {
+  width: 100%;
+  margin: 0;
+  border: 0;
+  border-radius: 0;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  appearance: none;
+  -webkit-appearance: none;
+}
+
+.online-score-row-btn:focus-visible {
+  outline: 2px solid rgba(134, 239, 172, 0.85);
+  outline-offset: -2px;
+  background: rgba(255, 255, 255, 0.07);
+}
+
 .online-score-row:last-child {
   border-bottom: 0;
 }
 
-.online-score-row:hover {
+.online-score-row:hover,
+.online-score-row-btn:hover {
   background: rgba(255, 255, 255, 0.05);
 }
 
@@ -3861,8 +4010,6 @@ body.ios-landscape-hint {
 body.phone-mode .menu-panel,
 body.phone-mode .online-panel,
 body.phone-mode .main-menu-card,
-body.phone-mode .profile-card,
-body.phone-mode .profile-view-card,
 body.phone-mode .settings-card,
 body.phone-mode .admin-card,
 body.phone-mode .updates-card,
@@ -3876,6 +4023,13 @@ body.phone-mode .scoreboard-card {
   max-width: min(96vw, calc(100vw - 16px));
   padding: 16px 14px 12px;
   gap: 12px;
+}
+
+/* Profile keeps its own phone shell (scroll body + pinned Back) — don't override max-height/overflow here */
+body.phone-mode .profile-card,
+body.phone-mode .profile-view-card {
+  width: min(96vw, 560px);
+  max-width: min(96vw, calc(100vw - 16px));
 }
 
 body.phone-mode .menu-tile,
@@ -4520,6 +4674,8 @@ body[data-theme="light"] .shop-grid::-webkit-scrollbar-thumb,
 body.phone-mode[data-theme="light"] .updates-body::-webkit-scrollbar-thumb,
 body.phone-mode[data-theme="light"] .settings-body::-webkit-scrollbar-thumb,
 body.phone-mode[data-theme="light"] .admin-body::-webkit-scrollbar-thumb,
+body.phone-mode[data-theme="light"] .profile-body::-webkit-scrollbar-thumb,
+body.phone-mode[data-theme="light"] .profile-view-body::-webkit-scrollbar-thumb,
 body.phone-mode[data-theme="light"] .bot-level-grid::-webkit-scrollbar-thumb,
 body.phone-mode[data-theme="light"] .shop-grid::-webkit-scrollbar-thumb {
   background: rgba(24, 24, 27, 0.35);

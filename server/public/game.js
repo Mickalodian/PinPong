@@ -3549,6 +3549,45 @@ function formatAccomplishmentsFromStats(stats = {}) {
   return list;
 }
 
+function buildLeaderboardProfileView(entry) {
+  if (!entry) return null;
+  const xpTotal = Math.max(0, Math.floor(entry.xp || 0));
+  const classic = Math.max(0, Math.floor(entry.maxBotCleared ?? entry.rank ?? 0));
+  const chaos = Math.max(0, Math.floor(entry.maxChaosCleared || 0));
+  const survival = Math.max(0, Math.floor(entry.maxSurvivalCleared || 0));
+  const boss = Math.max(0, Math.floor(entry.maxBossCleared || 0));
+  const wins = Math.max(0, Math.floor(entry.wins || 0));
+  const losses = Math.max(0, Math.floor(entry.losses || 0));
+  const matches = Math.max(0, Math.floor(entry.matches || 0));
+  const goals = Math.max(0, Math.floor(entry.goalsFor || 0));
+  const place = Math.max(0, Math.floor(entry.place || 0));
+  const accomplishments = formatAccomplishmentsFromStats({
+    xp: xpTotal,
+    maxBotCleared: classic,
+    maxChaosCleared: chaos,
+    maxSurvivalCleared: survival,
+    maxBossCleared: boss,
+  });
+  accomplishments.unshift(
+    place ? `Scoreboard rank #${place}` : "On the server scoreboard",
+    `${wins} online win${wins === 1 ? "" : "s"} · ${losses} loss${losses === 1 ? "" : "es"}`,
+    `${matches} online match${matches === 1 ? "" : "es"} played`
+  );
+  if (goals > 0) accomplishments.push(`${goals} goals scored online`);
+  return {
+    name: entry.name || "Player",
+    kind: "Online player",
+    bio: `Public scoreboard profile · Classic L${classic} · XP Level ${getXpProgress(xpTotal).level}.`,
+    rankLabel: `Classic rank L${classic}`,
+    xpTotal,
+    avatarId: entry.avatar || "default",
+    customAvatarUrl: entry.customAvatarUrl || "",
+    avatarColor: "",
+    avatarEmoji: "",
+    accomplishments,
+  };
+}
+
 function buildSelfProfileView() {
   const xp = getXpProgress();
   const classic = getPlayerLevel();
@@ -4737,6 +4776,7 @@ const ui = {
   gameOverReward: document.getElementById("gameOverReward"),
   gameOverXp: document.getElementById("gameOverXp"),
   gameOverScore: document.getElementById("gameOverScore"),
+  gameOverRematchMsg: document.getElementById("gameOverRematchMsg"),
   levelUpOverlay: document.getElementById("levelUpOverlay"),
   levelUpRank: document.getElementById("levelUpRank"),
   levelUpSub: document.getElementById("levelUpSub"),
@@ -4999,6 +5039,7 @@ const net = {
   opponentName: "",
   opponentLevel: 0,
   opponentProfile: null,
+  rematchReady: [false, false],
   searching: false,
   searchStartedAt: 0,
 };
@@ -8270,6 +8311,18 @@ function endGame(winner, opts = {}) {
   const xpLevelAfter = getXpLevel();
 
   ui.gameOverScore.textContent = `${s.p1.score} : ${s.p2.score}`;
+  if (s.mode === "online") {
+    if (justEnded) net.rematchReady = [false, false];
+    updateOnlineRematchUI();
+  } else if (ui.gameOverRematchMsg) {
+    ui.gameOverRematchMsg.textContent = "";
+    ui.gameOverRematchMsg.classList.add("hidden");
+  }
+  if (ui.playAgain && s.mode !== "online") {
+    ui.playAgain.disabled = false;
+    ui.playAgain.textContent = "Play again";
+    delete ui.playAgain.dataset.onlineRematch;
+  }
   if (ui.btnNextLevel) {
     const maxLevel =
       s.botMode === "chaos"
@@ -8653,6 +8706,76 @@ function renderInterpolatedBall() {
   }
 }
 
+function updateOnlineRematchUI() {
+  const msgEl = ui.gameOverRematchMsg;
+  const btn = ui.playAgain;
+  if (s.mode !== "online" || !s.gameOver) {
+    if (msgEl) {
+      msgEl.textContent = "";
+      msgEl.classList.add("hidden");
+    }
+    if (btn) {
+      btn.disabled = false;
+      if (btn.dataset.onlineRematch === "1") {
+        btn.textContent = "Play again";
+        delete btn.dataset.onlineRematch;
+      }
+    }
+    return;
+  }
+  const me = Math.max(0, Math.min(1, (net.player || 1) - 1));
+  const them = me === 0 ? 1 : 0;
+  const ready = Array.isArray(net.rematchReady) ? net.rematchReady : [false, false];
+  const iReady = !!ready[me];
+  const theyReady = !!ready[them];
+  if (btn) {
+    btn.dataset.onlineRematch = "1";
+    btn.disabled = iReady;
+    btn.textContent = iReady ? "Waiting…" : "Rematch";
+  }
+  if (msgEl) {
+    msgEl.classList.remove("hidden");
+    if (iReady && theyReady) msgEl.textContent = "Both ready — starting…";
+    else if (iReady && !theyReady) msgEl.textContent = "Waiting for opponent to rematch…";
+    else if (!iReady && theyReady) msgEl.textContent = "Opponent wants a rematch — tap Rematch";
+    else msgEl.textContent = "Both players must tap Rematch";
+  }
+}
+
+function beginOnlineRematch() {
+  net.rematchReady = [false, false];
+  s.gameOver = false;
+  s.p1.score = 0;
+  s.p2.score = 0;
+  ui.p1.textContent = "0";
+  ui.p2.textContent = "0";
+  hideOverlay(ui.gameOver);
+  closeLevelUpOverlay();
+  if (ui.playAgain) {
+    ui.playAgain.disabled = false;
+    ui.playAgain.textContent = "Play again";
+    delete ui.playAgain.dataset.onlineRematch;
+  }
+  if (ui.gameOverRematchMsg) {
+    ui.gameOverRematchMsg.textContent = "";
+    ui.gameOverRematchMsg.classList.add("hidden");
+  }
+  ui.status.textContent = serveHint();
+  startGameMusic();
+  updateResignButton();
+  setStagePlaying(true);
+}
+
+function requestOnlineRematch() {
+  if (s.mode !== "online" || !s.gameOver || !net.connected) return;
+  const me = Math.max(0, Math.min(1, (net.player || 1) - 1));
+  if (net.rematchReady[me]) return;
+  sendWs({ type: "rematch" });
+  // Optimistic local mark until server confirms
+  net.rematchReady[me] = true;
+  updateOnlineRematchUI();
+}
+
 function applyServerState(state, serverT, forceSnap = false) {
   if (forceSnap) {
     net.snapPrev = null;
@@ -8891,6 +9014,7 @@ function closeWs() {
   net.opponentName = "";
   net.opponentLevel = 0;
   net.opponentProfile = null;
+  net.rematchReady = [false, false];
 }
 
 function sendCosmetics() {
@@ -9087,7 +9211,20 @@ function handleWsMessage(msg) {
     }
     const winner = msg.by === 1 ? "p2" : "p1";
     const resignedByMe = msg.by === net.player;
+    net.rematchReady = [false, false];
     endGame(winner, { resigned: true, resignedByMe });
+    return;
+  }
+
+  if (msg.type === "rematchStatus") {
+    const ready = Array.isArray(msg.ready) ? msg.ready : [false, false];
+    net.rematchReady = [!!ready[0], !!ready[1]];
+    updateOnlineRematchUI();
+    return;
+  }
+
+  if (msg.type === "rematchStart") {
+    beginOnlineRematch();
     return;
   }
 
@@ -9097,6 +9234,7 @@ function handleWsMessage(msg) {
     setOnlineStatus("Opponent left the game.", "lobby");
     ui.status.textContent = "Opponent left";
     s.running = false;
+    if (s.gameOver) hideOverlay(ui.gameOver);
     showOverlay(ui.lobbyOverlay);
     return;
   }
@@ -9318,13 +9456,15 @@ function renderOnlineScoreboard(entries) {
     return;
   }
   if (ui.onlineScoreboardMsg) {
-    ui.onlineScoreboardMsg.textContent = `${rows.length} player${rows.length === 1 ? "" : "s"} on this server.`;
+    ui.onlineScoreboardMsg.textContent = `${rows.length} player${rows.length === 1 ? "" : "s"} · tap a row to view profile.`;
   }
   rows.forEach((entry) => {
     const placeNum = Math.max(1, Math.floor(entry.place || 0));
-    const row = document.createElement("div");
-    row.className = `online-score-row${placeNum <= 3 ? ` place-${placeNum}` : ""}`;
+    const row = document.createElement("button");
+    row.type = "button";
+    row.className = `online-score-row online-score-row-btn${placeNum <= 3 ? ` place-${placeNum}` : ""}`;
     row.setAttribute("role", "listitem");
+    row.title = `View ${entry.name || "player"}'s profile`;
 
     const place = document.createElement("div");
     place.className = "online-score-place";
@@ -9362,6 +9502,11 @@ function renderOnlineScoreboard(entries) {
     record.append(wins, wl);
 
     row.append(place, player, record);
+    row.addEventListener("click", () => {
+      playMenuClick();
+      const profile = buildLeaderboardProfileView(entry);
+      if (profile) openProfileView(profile);
+    });
     list.appendChild(row);
   });
 }
@@ -9784,12 +9929,7 @@ function bindUi() {
   });
   bind(ui.playAgain, () => {
     if (s.mode === "online") {
-      sendWs({ type: "rematch" });
-      hideOverlay(ui.gameOver);
-      s.gameOver = false;
-      ui.status.textContent = serveHint();
-      startGameMusic();
-      updateResignButton();
+      requestOnlineRematch();
       return;
     }
     if (s.botMode === "chaos") {

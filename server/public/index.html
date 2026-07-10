@@ -25,7 +25,7 @@
         display: none !important;
       }
     </style>
-    <link rel="stylesheet" href="style.css?v=20260710ax" />
+    <link rel="stylesheet" href="style.css?v=20260710az" />
   </head>
   <body>
     <canvas id="menuBg" class="menu-bg" aria-hidden="true"></canvas>
@@ -701,7 +701,7 @@
           <div class="overlay-card menu-card online-panel menu-panel scoreboard-card">
             <div class="online-panel-header menu-panel-header">
               <div class="overlay-title">SCOREBOARD</div>
-              <p class="lobby-text">Server-wide online players ranked by wins.</p>
+              <p class="lobby-text">Server-wide online players ranked by wins. Tap a player to view their profile.</p>
             </div>
             <div class="online-scoreboard-shell">
               <div class="online-scoreboard-cols" aria-hidden="true">
@@ -781,6 +781,7 @@
             <div class="overlay-reward hidden" id="gameOverReward" aria-live="polite"></div>
             <div class="overlay-reward overlay-xp hidden" id="gameOverXp" aria-live="polite"></div>
             <div class="overlay-score" id="gameOverScore">5 : 3</div>
+            <p class="lobby-text game-over-rematch-msg hidden" id="gameOverRematchMsg" aria-live="polite"></p>
             <button type="button" class="play-again hidden" id="btnNextLevel">Next level</button>
             <button type="button" class="play-again" id="playAgain">Play again</button>
             <button type="button" class="play-again secondary" id="backToMenu">Main menu</button>
@@ -829,6 +830,6 @@
       window.PONG_ADMIN = null;
     </script>
     <script src="admin.local.js"></script>
-    <script src="game.js?v=20260710ax" defer></script>
+    <script src="game.js?v=20260710az" defer></script>
   </body>
 </html>

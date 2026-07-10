@@ -133,6 +133,18 @@ function upsertLeaderboardPlayer(patch = {}, { createIfMissing = true } = {}) {
     next.customAvatarUrl =
       url.startsWith("/avatars/") || url.startsWith("http://") || url.startsWith("https://") ? url : prev.customAvatarUrl || "";
   }
+  if (typeof patch.maxBotCleared === "number" && Number.isFinite(patch.maxBotCleared)) {
+    next.maxBotCleared = Math.max(0, Math.min(100, Math.floor(patch.maxBotCleared)));
+  }
+  if (typeof patch.maxChaosCleared === "number" && Number.isFinite(patch.maxChaosCleared)) {
+    next.maxChaosCleared = Math.max(0, Math.min(100, Math.floor(patch.maxChaosCleared)));
+  }
+  if (typeof patch.maxSurvivalCleared === "number" && Number.isFinite(patch.maxSurvivalCleared)) {
+    next.maxSurvivalCleared = Math.max(0, Math.min(100, Math.floor(patch.maxSurvivalCleared)));
+  }
+  if (typeof patch.maxBossCleared === "number" && Number.isFinite(patch.maxBossCleared)) {
+    next.maxBossCleared = Math.max(0, Math.min(20, Math.floor(patch.maxBossCleared)));
+  }
   if (typeof patch.winsDelta === "number") next.wins = Math.max(0, (next.wins || 0) + Math.floor(patch.winsDelta));
   if (typeof patch.lossesDelta === "number") next.losses = Math.max(0, (next.losses || 0) + Math.floor(patch.lossesDelta));
   if (typeof patch.drawsDelta === "number") next.draws = Math.max(0, (next.draws || 0) + Math.floor(patch.drawsDelta));
@@ -176,6 +188,10 @@ function leaderboardPublicList(limit = 100) {
       xpLevel: e.xpLevel || xpLevelFromTotal(e.xp || 0),
       avatar: e.avatar || "default",
       customAvatarUrl: e.customAvatarUrl || "",
+      maxBotCleared: e.maxBotCleared ?? e.rank ?? 0,
+      maxChaosCleared: e.maxChaosCleared || 0,
+      maxSurvivalCleared: e.maxSurvivalCleared || 0,
+      maxBossCleared: e.maxBossCleared || 0,
       wins: e.wins || 0,
       losses: e.losses || 0,
       draws: e.draws || 0,
@@ -199,6 +215,15 @@ function playerSnapshotFromWs(ws) {
     xpLevel: typeof ws.profileXpLevel === "number" ? ws.profileXpLevel : xpLevelFromTotal(ws.profileXp || 0),
     avatar: ws.profileAvatar || "default",
     customAvatarUrl: ws.profileCustomAvatarUrl || "",
+    maxBotCleared:
+      typeof ws.profileMaxBotCleared === "number"
+        ? ws.profileMaxBotCleared
+        : typeof ws.playerLevel === "number"
+          ? ws.playerLevel
+          : 0,
+    maxChaosCleared: typeof ws.profileMaxChaosCleared === "number" ? ws.profileMaxChaosCleared : 0,
+    maxSurvivalCleared: typeof ws.profileMaxSurvivalCleared === "number" ? ws.profileMaxSurvivalCleared : 0,
+    maxBossCleared: typeof ws.profileMaxBossCleared === "number" ? ws.profileMaxBossCleared : 0,
   };
 }
 
@@ -844,6 +869,7 @@ function pairSearchers(ws1, ws2) {
     tickAcc: 0,
     broadcastAcc: 0,
     matchmade: true,
+    rematchReady: [false, false],
   };
   rooms.set(code, room);
   attachPlayer(room, ws1, 0);
@@ -901,6 +927,7 @@ function startLoop(room) {
 
     if (room.state.gameOver && !room.matchLogged) {
       recordOnlineMatch(room);
+      room.rematchReady = [false, false];
     }
 
     room.broadcastAcc += frameDt;
@@ -1093,6 +1120,7 @@ wss.on("connection", (ws) => {
         lastTick: Date.now(),
         tickAcc: 0,
         broadcastAcc: 0,
+        rematchReady: [false, false],
       };
       rooms.set(code, room);
       attachPlayer(room, ws, 0);
@@ -1206,11 +1234,25 @@ wss.on("connection", (ws) => {
     }
 
     if (msg.type === "rematch" && room.state.gameOver) {
-      room.state = createState();
-      room.matchLogged = false;
-      resetBall(room.state, true);
-      sendState(room);
-      startLoop(room);
+      if (!Array.isArray(room.rematchReady) || room.rematchReady.length !== 2) {
+        room.rematchReady = [false, false];
+      }
+      const slot = ws.playerSlot;
+      if (slot !== 0 && slot !== 1) return;
+      room.rematchReady[slot] = true;
+      broadcast(room, {
+        type: "rematchStatus",
+        ready: [!!room.rematchReady[0], !!room.rematchReady[1]],
+      });
+      if (room.rematchReady[0] && room.rematchReady[1]) {
+        room.rematchReady = [false, false];
+        room.state = createState();
+        room.matchLogged = false;
+        resetBall(room.state, true);
+        broadcast(room, { type: "rematchStart" });
+        sendState(room);
+        startLoop(room);
+      }
       return;
     }
 
@@ -1219,6 +1261,7 @@ wss.on("connection", (ws) => {
       room.state.gameOver = true;
       room.state.winner = winner;
       room.state.running = false;
+      room.rematchReady = [false, false];
       recordOnlineMatch(room);
       broadcast(room, {
         type: "resigned",

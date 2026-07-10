@@ -2,12 +2,12 @@
   "mikloit": {
     "username": "mikloit",
     "displayName": "MikLoit",
-    "passwordHash": "3c8351d8a98bf1971429679279ffd31216aaac62f312a2460000fd0f67f7d3ba8419abbe307e54a9fd5fe8c2b2246e5bf06225f9456d5bfe2cefcb5e22733b0a",
-    "salt": "66a14385e936ce08ddfe1b170578bc68",
+    "passwordHash": "c0ae845d79b7fb63531b14ad567effd4e6472153da31d7d346f6ead14f1404943d849609745d789da2e746389ec7cae9c9e5d20213c165c053a5bfc7afa6ba00",
+    "salt": "0b9a600c57f47d04d4ae30d6a2ff6162",
     "playerId": "dccb8911-4688-419e-869e-cc2c2c00217d",
     "isOwner": true,
     "createdAt": 1783713492688,
-    "updatedAt": 1783713514721
+    "updatedAt": 1783714414166
   },
   "nobody": {
     "username": "nobody",
