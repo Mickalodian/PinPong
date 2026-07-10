@@ -2052,13 +2052,6 @@ function isPhoneLike() {
   return isTouchDevice && shortSide <= 520;
 }
 
-function isLandscapeNow() {
-  if (typeof window.matchMedia === "function" && matchMedia("(orientation: landscape)").matches) {
-    return true;
-  }
-  return window.innerWidth > window.innerHeight;
-}
-
 function serveHint() {
   return isTouchDevice ? "Tap to serve" : "Click to serve";
 }
@@ -2124,7 +2117,6 @@ const ui = {
   fullscreenHint: document.getElementById("fullscreenHint"),
   settingsMsg: document.getElementById("settingsMsg"),
   musicTrackGrid: document.getElementById("musicTrackGrid"),
-  rotateGate: document.getElementById("rotateGate"),
   phoneZoomRow: document.getElementById("phoneZoomRow"),
   phoneZoomValue: document.getElementById("phoneZoomValue"),
   btnZoomOut: document.getElementById("btnZoomOut"),
@@ -2528,7 +2520,7 @@ function openBotLevelSelect() {
       hasHeaderBodyFooter: !!(header && body && footer),
       cssHref: [...document.styleSheets].map((s) => s.href).filter(Boolean).slice(-1)[0] || null,
     };
-    agentLog("A-E", "game.js:openBotLevelSelect", "bot level geometry", data, "pre-fix");
+    agentLog("A-E", "game.js:openBotLevelSelect", "bot level geometry", data, "post-fix");
   });
   // #endregion
 }
@@ -2855,28 +2847,6 @@ function isFullscreenActive() {
   return !!(document.fullscreenElement || document.webkitFullscreenElement);
 }
 
-async function lockLandscapeIfPossible() {
-  try {
-    if (screen.orientation && typeof screen.orientation.lock === "function") {
-      await screen.orientation.lock("landscape");
-      return true;
-    }
-  } catch {
-    /* iOS Safari usually blocks orientation.lock outside installed PWAs */
-  }
-  return false;
-}
-
-function unlockOrientationIfPossible() {
-  try {
-    if (screen.orientation && typeof screen.orientation.unlock === "function") {
-      screen.orientation.unlock();
-    }
-  } catch {
-    /* ignore */
-  }
-}
-
 function fitGameStage() {
   if (!stageEl || !canvas) return;
   const phone = document.body.classList.contains("phone-mode");
@@ -2992,16 +2962,8 @@ function bindPhonePinchZoom() {
 
 function updatePhoneLayout() {
   const phone = isPhoneLike();
-  const landscape = isLandscapeNow();
   document.body.classList.toggle("phone-mode", phone);
-  document.body.classList.toggle("phone-landscape", phone && landscape);
-  document.body.classList.toggle("phone-portrait", phone && !landscape);
-  if (ui.rotateGate) {
-    ui.rotateGate.classList.toggle("hidden", !(phone && !landscape));
-  }
-  if (phone && landscape) {
-    lockLandscapeIfPossible();
-  }
+  document.body.classList.remove("phone-landscape", "phone-portrait", "ios-landscape-hint");
   fitGameStage();
   if (menuBg.active) resizeMenuBg();
 }
@@ -3010,19 +2972,11 @@ function initPhoneExperience() {
   updatePhoneLayout();
   refreshPhoneZoomUI();
   bindPhonePinchZoom();
-  const onOrient = () => {
-    updatePhoneLayout();
-  };
-  window.addEventListener("orientationchange", onOrient);
+  window.addEventListener("orientationchange", updatePhoneLayout);
+  window.addEventListener("resize", updatePhoneLayout);
   if (screen.orientation && screen.orientation.addEventListener) {
-    screen.orientation.addEventListener("change", onOrient);
+    screen.orientation.addEventListener("change", updatePhoneLayout);
   }
-  // Try lock after first user gesture (required on many browsers)
-  const tryLockOnce = () => {
-    if (isPhoneLike()) lockLandscapeIfPossible();
-  };
-  document.addEventListener("pointerdown", tryLockOnce, { once: true, passive: true });
-  document.addEventListener("touchstart", tryLockOnce, { once: true, passive: true });
 }
 
 async function enterFullscreenMode() {
@@ -3033,23 +2987,17 @@ async function enterFullscreenMode() {
   } catch {
     /* ignore */
   }
-  await lockLandscapeIfPossible();
-  if (isPhoneLike() && !isFullscreenActive()) {
-    document.body.classList.add("ios-landscape-hint");
-    if (ui.fullscreenHint) {
-      ui.fullscreenHint.textContent = isIOSLike()
-        ? "iPhone: rotate to landscape. Add to Home Screen for a fuller display."
-        : "Rotate to landscape for the best phone layout.";
-    }
+  if (isPhoneLike() && !isFullscreenActive() && ui.fullscreenHint) {
+    ui.fullscreenHint.textContent = isIOSLike()
+      ? "iPhone: Add to Home Screen for a fuller display, or use your browser’s fullscreen if available."
+      : "Fullscreen may be limited on this device. Try your browser’s fullscreen option.";
   }
-  settings.fullscreen = isFullscreenActive() || document.body.classList.contains("ios-landscape-hint");
+  settings.fullscreen = isFullscreenActive();
   updatePhoneLayout();
   refreshSettingsUI();
 }
 
 async function exitFullscreenMode() {
-  document.body.classList.remove("ios-landscape-hint");
-  if (!isPhoneLike()) unlockOrientationIfPossible();
   try {
     if (document.exitFullscreen && isFullscreenActive()) await document.exitFullscreen();
     else if (document.webkitExitFullscreen && document.webkitFullscreenElement) {
@@ -3060,15 +3008,14 @@ async function exitFullscreenMode() {
   }
   settings.fullscreen = false;
   if (ui.fullscreenHint) {
-    ui.fullscreenHint.textContent =
-      "Phones auto-use landscape. Toggle for fullscreen when supported.";
+    ui.fullscreenHint.textContent = "Toggle for fullscreen when supported.";
   }
   updatePhoneLayout();
   refreshSettingsUI();
 }
 
 async function toggleFullscreenSetting() {
-  if (isFullscreenActive() || document.body.classList.contains("ios-landscape-hint")) {
+  if (isFullscreenActive()) {
     await exitFullscreenMode();
   } else {
     await enterFullscreenMode();
@@ -3080,15 +3027,14 @@ function refreshSettingsUI() {
     ui.btnMusicToggle.setAttribute("aria-pressed", settings.musicOn ? "true" : "false");
     ui.btnMusicToggle.textContent = settings.musicOn ? "On" : "Off";
   }
-  const fsOn = isFullscreenActive() || document.body.classList.contains("ios-landscape-hint");
+  const fsOn = isFullscreenActive();
   settings.fullscreen = fsOn;
   if (ui.btnFullscreen) {
     ui.btnFullscreen.setAttribute("aria-pressed", fsOn ? "true" : "false");
     ui.btnFullscreen.textContent = fsOn ? "On" : "Off";
   }
-  if (ui.fullscreenHint && isPhoneLike() && !fsOn) {
-    ui.fullscreenHint.textContent =
-      "Phones auto-use landscape. Toggle for fullscreen when supported.";
+  if (ui.fullscreenHint && !fsOn) {
+    ui.fullscreenHint.textContent = "Toggle for fullscreen when supported.";
   }
   document.querySelectorAll(".music-track-btn").forEach((btn) => {
     btn.classList.toggle("active", btn.dataset.track === settings.musicTrack);

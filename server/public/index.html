@@ -9,7 +9,6 @@
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black" />
     <meta name="mobile-web-app-capable" content="yes" />
-    <meta name="screen-orientation" content="landscape" />
     <title>PongMaster</title>
     <style>
       html,
@@ -22,16 +21,9 @@
         display: none !important;
       }
     </style>
-    <link rel="stylesheet" href="style.css?v=20260710a" />
+    <link rel="stylesheet" href="style.css?v=20260710b" />
   </head>
   <body>
-    <div id="rotateGate" class="rotate-gate hidden" aria-live="polite">
-      <div class="rotate-gate-card">
-        <div class="rotate-icon" aria-hidden="true">↻</div>
-        <div class="rotate-title">Rotate your phone</div>
-        <p class="rotate-text">PongMaster plays in landscape. Turn your device sideways.</p>
-      </div>
-    </div>
     <canvas id="menuBg" class="menu-bg" aria-hidden="true"></canvas>
     <main class="wrap">
       <header class="top">
@@ -80,7 +72,7 @@
                 <span class="settings-label">Fullscreen</span>
                 <button type="button" class="settings-toggle" id="btnFullscreen" aria-pressed="false">Off</button>
               </div>
-              <p class="settings-hint" id="fullscreenHint">Phones auto-use landscape. Toggle for fullscreen when supported.</p>
+              <p class="settings-hint" id="fullscreenHint">Toggle for fullscreen when supported.</p>
               <div class="settings-row phone-only-row" id="phoneZoomRow">
                 <span class="settings-label">Phone zoom</span>
                 <div class="zoom-controls">
@@ -115,18 +107,24 @@
 
         <div class="overlay hidden" id="botLevelOverlay" aria-hidden="true">
           <div class="overlay-card menu-card bot-level-card">
-            <div class="overlay-title">BOT LEVEL</div>
-            <p class="lobby-text">Clear each level to unlock the next. First clear of a level gives +5 pts.</p>
-            <div class="bot-level-presets">
-              <button type="button" class="play-again secondary bot-preset" data-level="1">Easy 1</button>
-              <button type="button" class="play-again secondary bot-preset" data-level="25">Medium 25</button>
-              <button type="button" class="play-again secondary bot-preset" data-level="50">Hard 50</button>
-              <button type="button" class="play-again secondary bot-preset" data-level="75">Expert 75</button>
-              <button type="button" class="play-again secondary bot-preset" data-level="100">Master 100</button>
+            <div class="bot-level-header">
+              <div class="overlay-title">BOT LEVEL</div>
+              <p class="lobby-text">Clear each level to unlock the next. First clear of a level gives +5 pts.</p>
+              <div class="bot-level-presets">
+                <button type="button" class="play-again secondary bot-preset" data-level="1">Easy 1</button>
+                <button type="button" class="play-again secondary bot-preset" data-level="25">Medium 25</button>
+                <button type="button" class="play-again secondary bot-preset" data-level="50">Hard 50</button>
+                <button type="button" class="play-again secondary bot-preset" data-level="75">Expert 75</button>
+                <button type="button" class="play-again secondary bot-preset" data-level="100">Master 100</button>
+              </div>
             </div>
-            <div class="bot-level-grid" id="botLevelGrid"></div>
-            <p class="shop-msg" id="botLevelHint">Level 1 — Slow &amp; clumsy</p>
-            <button type="button" class="link-btn" id="btnBotLevelBack">Back</button>
+            <div class="bot-level-body">
+              <div class="bot-level-grid" id="botLevelGrid"></div>
+            </div>
+            <div class="bot-level-footer">
+              <p class="shop-msg" id="botLevelHint">Level 1 — Slow &amp; clumsy</p>
+              <button type="button" class="link-btn" id="btnBotLevelBack">Back</button>
+            </div>
           </div>
         </div>
 
@@ -248,6 +246,6 @@
       window.PONG_ADMIN = null;
     </script>
     <script src="admin.local.js"></script>
-    <script src="game.js?v=20260710a" defer></script>
+    <script src="game.js?v=20260710b" defer></script>
   </body>
 </html>
