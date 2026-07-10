@@ -64,8 +64,11 @@ body.phone-mode .stage {
   align-items: center;
   justify-content: center;
   transform-origin: center center;
-  overflow: hidden;
+  /* Don't clip the 2px court border */
+  overflow: visible;
   position: relative;
+  padding: 2px;
+  box-sizing: border-box;
 }
 
 body.phone-mode .overlay {
@@ -75,11 +78,8 @@ body.phone-mode .overlay {
   height: 100%;
   align-items: center;
   justify-content: center;
-  overflow-x: hidden;
-  overflow-y: auto;
-  -webkit-overflow-scrolling: touch;
-  overscroll-behavior: contain;
-  touch-action: pan-y;
+  /* One scroll owner: the card / panel body — avoids nested rubber-banding */
+  overflow: hidden;
   padding: max(8px, env(safe-area-inset-top)) 10px max(8px, env(safe-area-inset-bottom));
   box-sizing: border-box;
 }
@@ -91,6 +91,9 @@ body.phone-mode .stage > canvas#game {
   max-height: 100%;
   object-fit: contain;
   flex: 0 0 auto;
+  box-sizing: border-box;
+  border-width: 2px;
+  border-style: solid;
 }
 
 .phone-only-row {
@@ -179,7 +182,7 @@ body.phone-mode .meta {
 }
 
 body.phone-mode .overlay-card {
-  max-height: min(92dvh, 100%);
+  max-height: min(92dvh, calc(100% - 12px));
   overflow-x: hidden;
   overflow-y: auto;
   -webkit-overflow-scrolling: touch;
@@ -189,14 +192,6 @@ body.phone-mode .overlay-card {
   width: min(420px, calc(100% - 12px));
   margin: auto;
   box-sizing: border-box;
-}
-
-body.phone-mode .menu-card:not(.shop-card):not(.bot-level-card):not(.settings-card):not(.admin-card) {
-  display: flex;
-  flex-direction: column;
-  align-items: stretch;
-  gap: 10px;
-  max-height: min(92dvh, 100%);
 }
 
 body.phone-mode .overlay-title {
@@ -209,9 +204,28 @@ body.phone-mode .overlay-title {
   white-space: nowrap;
 }
 
-body.phone-mode .settings-card {
-  max-height: min(80dvh, calc(100dvh - 24px));
+body.phone-mode .menu-card:not(.shop-card):not(.bot-level-card):not(.settings-card):not(.admin-card) {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 10px;
+  max-height: min(92dvh, calc(100% - 12px));
+}
+
+/* Structured panels: card locks, inner body scrolls to the real content edge */
+body.phone-mode .settings-card,
+body.phone-mode .admin-card,
+body.phone-mode .shop-card,
+body.phone-mode .bot-level-card {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  max-height: min(92dvh, calc(100% - 12px));
   overflow: hidden;
+  overscroll-behavior: none;
+}
+
+body.phone-mode .settings-card {
   padding: 12px 14px 10px;
 }
 
@@ -224,11 +238,134 @@ body.phone-mode .settings-title {
   white-space: nowrap;
   position: static;
   background: transparent;
+  flex: 0 0 auto;
+}
+
+body.phone-mode .settings-body,
+body.phone-mode .admin-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  width: 100%;
+  overflow-x: hidden;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+  touch-action: pan-y;
+  padding: 4px 2px 8px;
+  box-sizing: border-box;
 }
 
 body.phone-mode .settings-body {
   gap: 8px;
-  padding-bottom: 6px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+body.phone-mode .admin-header {
+  flex: 0 0 auto;
+  width: 100%;
+  text-align: center;
+}
+
+body.phone-mode .admin-body {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 10px;
+  text-align: left;
+  width: 100%;
+  max-width: 100%;
+  padding: 4px 12px 14px 4px;
+  box-sizing: border-box;
+  scrollbar-gutter: stable;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.55) transparent;
+}
+
+body.phone-mode .admin-body::-webkit-scrollbar {
+  width: 8px;
+}
+
+body.phone-mode .admin-body::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.45);
+  border-radius: 8px;
+  border: 2px solid transparent;
+  background-clip: content-box;
+}
+
+body.phone-mode .admin-body::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+body.phone-mode .admin-card {
+  max-width: min(420px, calc(100% - 8px));
+  width: 100%;
+  padding: 12px 10px 8px;
+  box-sizing: border-box;
+}
+
+body.phone-mode .admin-row,
+body.phone-mode .admin-actions {
+  display: flex;
+  flex-direction: column;
+  flex-wrap: nowrap;
+  gap: 8px;
+  margin-bottom: 0;
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+}
+
+body.phone-mode .admin-input,
+body.phone-mode .admin-btn,
+body.phone-mode .admin-row .play-again,
+body.phone-mode .admin-actions .play-again,
+body.phone-mode .admin-body > .link-btn,
+body.phone-mode .admin-body > .shop-points,
+body.phone-mode .admin-body > .shop-msg,
+body.phone-mode .admin-body > .admin-section-label,
+body.phone-mode .admin-toggles {
+  flex: 0 0 auto;
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+  box-sizing: border-box;
+}
+
+body.phone-mode .admin-btn,
+body.phone-mode .admin-row .play-again,
+body.phone-mode .admin-actions .play-again {
+  min-height: 44px;
+}
+
+body.phone-mode .admin-toggle {
+  font-size: 12px;
+  gap: 10px;
+  width: 100%;
+}
+
+body.phone-mode .settings-body,
+body.phone-mode .bot-level-grid,
+body.phone-mode .shop-grid {
+  scrollbar-gutter: stable;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.55) transparent;
+}
+
+body.phone-mode .settings-body::-webkit-scrollbar,
+body.phone-mode .bot-level-grid::-webkit-scrollbar,
+body.phone-mode .shop-grid::-webkit-scrollbar {
+  width: 8px;
+}
+
+body.phone-mode .settings-body::-webkit-scrollbar-thumb,
+body.phone-mode .bot-level-grid::-webkit-scrollbar-thumb,
+body.phone-mode .shop-grid::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.45);
+  border-radius: 8px;
+  border: 2px solid transparent;
+  background-clip: content-box;
 }
 
 body.phone-mode .play-again {
@@ -238,7 +375,7 @@ body.phone-mode .play-again {
 
 body.phone-mode .shop-card {
   max-width: min(620px, calc(100vw - 12px));
-  max-height: min(88dvh, calc(100dvh - 12px));
+  max-height: min(92dvh, calc(100% - 12px));
   overflow: hidden;
   padding: 8px 10px 6px;
   gap: 4px;
@@ -494,6 +631,7 @@ canvas {
   width: 100%;
   height: auto;
   border: 2px solid #fff;
+  box-sizing: border-box;
   background: #000;
   position: relative;
   z-index: 1;
@@ -1313,8 +1451,36 @@ canvas {
 }
 
 .admin-card {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
   max-width: min(380px, 92vw);
+  max-height: min(86dvh, calc(100dvh - 28px));
+  overflow: hidden;
   text-align: left;
+  gap: 8px;
+}
+
+.admin-header {
+  flex: 0 0 auto;
+  width: 100%;
+  text-align: center;
+}
+
+.admin-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  width: 100%;
+  overflow-x: hidden;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+  touch-action: pan-y;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 2px 0 6px;
+  box-sizing: border-box;
 }
 
 .admin-welcome {
@@ -1326,22 +1492,37 @@ canvas {
 
 .admin-row {
   display: flex;
+  flex-wrap: wrap;
   gap: 6px;
   margin-bottom: 10px;
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
 }
 
 .admin-input {
-  flex: 1;
+  flex: 1 1 100%;
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
   min-height: 40px;
   font-size: 14px;
   letter-spacing: 0.05em;
+  box-sizing: border-box;
 }
 
 .admin-btn {
+  flex: 1 1 calc(50% - 4px);
   width: auto;
-  min-width: 56px;
+  min-width: 0;
+  max-width: 100%;
   padding: 10px 12px;
   font-size: 11px;
+  box-sizing: border-box;
+}
+
+.admin-row .admin-btn:only-of-type {
+  flex: 1 1 100%;
 }
 
 .admin-actions {
@@ -1539,7 +1720,7 @@ body.ios-landscape-hint {
   }
 
   body.phone-mode .settings-card {
-    max-height: min(78dvh, calc(100dvh - 20px));
+    max-height: min(92dvh, calc(100% - 12px));
     overflow: hidden;
   }
 
@@ -1549,7 +1730,7 @@ body.ios-landscape-hint {
   .shop-card,
   .bot-level-card,
   .admin-card {
-    max-height: min(92dvh, calc(100dvh - 8px));
+    max-height: min(92dvh, calc(100% - 12px));
     overflow: hidden;
   }
 
@@ -1865,6 +2046,27 @@ body.ios-landscape-hint {
     grid-template-columns: repeat(8, minmax(0, 1fr));
     max-height: none;
     min-height: 120px;
+  }
+
+  .admin-card {
+    max-width: min(420px, calc(100% - 8px));
+    width: 100%;
+  }
+
+  .admin-row,
+  .admin-actions {
+    flex-direction: column;
+    flex-wrap: nowrap;
+    gap: 8px;
+  }
+
+  .admin-input,
+  .admin-btn,
+  .admin-row .play-again,
+  .admin-actions .play-again {
+    flex: 0 0 auto;
+    width: 100%;
+    max-width: 100%;
   }
 
   .play-again {

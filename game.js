@@ -1690,6 +1690,49 @@ function openAdmin() {
   showOverlay(ui.adminOverlay);
   setStagePlaying(false);
   refreshAdminPanel();
+  // #region agent log
+  requestAnimationFrame(() => {
+    const overlay = ui.adminOverlay;
+    const card = overlay?.querySelector(".admin-card");
+    const body = overlay?.querySelector(".admin-body");
+    if (!card || !body) return;
+    const cr = card.getBoundingClientRect();
+    const br = body.getBoundingClientRect();
+    const cs = getComputedStyle(card);
+    const bs = getComputedStyle(body);
+    const os = overlay ? getComputedStyle(overlay) : null;
+    const addBtn = body.querySelector("#btnAdminAddPts");
+    const setLevelBtn = body.querySelector("#btnAdminSetLevel");
+    const ar = addBtn?.getBoundingClientRect();
+    const lr = setLevelBtn?.getBoundingClientRect();
+    agentLog("S2", "game.js:openAdmin", "admin scroll shell", {
+      phoneMode: document.body.classList.contains("phone-mode"),
+      vw: window.innerWidth,
+      vh: window.innerHeight,
+      portrait: window.innerHeight >= window.innerWidth,
+      overlayOverflowY: os?.overflowY || null,
+      cardOverflowY: cs.overflowY,
+      cardMaxH: cs.maxHeight,
+      cardH: Math.round(cr.height),
+      cardClientH: card.clientHeight,
+      cardScrollH: card.scrollHeight,
+      bodyClientH: body.clientHeight,
+      bodyScrollH: body.scrollHeight,
+      bodyOverflowY: bs.overflowY,
+      bodyTouchAction: bs.touchAction,
+      bodyPadRight: bs.paddingRight,
+      bodyScrollNeeded: body.scrollHeight > body.clientHeight + 1,
+      canReachEnd: body.scrollHeight - body.clientHeight > 8,
+      hasAdminBody: true,
+      addBtnRight: ar ? Math.round(ar.right) : null,
+      addBtnClipped: !!(ar && (ar.right > br.right + 1 || ar.right > cr.right + 1)),
+      setLevelRight: lr ? Math.round(lr.right) : null,
+      setLevelClipped: !!(lr && (lr.right > br.right + 1 || lr.right > cr.right + 1)),
+      bodyWidth: Math.round(br.width),
+      cardWidth: Math.round(cr.width),
+    }, "post-fix");
+  });
+  // #endregion
 }
 
 function closeAdmin() {
@@ -2038,18 +2081,20 @@ function isPhoneLike() {
   const shortSide = Math.min(window.innerWidth, window.innerHeight);
   const longSide = Math.max(window.innerWidth, window.innerHeight);
   // Short landscape viewports (phones / emulators) always use phone layout
-  if (shortSide <= 500 && longSide <= 980) return true;
+  if (shortSide <= 520 && longSide <= 980) return true;
   if (typeof window.matchMedia === "function") {
     if (matchMedia("(hover: none) and (pointer: coarse)").matches) {
-      if (shortSide <= 520 || (shortSide <= 700 && longSide <= 980)) return true;
+      if (shortSide <= 700 || longSide <= 980) return true;
     }
+    // Narrow touch / mobile browser chrome
+    if (matchMedia("(max-width: 700px)").matches && isTouchDevice) return true;
   }
   const ua = navigator.userAgent || "";
   if (/Android.+Mobile|iPhone|iPod|Windows Phone|webOS|BlackBerry|IEMobile|Opera Mini/i.test(ua)) {
     return true;
   }
   if (isIOSLike() && Math.min(window.screen.width, window.screen.height) <= 820) return true;
-  return isTouchDevice && shortSide <= 520;
+  return isTouchDevice && shortSide <= 700;
 }
 
 function serveHint() {
@@ -2863,6 +2908,8 @@ function fitGameStage() {
   if (!phone) {
     stageEl.style.width = "";
     stageEl.style.height = "";
+    stageEl.style.maxWidth = "";
+    stageEl.style.maxHeight = "";
     canvas.style.width = "";
     canvas.style.height = "";
     canvas.style.maxWidth = "";
@@ -2873,38 +2920,79 @@ function fitGameStage() {
   const wrap = document.querySelector(".wrap");
   const top = document.querySelector(".top");
   const bottom = document.querySelector(".bottom");
+  const ability = ui.abilityBar;
+  const resign = ui.btnResign;
   const wrapStyle = wrap ? getComputedStyle(wrap) : null;
   const gap = wrapStyle ? parseFloat(wrapStyle.rowGap || wrapStyle.gap || "0") || 0 : 0;
   const padY = wrapStyle
     ? (parseFloat(wrapStyle.paddingTop) || 0) + (parseFloat(wrapStyle.paddingBottom) || 0)
     : 0;
+  const padX = wrapStyle
+    ? (parseFloat(wrapStyle.paddingLeft) || 0) + (parseFloat(wrapStyle.paddingRight) || 0)
+    : 0;
+  // Court border (2px each side) + stage padding must stay inside the viewport.
+  const BORDER_PAD = 8;
   const availW = Math.max(
-    160,
-    (wrap ? wrap.clientWidth : window.innerWidth) -
-      (wrapStyle
-        ? (parseFloat(wrapStyle.paddingLeft) || 0) + (parseFloat(wrapStyle.paddingRight) || 0)
-        : 0)
+    120,
+    (wrap ? wrap.clientWidth : window.innerWidth) - padX - BORDER_PAD
   );
+  const abilityH =
+    ability && !ability.classList.contains("hidden") ? ability.offsetHeight + 8 : 0;
+  const resignH =
+    resign && !resign.classList.contains("hidden") ? resign.offsetHeight + 10 : 0;
   const chromeH =
     (top ? top.offsetHeight : 0) +
     (bottom ? bottom.offsetHeight : 0) +
+    abilityH +
+    resignH +
     gap * 2 +
     padY +
-    12;
-  const availH = Math.max(120, window.innerHeight - chromeH);
-  // Screen zoom is applied via CSS transform on .wrap; canvas only fits the stage.
+    BORDER_PAD +
+    8;
+  const availH = Math.max(100, window.innerHeight - chromeH);
   const scale = Math.min(availW / W, availH / H);
   const drawW = Math.max(1, Math.floor(W * scale));
   const drawH = Math.max(1, Math.floor(H * scale));
+  canvas.style.boxSizing = "border-box";
   canvas.style.width = `${drawW}px`;
   canvas.style.height = `${drawH}px`;
-  canvas.style.maxWidth = "100%";
-  canvas.style.maxHeight = "100%";
+  canvas.style.maxWidth = `min(100%, ${drawW}px)`;
+  canvas.style.maxHeight = `min(100%, ${drawH}px)`;
   // Keep stage full-bleed on phone so menus/overlays aren't clipped to the canvas band.
   stageEl.style.width = "100%";
   stageEl.style.height = "100%";
   stageEl.style.maxWidth = "100%";
   stageEl.style.maxHeight = "100%";
+
+  // #region agent log
+  requestAnimationFrame(() => {
+    const cr = canvas.getBoundingClientRect();
+    const sr = stageEl.getBoundingClientRect();
+    agentLog("B1", "game.js:fitGameStage", "phone court border fit", {
+      vw: window.innerWidth,
+      vh: window.innerHeight,
+      portrait: window.innerHeight >= window.innerWidth,
+      availW: Math.round(availW),
+      availH: Math.round(availH),
+      drawW,
+      drawH,
+      canvasL: Math.round(cr.left),
+      canvasR: Math.round(cr.right),
+      canvasT: Math.round(cr.top),
+      canvasB: Math.round(cr.bottom),
+      canvasW: Math.round(cr.width),
+      canvasH: Math.round(cr.height),
+      stageW: Math.round(sr.width),
+      stageH: Math.round(sr.height),
+      clippedRight: cr.right > window.innerWidth - 1,
+      clippedLeft: cr.left < 1,
+      clippedTop: cr.top < 1,
+      clippedBottom: cr.bottom > window.innerHeight - 1,
+      borderBox: getComputedStyle(canvas).boxSizing,
+      zoom: settings.phoneZoom,
+    }, "post-fix");
+  });
+  // #endregion
 }
 
 function applyPhoneUiTransform() {
@@ -3198,53 +3286,40 @@ function openSettings() {
     const clippedByOverlayY = tr.top < or.top - 0.5 || tr.bottom > or.bottom + 0.5;
     const titleFullyVisible = tr.top >= or.top - 0.5 && tr.bottom <= or.bottom + 0.5 && tr.height > 10;
     const scrollNeeded = !!(body && body.scrollHeight > body.clientHeight + 1);
+    const bs = body ? getComputedStyle(body) : null;
     fetch("http://127.0.0.1:7263/ingest/7b680789-6fbf-44a7-9704-6ddeb5cf3ed6", {
       method: "POST",
       headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "38eb5e" },
       body: JSON.stringify({
         sessionId: "38eb5e",
         runId: "post-fix",
-        hypothesisId: "A-E",
+        hypothesisId: "S1",
         location: "game.js:openSettings",
-        message: "settings title geometry",
+        message: "settings scroll shell",
         data: {
           runTag: "post-fix",
           titleText: title.textContent,
           titleW: Math.round(tr.width),
           titleH: Math.round(tr.height),
-          titleL: Math.round(tr.left),
-          titleR: Math.round(tr.right),
           titleT: Math.round(tr.top),
           titleB: Math.round(tr.bottom),
           cardW: Math.round(cr.width),
           cardH: Math.round(cr.height),
-          cardL: Math.round(cr.left),
-          cardR: Math.round(cr.right),
-          cardT: Math.round(cr.top),
-          cardB: Math.round(cr.bottom),
           cardClientH: card.clientHeight,
           cardScrollH: card.scrollHeight,
           bodyClientH: body?.clientHeight ?? null,
           bodyScrollH: body?.scrollHeight ?? null,
-          cardOverflowX: cs.overflowX,
+          bodyOverflowY: bs?.overflowY || null,
+          bodyTouchAction: bs?.touchAction || null,
           cardOverflowY: cs.overflowY,
-          parentOverflowX: ps?.overflowX || null,
           parentOverflowY: ps?.overflowY || null,
-          titleFontSize: ts.fontSize,
-          titleLetterSpacing: ts.letterSpacing,
-          titleWhiteSpace: ts.whiteSpace,
-          titleOverflow: ts.overflow,
-          titleMaxWidth: ts.maxWidth,
-          titleScrollW: title.scrollWidth,
-          titleClientW: title.clientWidth,
-          titleDeltaFromCard: Math.round(tr.top - cr.top),
           clippedX,
           clippedY,
           clippedByOverlayY,
           titleFullyVisible,
           scrollNeeded,
+          canReachEnd: !!(body && body.scrollHeight - body.clientHeight > 8),
           phoneMode: document.body.classList.contains("phone-mode"),
-          landscape: document.body.classList.contains("phone-landscape"),
           vw: window.innerWidth,
           vh: window.innerHeight,
           cssHref: [...document.styleSheets].map((s) => s.href).filter(Boolean).slice(-1)[0] || null,

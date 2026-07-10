@@ -21,7 +21,7 @@
         display: none !important;
       }
     </style>
-    <link rel="stylesheet" href="style.css?v=20260710d" />
+    <link rel="stylesheet" href="style.css?v=20260710h" />
   </head>
   <body>
     <canvas id="menuBg" class="menu-bg" aria-hidden="true"></canvas>
@@ -141,34 +141,38 @@
 
         <div class="overlay hidden" id="adminOverlay" aria-hidden="true">
           <div class="overlay-card menu-card admin-card">
-            <div class="overlay-title">ADMIN</div>
-            <p class="admin-welcome" id="adminWelcome">Owner panel</p>
-            <p class="shop-points">Points: <span id="adminPoints">0</span></p>
-            <div class="admin-row">
-              <input id="adminPointsInput" class="room-input admin-input" type="number" min="0" placeholder="Amount" />
-              <button type="button" class="play-again secondary admin-btn" id="btnAdminAddPts">Add</button>
-              <button type="button" class="play-again secondary admin-btn" id="btnAdminSetPts">Set</button>
+            <div class="admin-header">
+              <div class="overlay-title">ADMIN</div>
+              <p class="admin-welcome" id="adminWelcome">Owner panel</p>
             </div>
-            <div class="admin-actions">
-              <button type="button" class="play-again secondary" id="btnAdminUnlockAll">Unlock all colours</button>
-              <button type="button" class="play-again secondary" id="btnAdminMaxPts">+999 points</button>
-              <button type="button" class="play-again secondary" id="btnAdminUnlockLevels">Unlock all bot levels</button>
+            <div class="admin-body">
+              <p class="shop-points">Points: <span id="adminPoints">0</span></p>
+              <div class="admin-row">
+                <input id="adminPointsInput" class="room-input admin-input" type="number" min="0" placeholder="Amount" />
+                <button type="button" class="play-again secondary admin-btn" id="btnAdminAddPts">Add</button>
+                <button type="button" class="play-again secondary admin-btn" id="btnAdminSetPts">Set</button>
+              </div>
+              <div class="admin-actions">
+                <button type="button" class="play-again secondary" id="btnAdminUnlockAll">Unlock all colours</button>
+                <button type="button" class="play-again secondary" id="btnAdminMaxPts">+999 points</button>
+                <button type="button" class="play-again secondary" id="btnAdminUnlockLevels">Unlock all bot levels</button>
+              </div>
+              <p class="admin-section-label">Player level (0–100)</p>
+              <p class="shop-points">Level: <span id="adminLevel">0</span></p>
+              <div class="admin-row">
+                <input id="adminLevelInput" class="room-input admin-input" type="number" min="0" max="100" placeholder="Level" />
+                <button type="button" class="play-again secondary admin-btn" id="btnAdminSetLevel">Set level</button>
+              </div>
+              <p class="admin-section-label">Abilities (local games)</p>
+              <div class="admin-toggles">
+                <label class="admin-toggle"><input type="checkbox" id="abMegaPaddle" /> Mega paddle</label>
+                <label class="admin-toggle"><input type="checkbox" id="abFreeShop" /> Free shop</label>
+                <label class="admin-toggle"><input type="checkbox" id="abSlowBot" /> Slow bot</label>
+                <label class="admin-toggle"><input type="checkbox" id="abBonusPts" /> +10 pts per win</label>
+              </div>
+              <p class="shop-msg" id="adminMsg">Abilities are local. Points sync globally.</p>
+              <button type="button" class="link-btn" id="btnAdminBack">Back</button>
             </div>
-            <p class="admin-section-label">Player level (0–100)</p>
-            <p class="shop-points">Level: <span id="adminLevel">0</span></p>
-            <div class="admin-row">
-              <input id="adminLevelInput" class="room-input admin-input" type="number" min="0" max="100" placeholder="Level" />
-              <button type="button" class="play-again secondary admin-btn" id="btnAdminSetLevel">Set level</button>
-            </div>
-            <p class="admin-section-label">Abilities (local games)</p>
-            <div class="admin-toggles">
-              <label class="admin-toggle"><input type="checkbox" id="abMegaPaddle" /> Mega paddle</label>
-              <label class="admin-toggle"><input type="checkbox" id="abFreeShop" /> Free shop</label>
-              <label class="admin-toggle"><input type="checkbox" id="abSlowBot" /> Slow bot</label>
-              <label class="admin-toggle"><input type="checkbox" id="abBonusPts" /> +10 pts per win</label>
-            </div>
-            <p class="shop-msg" id="adminMsg">Abilities are local. Points sync globally.</p>
-            <button type="button" class="link-btn" id="btnAdminBack">Back</button>
           </div>
         </div>
 
@@ -246,6 +250,6 @@
       window.PONG_ADMIN = null;
     </script>
     <script src="admin.local.js"></script>
-    <script src="game.js?v=20260710d" defer></script>
+    <script src="game.js?v=20260710h" defer></script>
   </body>
 </html>
