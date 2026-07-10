@@ -19,6 +19,11 @@ const ABILITIES_KEY = "pong-bw-abilities";
 const SETTINGS_KEY = "pong-bw-settings";
 const POINTS_PER_WIN = 2;
 const POINTS_PER_BOT_CLEAR = 5;
+const POINTS_PER_CHAOS_CLEAR = 3;
+const POINTS_PER_SURVIVAL_WIN = 5;
+const CHAOS_MAX_LEVEL = 25;
+const SURVIVAL_MAX_ROUND = 25;
+const SURVIVAL_MATCH_SECONDS = 120;
 const PARRY_CHARGE_NEED = 10;
 const FIRE_SMASH_SPEED = 1650;
 
@@ -64,6 +69,46 @@ const SHOP = {
       style: "voidstorm",
       legendary: true,
       requireLevel: 40,
+    },
+    {
+      id: "hearthflame",
+      name: "Hearthflame",
+      price: 0,
+      style: "hearthflame",
+      legendary: true,
+      requireLevel: 60,
+    },
+    {
+      id: "skywyrm",
+      name: "Skywyrm",
+      price: 0,
+      style: "skywyrm",
+      legendary: true,
+      requireLevel: 80,
+    },
+    {
+      id: "obsidian",
+      name: "Obsidian",
+      price: 0,
+      style: "obsidian",
+      legendary: true,
+      requireLevel: 100,
+    },
+    {
+      id: "chaosrift",
+      name: "Chaos Rift",
+      price: 0,
+      style: "chaosrift",
+      chaos: true,
+      requireChaosLevel: 25,
+    },
+    {
+      id: "endurance",
+      name: "Endurance",
+      price: 0,
+      style: "endurance",
+      survival: true,
+      requireSurvivalLevel: 25,
     },
     {
       id: "heartbloom",
@@ -129,6 +174,46 @@ const SHOP = {
       requireLevel: 40,
     },
     {
+      id: "hearthflame",
+      name: "Hearthflame",
+      price: 0,
+      style: "hearthflame",
+      legendary: true,
+      requireLevel: 60,
+    },
+    {
+      id: "skywyrm",
+      name: "Skywyrm",
+      price: 0,
+      style: "skywyrm",
+      legendary: true,
+      requireLevel: 80,
+    },
+    {
+      id: "obsidian",
+      name: "Obsidian",
+      price: 0,
+      style: "obsidian",
+      legendary: true,
+      requireLevel: 100,
+    },
+    {
+      id: "chaosrift",
+      name: "Chaos Rift",
+      price: 0,
+      style: "chaosrift",
+      chaos: true,
+      requireChaosLevel: 25,
+    },
+    {
+      id: "endurance",
+      name: "Endurance",
+      price: 0,
+      style: "endurance",
+      survival: true,
+      requireSurvivalLevel: 25,
+    },
+    {
       id: "heartbloom",
       name: "Heart Bloom",
       price: 0,
@@ -178,11 +263,13 @@ const save = {
   name: "",
   points: 0,
   maxBotCleared: 0,
+  maxChaosCleared: 0,
+  maxSurvivalCleared: 0,
   owned: { paddle: ["white"], table: ["classic"] },
   equipped: { paddle: "white", table: "classic" },
   redeemedCodes: [],
   shopTab: "paddle",
-  abilities: { megaPaddle: false, freeShop: false, slowBot: false, bonusPts: false },
+  abilities: { megaPaddle: false, freeShop: false, slowBot: false, pauseBot: false, bonusPts: false },
 };
 
 function isAdmin() {
@@ -257,6 +344,16 @@ function applyProfile(data, { replace = false } = {}) {
     save.maxBotCleared = replace ? incoming : Math.max(save.maxBotCleared || 0, incoming);
   }
 
+  if (typeof data.maxChaosCleared === "number" && Number.isFinite(data.maxChaosCleared)) {
+    const incoming = Math.max(0, Math.min(CHAOS_MAX_LEVEL, Math.floor(data.maxChaosCleared)));
+    save.maxChaosCleared = replace ? incoming : Math.max(save.maxChaosCleared || 0, incoming);
+  }
+
+  if (typeof data.maxSurvivalCleared === "number" && Number.isFinite(data.maxSurvivalCleared)) {
+    const incoming = Math.max(0, Math.min(SURVIVAL_MAX_ROUND, Math.floor(data.maxSurvivalCleared)));
+    save.maxSurvivalCleared = replace ? incoming : Math.max(save.maxSurvivalCleared || 0, incoming);
+  }
+
   if (data.owned?.paddle || data.owned?.table) {
     save.owned.paddle = replace
       ? uniqIds(data.owned?.paddle, "white")
@@ -282,21 +379,31 @@ function getPlayerLevel() {
 }
 
 function itemUnlocked(item) {
-  if (!item || !item.requireLevel) return true;
+  if (!item) return true;
   if (isAdmin() && save.abilities.freeShop) return true;
+  if (item.requireChaosLevel) {
+    return (save.maxChaosCleared || 0) >= item.requireChaosLevel;
+  }
+  if (item.requireSurvivalLevel) {
+    return (save.maxSurvivalCleared || 0) >= item.requireSurvivalLevel;
+  }
+  if (!item.requireLevel) return true;
   return getPlayerLevel() >= item.requireLevel;
 }
 
 function sanitizeEquippedCosmetics() {
   let changed = false;
   for (const kind of ["paddle", "table"]) {
+    for (const item of SHOP[kind]) {
+      const gated = !!(item.requireLevel || item.requireChaosLevel || item.requireSurvivalLevel);
+      if (gated && itemUnlocked(item) && !save.owned[kind].includes(item.id)) {
+        save.owned[kind].push(item.id);
+        changed = true;
+      }
+    }
     const item = shopItem(kind, save.equipped[kind]);
     if (!itemUnlocked(item)) {
       save.equipped[kind] = kind === "paddle" ? "white" : "classic";
-      changed = true;
-    }
-    if (itemUnlocked(item) && item.requireLevel && !save.owned[kind].includes(item.id)) {
-      save.owned[kind].push(item.id);
       changed = true;
     }
   }
@@ -305,6 +412,43 @@ function sanitizeEquippedCosmetics() {
 
 function isBotLevelUnlocked(level) {
   return level === 1 || level <= (save.maxBotCleared || 0) + 1;
+}
+
+function isChaosLevelUnlocked(level) {
+  return level === 1 || level <= (save.maxChaosCleared || 0) + 1;
+}
+
+function isSurvivalRoundUnlocked(round) {
+  return round === 1 || round <= (save.maxSurvivalCleared || 0) + 1;
+}
+
+function chaosWinPoints(level) {
+  const lv = clamp(Math.round(Number(level) || 1), 1, CHAOS_MAX_LEVEL);
+  return Math.round(2 + ((lv - 1) * 48) / (CHAOS_MAX_LEVEL - 1));
+}
+
+function grantChaosRiftIfEligible() {
+  let granted = false;
+  if ((save.maxChaosCleared || 0) < 25) return false;
+  for (const kind of ["paddle", "table"]) {
+    if (!save.owned[kind].includes("chaosrift")) {
+      save.owned[kind].push("chaosrift");
+      granted = true;
+    }
+  }
+  return granted;
+}
+
+function grantEnduranceIfEligible() {
+  let granted = false;
+  if ((save.maxSurvivalCleared || 0) < SURVIVAL_MAX_ROUND) return false;
+  for (const kind of ["paddle", "table"]) {
+    if (!save.owned[kind].includes("endurance")) {
+      save.owned[kind].push("endurance");
+      granted = true;
+    }
+  }
+  return granted;
 }
 
 function playerLevelStyle(level) {
@@ -370,7 +514,7 @@ function applyLevelClass(el, level) {
 }
 
 function awardBotClear(level) {
-  if (s.mode !== "local") return 0;
+  if (s.mode !== "local" || s.botMode === "chaos" || s.botMode === "survival") return 0;
   const lv = Math.max(1, Math.min(100, level || s.botLevel));
   if (lv <= save.maxBotCleared) return 0;
   save.maxBotCleared = lv;
@@ -382,11 +526,40 @@ function awardBotClear(level) {
   return POINTS_PER_BOT_CLEAR;
 }
 
+function awardChaosClear(level) {
+  if (s.mode !== "local" || s.botMode !== "chaos") return 0;
+  const lv = Math.max(1, Math.min(CHAOS_MAX_LEVEL, level || s.botLevel));
+  if (lv <= (save.maxChaosCleared || 0)) return 0;
+  save.maxChaosCleared = lv;
+  save.points += POINTS_PER_CHAOS_CLEAR;
+  grantChaosRiftIfEligible();
+  sanitizeEquippedCosmetics();
+  persistSave();
+  updatePointsUI();
+  updateNameUI();
+  return POINTS_PER_CHAOS_CLEAR;
+}
+
+function awardSurvivalClear(round) {
+  if (s.mode !== "local" || s.botMode !== "survival") return 0;
+  const lv = Math.max(1, Math.min(SURVIVAL_MAX_ROUND, round || s.botLevel));
+  if (lv <= (save.maxSurvivalCleared || 0)) return 0;
+  save.maxSurvivalCleared = lv;
+  grantEnduranceIfEligible();
+  sanitizeEquippedCosmetics();
+  persistSave();
+  updatePointsUI();
+  updateNameUI();
+  return 1;
+}
+
 function profilePayload() {
   return {
     name: save.name,
     points: save.points,
     maxBotCleared: save.maxBotCleared,
+    maxChaosCleared: save.maxChaosCleared || 0,
+    maxSurvivalCleared: save.maxSurvivalCleared || 0,
     owned: save.owned,
     equipped: save.equipped,
     redeemedCodes: Array.isArray(save.redeemedCodes) ? save.redeemedCodes : [],
@@ -418,6 +591,8 @@ async function syncProfileFromServer() {
     const before = {
       points: save.points || 0,
       maxBotCleared: save.maxBotCleared || 0,
+      maxChaosCleared: save.maxChaosCleared || 0,
+      maxSurvivalCleared: save.maxSurvivalCleared || 0,
       ownedPaddle: (save.owned.paddle || []).length,
       ownedTable: (save.owned.table || []).length,
     };
@@ -434,6 +609,8 @@ async function syncProfileFromServer() {
       const after = {
         points: save.points || 0,
         maxBotCleared: save.maxBotCleared || 0,
+        maxChaosCleared: save.maxChaosCleared || 0,
+        maxSurvivalCleared: save.maxSurvivalCleared || 0,
         ownedPaddle: (save.owned.paddle || []).length,
         ownedTable: (save.owned.table || []).length,
       };
@@ -441,10 +618,14 @@ async function syncProfileFromServer() {
       if (
         after.points > (Number(data.profile.points) || 0) ||
         after.maxBotCleared > (Number(data.profile.maxBotCleared) || 0) ||
+        after.maxChaosCleared > (Number(data.profile.maxChaosCleared) || 0) ||
+        after.maxSurvivalCleared > (Number(data.profile.maxSurvivalCleared) || 0) ||
         after.ownedPaddle > (data.profile.owned?.paddle || []).length ||
         after.ownedTable > (data.profile.owned?.table || []).length ||
         before.points > (Number(data.profile.points) || 0) ||
-        before.maxBotCleared > (Number(data.profile.maxBotCleared) || 0)
+        before.maxBotCleared > (Number(data.profile.maxBotCleared) || 0) ||
+        before.maxChaosCleared > (Number(data.profile.maxChaosCleared) || 0) ||
+        before.maxSurvivalCleared > (Number(data.profile.maxSurvivalCleared) || 0)
       ) {
         await syncProfileToServer();
       }
@@ -698,6 +879,43 @@ function applyFillStyle(c, item, x, y, w, h, alpha) {
     safeColorStop(g, 0.55, "#0b1224");
     safeColorStop(g, 0.78, "#020617");
     safeColorStop(g, 1, "#000000");
+  } else if (item.style === "hearthflame") {
+    // Pure black void — fire is painted in the overlay and blooms into darkness
+    g = c.createLinearGradient(x, y, x, y + h);
+    safeColorStop(g, 0, "#000000");
+    safeColorStop(g, 0.55, "#050201");
+    safeColorStop(g, 0.82, "#0a0402");
+    safeColorStop(g, 1, "#000000");
+  } else if (item.style === "skywyrm") {
+    const shift = Math.sin(t * 0.25) * 0.04;
+    g = c.createLinearGradient(x, y, x, y + h);
+    safeColorStop(g, 0, "#7dd3fc");
+    safeColorStop(g, 0.28 + shift, "#38bdf8");
+    safeColorStop(g, 0.55, "#0ea5e9");
+    safeColorStop(g, 0.78, "#0369a1");
+    safeColorStop(g, 1, "#0c4a6e");
+  } else if (item.style === "obsidian") {
+    g = c.createLinearGradient(x, y, x + w, y + h);
+    safeColorStop(g, 0, "#000000");
+    safeColorStop(g, 0.35, "#050505");
+    safeColorStop(g, 0.65, "#0a0a0a");
+    safeColorStop(g, 1, "#000000");
+  } else if (item.style === "chaosrift") {
+    const shift = Math.sin(t * 1.4) * 0.06;
+    g = c.createLinearGradient(x, y, x + w, y + h);
+    safeColorStop(g, 0, "#050008");
+    safeColorStop(g, 0.28 + shift, "#120018");
+    safeColorStop(g, 0.52, "#0a0510");
+    safeColorStop(g, 0.78 - shift, "#180820");
+    safeColorStop(g, 1, "#000000");
+  } else if (item.style === "endurance") {
+    const shift = Math.sin(t * 0.55) * 0.04;
+    g = c.createLinearGradient(x, y, x + w, y + h);
+    safeColorStop(g, 0, "#050403");
+    safeColorStop(g, 0.3 + shift, "#0c0a08");
+    safeColorStop(g, 0.55, "#081210");
+    safeColorStop(g, 0.78 - shift, "#0a100c");
+    safeColorStop(g, 1, "#030201");
   } else if (item.style === "heartbloom") {
     const ox = Math.sin(t * 0.7) * w * 0.18;
     g = c.createLinearGradient(x + ox, y, x + w - ox, y + h);
@@ -989,8 +1207,396 @@ function drawLightningStrike(c, x0, y0, x1, y1, scale, seed, flash, alpha, progr
   return { main, head, progress: prog };
 }
 
+function drawSkywyrmDragon(c, ox, oy, unit, wingPhase, pitch, alpha, mouthOpen = 0, fireAmt = 0) {
+  c.save();
+  c.translate(ox, oy);
+  c.rotate(pitch);
+  c.globalAlpha = alpha;
+
+  const u = unit;
+  const flap = wingPhase;
+  const wingUp = -0.6 + flap * 1.05;
+  const wingSpread = 1.12 + Math.abs(flap) * 0.28;
+  const jaw = Math.max(0, Math.min(1, mouthOpen));
+
+  // Soft contact shadow
+  c.fillStyle = "rgba(40, 10, 5, 0.28)";
+  c.beginPath();
+  c.ellipse(u * 0.3, u * 2.8, u * 4.2, u * 0.7, 0, 0, Math.PI * 2);
+  c.fill();
+
+  // Far wing (behind body)
+  c.save();
+  c.translate(-u * 0.25, -u * 0.2);
+  c.rotate(wingUp * 0.92);
+  c.scale(wingSpread, 1);
+  const farWing = c.createLinearGradient(0, 0, 0, -u * 5.2);
+  farWing.addColorStop(0, "#450a0a");
+  farWing.addColorStop(0.4, "#991b1b");
+  farWing.addColorStop(0.75, "#dc2626");
+  farWing.addColorStop(1, "rgba(252, 165, 165, 0.35)");
+  c.fillStyle = farWing;
+  c.beginPath();
+  c.moveTo(0, 0);
+  c.bezierCurveTo(u * 1.0, -u * 1.5, u * 3.0, -u * 4.0, u * 0.5, -u * 5.4);
+  c.bezierCurveTo(-u * 0.8, -u * 4.2, -u * 2.2, -u * 1.9, -u * 0.4, 0);
+  c.closePath();
+  c.fill();
+  c.strokeStyle = "rgba(254, 202, 202, 0.35)";
+  c.lineWidth = Math.max(0.45, u * 0.09);
+  c.beginPath();
+  c.moveTo(0, 0);
+  c.lineTo(u * 0.4, -u * 4.9);
+  c.moveTo(0, 0);
+  c.lineTo(u * 1.8, -u * 3.8);
+  c.moveTo(0, 0);
+  c.lineTo(-u * 1.1, -u * 2.8);
+  c.stroke();
+  c.restore();
+
+  // Tail
+  const tailGrad = c.createLinearGradient(-u * 2, 0, -u * 7.5, 0);
+  tailGrad.addColorStop(0, "#b91c1c");
+  tailGrad.addColorStop(1, "#7f1d1d");
+  c.fillStyle = tailGrad;
+  c.beginPath();
+  c.moveTo(-u * 2.6, u * 0.2);
+  c.bezierCurveTo(-u * 4.2, u * 1.1, -u * 6.0, u * 0.25, -u * 7.6, -u * 0.75);
+  c.bezierCurveTo(-u * 5.8, -u * 0.15, -u * 4.0, -u * 0.6, -u * 2.5, -u * 0.3);
+  c.closePath();
+  c.fill();
+  // Tail spikes
+  c.fillStyle = "#fca5a5";
+  for (let i = 0; i < 4; i++) {
+    const tx = -u * (3.2 + i * 1.05);
+    const ty = -u * (0.15 + i * 0.08);
+    c.beginPath();
+    c.moveTo(tx, ty);
+    c.lineTo(tx - u * 0.15, ty - u * 0.55);
+    c.lineTo(tx + u * 0.35, ty - u * 0.1);
+    c.closePath();
+    c.fill();
+  }
+  // Tail fin
+  c.fillStyle = "#ef4444";
+  c.beginPath();
+  c.moveTo(-u * 7.2, -u * 0.55);
+  c.quadraticCurveTo(-u * 8.5, -u * 1.8, -u * 7.8, -u * 0.15);
+  c.quadraticCurveTo(-u * 8.3, u * 1.1, -u * 7.1, u * 0.2);
+  c.closePath();
+  c.fill();
+
+  // Body
+  const body = c.createLinearGradient(0, -u * 1.4, 0, u * 1.5);
+  body.addColorStop(0, "#f87171");
+  body.addColorStop(0.3, "#dc2626");
+  body.addColorStop(0.65, "#b91c1c");
+  body.addColorStop(1, "#7f1d1d");
+  c.fillStyle = body;
+  c.beginPath();
+  c.moveTo(-u * 2.8, 0);
+  c.bezierCurveTo(-u * 1.6, -u * 1.45, u * 0.8, -u * 1.55, u * 2.9, -u * 0.45);
+  c.bezierCurveTo(u * 3.5, 0, u * 3.0, u * 1.05, u * 1.9, u * 1.2);
+  c.bezierCurveTo(u * 0.2, u * 1.4, -u * 1.8, u * 1.05, -u * 2.8, u * 0.2);
+  c.closePath();
+  c.fill();
+
+  // Spine ridges
+  c.fillStyle = "#fecaca";
+  for (let i = 0; i < 6; i++) {
+    const sx = -u * 1.8 + i * u * 0.75;
+    c.beginPath();
+    c.moveTo(sx, -u * 0.85);
+    c.lineTo(sx + u * 0.15, -u * 1.55);
+    c.lineTo(sx + u * 0.45, -u * 0.75);
+    c.closePath();
+    c.fill();
+  }
+
+  // Belly scales
+  const belly = c.createLinearGradient(0, 0, 0, u * 1.2);
+  belly.addColorStop(0, "rgba(254, 243, 199, 0.7)");
+  belly.addColorStop(0.55, "rgba(251, 191, 36, 0.35)");
+  belly.addColorStop(1, "rgba(180, 83, 9, 0.15)");
+  c.fillStyle = belly;
+  c.beginPath();
+  c.moveTo(-u * 1.9, u * 0.2);
+  c.bezierCurveTo(-u * 0.4, u * 0.7, u * 1.2, u * 0.75, u * 2.4, u * 0.3);
+  c.bezierCurveTo(u * 1.4, u * 1.15, -u * 0.5, u * 1.15, -u * 1.9, u * 0.4);
+  c.closePath();
+  c.fill();
+
+  // Scale rows
+  c.strokeStyle = "rgba(127, 29, 29, 0.45)";
+  c.lineWidth = Math.max(0.4, u * 0.07);
+  for (let i = 0; i < 7; i++) {
+    const sx = -u * 1.7 + i * u * 0.65;
+    c.beginPath();
+    c.arc(sx, -u * 0.2, u * 0.32, 0.15, Math.PI - 0.15);
+    c.stroke();
+  }
+
+  // Near wing (in front)
+  c.save();
+  c.translate(u * 0.2, -u * 0.15);
+  c.rotate(wingUp);
+  c.scale(wingSpread, 1);
+  const nearWing = c.createLinearGradient(0, 0, 0, -u * 5.6);
+  nearWing.addColorStop(0, "#991b1b");
+  nearWing.addColorStop(0.35, "#dc2626");
+  nearWing.addColorStop(0.7, "#f87171");
+  nearWing.addColorStop(1, "rgba(254, 226, 226, 0.5)");
+  c.fillStyle = nearWing;
+  c.beginPath();
+  c.moveTo(0, 0);
+  c.bezierCurveTo(u * 1.3, -u * 1.7, u * 3.4, -u * 4.3, u * 0.6, -u * 5.8);
+  c.bezierCurveTo(-u * 1.0, -u * 4.5, -u * 2.5, -u * 2.0, -u * 0.4, 0);
+  c.closePath();
+  c.fill();
+  c.strokeStyle = "rgba(69, 10, 10, 0.5)";
+  c.lineWidth = Math.max(0.5, u * 0.1);
+  c.beginPath();
+  c.moveTo(0, 0);
+  c.lineTo(u * 0.5, -u * 5.3);
+  c.moveTo(0, 0);
+  c.lineTo(u * 2.0, -u * 4.0);
+  c.moveTo(0, 0);
+  c.lineTo(-u * 1.2, -u * 3.0);
+  c.stroke();
+  c.strokeStyle = "rgba(255, 255, 255, 0.35)";
+  c.lineWidth = Math.max(0.4, u * 0.08);
+  c.beginPath();
+  c.moveTo(u * 0.25, -u * 5.4);
+  c.quadraticCurveTo(u * 0.65, -u * 5.7, u * 0.4, -u * 5.0);
+  c.stroke();
+  c.restore();
+
+  // Neck
+  c.fillStyle = "#dc2626";
+  c.beginPath();
+  c.moveTo(u * 2.4, -u * 0.25);
+  c.bezierCurveTo(u * 3.3, -u * 0.85, u * 4.1, -u * 0.7, u * 4.7, -u * 0.2);
+  c.bezierCurveTo(u * 5.1, u * 0.2, u * 4.8, u * 0.55, u * 4.1, u * 0.5);
+  c.bezierCurveTo(u * 3.4, u * 0.45, u * 2.7, u * 0.3, u * 2.4, u * 0.2);
+  c.closePath();
+  c.fill();
+
+  // Upper jaw / snout
+  const snout = c.createLinearGradient(u * 4.5, 0, u * 6.2, 0);
+  snout.addColorStop(0, "#ef4444");
+  snout.addColorStop(1, "#991b1b");
+  c.fillStyle = snout;
+  c.beginPath();
+  c.moveTo(u * 4.5, -u * 0.28);
+  c.bezierCurveTo(u * 5.3, -u * 0.5, u * 6.0, -u * 0.2, u * 6.25, u * 0.05);
+  c.bezierCurveTo(u * 6.1, u * 0.22, u * 5.3, u * 0.18, u * 4.6, u * 0.08);
+  c.closePath();
+  c.fill();
+
+  // Lower jaw (opens when breathing fire)
+  c.fillStyle = "#7f1d1d";
+  c.beginPath();
+  c.moveTo(u * 4.55, u * 0.12);
+  c.bezierCurveTo(
+    u * 5.2,
+    u * (0.2 + jaw * 0.55),
+    u * 5.9,
+    u * (0.25 + jaw * 0.75),
+    u * 6.15,
+    u * (0.15 + jaw * 0.55)
+  );
+  c.bezierCurveTo(
+    u * 5.7,
+    u * (0.35 + jaw * 0.7),
+    u * 5.0,
+    u * (0.4 + jaw * 0.45),
+    u * 4.55,
+    u * 0.28
+  );
+  c.closePath();
+  c.fill();
+
+  // Mouth interior / glow when open
+  if (jaw > 0.08) {
+    const mouthGlow = c.createRadialGradient(
+      u * 5.4,
+      u * (0.15 + jaw * 0.25),
+      0,
+      u * 5.4,
+      u * (0.15 + jaw * 0.25),
+      u * (0.9 + jaw)
+    );
+    mouthGlow.addColorStop(0, `rgba(255, 250, 200,${0.7 * jaw})`);
+    mouthGlow.addColorStop(0.4, `rgba(251, 146, 60,${0.45 * jaw})`);
+    mouthGlow.addColorStop(1, "rgba(127, 29, 29, 0)");
+    c.fillStyle = mouthGlow;
+    c.beginPath();
+    c.moveTo(u * 4.7, u * 0.1);
+    c.lineTo(u * 6.05, u * (0.08 + jaw * 0.15));
+    c.lineTo(u * 5.95, u * (0.2 + jaw * 0.55));
+    c.lineTo(u * 4.7, u * 0.25);
+    c.closePath();
+    c.fill();
+
+    // Teeth
+    c.fillStyle = "#fef3c7";
+    for (let i = 0; i < 4; i++) {
+      const tx = u * (4.95 + i * 0.28);
+      c.beginPath();
+      c.moveTo(tx, u * 0.1);
+      c.lineTo(tx + u * 0.08, u * (0.1 + jaw * 0.22));
+      c.lineTo(tx + u * 0.16, u * 0.1);
+      c.closePath();
+      c.fill();
+    }
+  }
+
+  // Horns
+  c.fillStyle = "#fef3c7";
+  c.beginPath();
+  c.moveTo(u * 4.15, -u * 0.4);
+  c.quadraticCurveTo(u * 3.95, -u * 1.4, u * 4.4, -u * 1.65);
+  c.quadraticCurveTo(u * 4.5, -u * 0.85, u * 4.35, -u * 0.3);
+  c.closePath();
+  c.fill();
+  c.beginPath();
+  c.moveTo(u * 4.55, -u * 0.35);
+  c.quadraticCurveTo(u * 4.8, -u * 1.15, u * 5.15, -u * 1.25);
+  c.quadraticCurveTo(u * 4.9, -u * 0.65, u * 4.65, -u * 0.25);
+  c.closePath();
+  c.fill();
+
+  // Fiery eyes
+  const eyeX = u * 4.85;
+  const eyeY = -u * 0.08;
+  const eyeGlow = c.createRadialGradient(eyeX, eyeY, 0, eyeX, eyeY, u * 0.55);
+  eyeGlow.addColorStop(0, "rgba(255, 250, 200, 0.85)");
+  eyeGlow.addColorStop(0.35, "rgba(251, 146, 60, 0.55)");
+  eyeGlow.addColorStop(1, "rgba(220, 38, 38, 0)");
+  c.fillStyle = eyeGlow;
+  c.beginPath();
+  c.arc(eyeX, eyeY, u * 0.55, 0, Math.PI * 2);
+  c.fill();
+  c.fillStyle = "#fde047";
+  c.beginPath();
+  c.ellipse(eyeX, eyeY, u * 0.22, u * 0.17, -0.25, 0, Math.PI * 2);
+  c.fill();
+  c.fillStyle = "#ea580c";
+  c.beginPath();
+  c.ellipse(eyeX + u * 0.02, eyeY, u * 0.12, u * 0.14, -0.25, 0, Math.PI * 2);
+  c.fill();
+  c.fillStyle = "#450a0a";
+  c.beginPath();
+  c.arc(eyeX + u * 0.04, eyeY, u * 0.06, 0, Math.PI * 2);
+  c.fill();
+  c.fillStyle = "rgba(255,255,255,0.85)";
+  c.beginPath();
+  c.arc(eyeX - u * 0.04, eyeY - u * 0.05, u * 0.035, 0, Math.PI * 2);
+  c.fill();
+
+  // Hind / fore legs
+  c.fillStyle = "#991b1b";
+  c.beginPath();
+  c.moveTo(-u * 0.7, u * 0.65);
+  c.quadraticCurveTo(-u * 0.35, u * 1.7, u * 0.45, u * 1.9);
+  c.quadraticCurveTo(u * 0.2, u * 1.15, -u * 0.25, u * 0.7);
+  c.closePath();
+  c.fill();
+  c.beginPath();
+  c.moveTo(u * 1.5, u * 0.55);
+  c.quadraticCurveTo(u * 1.8, u * 1.5, u * 2.4, u * 1.65);
+  c.quadraticCurveTo(u * 2.0, u * 1.0, u * 1.6, u * 0.6);
+  c.closePath();
+  c.fill();
+
+  // Fire breath blast
+  if (fireAmt > 0.04) {
+    const fx0 = u * 6.2;
+    const fy0 = u * (0.08 + jaw * 0.2);
+    const reach = u * (4.5 + fireAmt * 7.5);
+    const cone = u * (0.6 + fireAmt * 1.8);
+
+    // Outer glow into air
+    const blast = c.createRadialGradient(fx0 + reach * 0.35, fy0, 0, fx0 + reach * 0.35, fy0, reach * 0.85);
+    blast.addColorStop(0, `rgba(255, 250, 200,${0.45 * fireAmt})`);
+    blast.addColorStop(0.3, `rgba(251, 146, 60,${0.35 * fireAmt})`);
+    blast.addColorStop(0.65, `rgba(220, 38, 38,${0.18 * fireAmt})`);
+    blast.addColorStop(1, "rgba(0,0,0,0)");
+    c.fillStyle = blast;
+    c.beginPath();
+    c.arc(fx0 + reach * 0.35, fy0, reach * 0.85, 0, Math.PI * 2);
+    c.fill();
+
+    // Flame cone
+    c.beginPath();
+    c.moveTo(fx0, fy0 - u * 0.12);
+    c.bezierCurveTo(
+      fx0 + reach * 0.35,
+      fy0 - cone,
+      fx0 + reach * 0.7,
+      fy0 - cone * 0.7,
+      fx0 + reach,
+      fy0 + Math.sin(performance.now() * 0.02) * u * 0.3
+    );
+    c.bezierCurveTo(
+      fx0 + reach * 0.7,
+      fy0 + cone * 0.7,
+      fx0 + reach * 0.35,
+      fy0 + cone,
+      fx0,
+      fy0 + u * 0.18
+    );
+    c.closePath();
+    const coneGrad = c.createLinearGradient(fx0, fy0, fx0 + reach, fy0);
+    coneGrad.addColorStop(0, `rgba(255, 255, 255,${0.85 * fireAmt})`);
+    coneGrad.addColorStop(0.2, `rgba(254, 240, 138,${0.9 * fireAmt})`);
+    coneGrad.addColorStop(0.45, `rgba(251, 146, 60,${0.85 * fireAmt})`);
+    coneGrad.addColorStop(0.75, `rgba(220, 38, 38,${0.55 * fireAmt})`);
+    coneGrad.addColorStop(1, "rgba(69, 10, 10, 0)");
+    c.fillStyle = coneGrad;
+    c.fill();
+
+    // Hot core stream
+    c.beginPath();
+    c.moveTo(fx0, fy0);
+    c.bezierCurveTo(
+      fx0 + reach * 0.4,
+      fy0 - cone * 0.25,
+      fx0 + reach * 0.7,
+      fy0 + cone * 0.15,
+      fx0 + reach * 0.92,
+      fy0
+    );
+    c.bezierCurveTo(
+      fx0 + reach * 0.7,
+      fy0 - cone * 0.1,
+      fx0 + reach * 0.4,
+      fy0 + cone * 0.2,
+      fx0,
+      fy0
+    );
+    c.closePath();
+    c.fillStyle = `rgba(255, 255, 255,${0.55 * fireAmt})`;
+    c.fill();
+
+    // Embers in the breath
+    for (let i = 0; i < 10; i++) {
+      const p = (i + 1) / 11;
+      const ex = fx0 + reach * p + Math.sin(performance.now() * 0.01 + i) * u * 0.25;
+      const ey = fy0 + Math.sin(performance.now() * 0.015 + i * 1.7) * cone * 0.45 * p;
+      c.globalAlpha = alpha * fireAmt * (1 - p * 0.7);
+      c.fillStyle = i % 2 ? "#fde68a" : "#fb923c";
+      c.beginPath();
+      c.arc(ex, ey, u * (0.08 + (1 - p) * 0.12), 0, Math.PI * 2);
+      c.fill();
+    }
+  }
+
+  c.restore();
+}
+
 function drawEpicOverlay(c, item, x, y, w, h, alpha) {
-  if (!item.epic && !item.legendary && !item.secret) return;
+  if (!item.epic && !item.legendary && !item.chaos && !item.survival && !item.secret) return;
   const t = performance.now() * 0.001;
   c.save();
   c.beginPath();
@@ -1233,6 +1839,717 @@ function drawEpicOverlay(c, item, x, y, w, h, alpha) {
     c.fillRect(x, y, w, h);
   }
 
+  if (item.style === "hearthflame") {
+    const scale = Math.max(0.55, Math.min(2.8, Math.min(w, h) / 28));
+    const baseY = y + h * 1.02;
+    let peakGlow = 0;
+    let glowCx = x + w * 0.5;
+    let glowCy = y + h * 0.72;
+
+    // Soft hearth illumination that fades into black (voidstorm-style wash)
+    const hearthPulse = 0.55 + Math.sin(t * 2.1) * 0.12;
+    const hearth = c.createRadialGradient(
+      x + w * 0.5,
+      y + h * 0.95,
+      1,
+      x + w * 0.5,
+      y + h * 0.42,
+      Math.max(w, h) * 1.05
+    );
+    hearth.addColorStop(0, `rgba(255, 180, 60,${0.16 * hearthPulse})`);
+    hearth.addColorStop(0.28, `rgba(234, 88, 12,${0.1 * hearthPulse})`);
+    hearth.addColorStop(0.55, `rgba(127, 29, 29,${0.05 * hearthPulse})`);
+    hearth.addColorStop(1, "rgba(0,0,0,0)");
+    c.globalAlpha = alpha;
+    c.fillStyle = hearth;
+    c.fillRect(x, y, w, h);
+
+    // Back-layer soft blazes (wide, translucent, bloom into void)
+    for (let i = 0; i < 5; i++) {
+      const phase = i * 1.9 + 0.4;
+      const flicker = 0.75 + Math.sin(t * (1.7 + i * 0.25) + phase) * 0.25;
+      const lane = 0.12 + i * 0.19;
+      const cx = x + lane * w + Math.sin(t * 1.1 + phase) * w * 0.05;
+      const height = h * (0.55 + (i % 3) * 0.1) * flicker;
+      const width = w * (0.22 + (i % 2) * 0.06);
+      const tipY = baseY - height;
+      const sway = Math.sin(t * 1.6 + phase) * width * 0.45;
+
+      const bloomR = Math.max(width, height * 0.35) * 1.1;
+      const bloom = c.createRadialGradient(cx, tipY + height * 0.45, 1, cx, tipY + height * 0.45, bloomR);
+      bloom.addColorStop(0, `rgba(255, 140, 40,${0.14 * flicker})`);
+      bloom.addColorStop(0.45, `rgba(220, 50, 10,${0.07 * flicker})`);
+      bloom.addColorStop(1, "rgba(0,0,0,0)");
+      c.globalAlpha = alpha;
+      c.fillStyle = bloom;
+      c.beginPath();
+      c.arc(cx, tipY + height * 0.45, bloomR, 0, Math.PI * 2);
+      c.fill();
+
+      c.beginPath();
+      c.moveTo(cx - width * 0.6, baseY);
+      c.bezierCurveTo(
+        cx - width * 1.05 + sway,
+        baseY - height * 0.35,
+        cx - width * 0.15 + sway * 0.5,
+        tipY + height * 0.3,
+        cx + sway * 0.25,
+        tipY
+      );
+      c.bezierCurveTo(
+        cx + width * 0.15 - sway * 0.5,
+        tipY + height * 0.3,
+        cx + width * 1.05 - sway,
+        baseY - height * 0.35,
+        cx + width * 0.6,
+        baseY
+      );
+      c.closePath();
+      const back = c.createLinearGradient(cx, tipY, cx, baseY);
+      back.addColorStop(0, `rgba(255, 90, 20,${0.15 * flicker})`);
+      back.addColorStop(0.4, `rgba(180, 30, 8,${0.35 * flicker})`);
+      back.addColorStop(1, "rgba(40, 5, 0,0)");
+      c.globalAlpha = alpha * 0.85;
+      c.fillStyle = back;
+      c.fill();
+    }
+
+    // Foreground flame tongues (white-hot cores → orange → red wisps into black)
+    const tongues = 8;
+    for (let i = 0; i < tongues; i++) {
+      const phase = i * 1.41;
+      const flicker = 0.78 + Math.sin(t * (2.4 + i * 0.33) + phase) * 0.22;
+      const lane = (i + 0.35) / tongues;
+      const cx = x + lane * w + Math.sin(t * (1.5 + i * 0.18) + phase) * w * 0.055;
+      const height = h * (0.38 + (i % 4) * 0.1 + Math.sin(t * 1.9 + phase) * 0.07) * flicker;
+      const width = w * (0.1 + (i % 5) * 0.028) * (0.88 + Math.sin(t * 2.2 + phase) * 0.14);
+      const tipY = baseY - height;
+      const sway = Math.sin(t * 2.35 + phase) * width * 0.5;
+      const sway2 = Math.cos(t * 3.2 + phase * 1.2) * width * 0.28;
+      const hot = 0.55 + Math.sin(t * 3.4 + phase) * 0.25;
+
+      const edgeGlow = c.createRadialGradient(cx, tipY + height * 0.4, 0, cx, tipY + height * 0.4, width * 1.8);
+      edgeGlow.addColorStop(0, `rgba(255, 200, 80,${0.2 * hot * flicker})`);
+      edgeGlow.addColorStop(0.5, `rgba(249, 115, 22,${0.08 * flicker})`);
+      edgeGlow.addColorStop(1, "rgba(0,0,0,0)");
+      c.globalAlpha = alpha;
+      c.fillStyle = edgeGlow;
+      c.beginPath();
+      c.arc(cx, tipY + height * 0.4, width * 1.8, 0, Math.PI * 2);
+      c.fill();
+
+      c.beginPath();
+      c.moveTo(cx - width * 0.5, baseY);
+      c.bezierCurveTo(
+        cx - width * 0.95 + sway,
+        baseY - height * 0.3,
+        cx - width * 0.18 + sway2,
+        tipY + height * 0.26,
+        cx + sway * 0.3,
+        tipY
+      );
+      c.bezierCurveTo(
+        cx + width * 0.18 - sway2,
+        tipY + height * 0.26,
+        cx + width * 0.95 - sway,
+        baseY - height * 0.3,
+        cx + width * 0.5,
+        baseY
+      );
+      c.closePath();
+      const fg = c.createLinearGradient(cx, tipY, cx, baseY);
+      fg.addColorStop(0, `rgba(255, 252, 230,${0.75 * hot})`);
+      fg.addColorStop(0.18, `rgba(255, 220, 90,${0.85 * hot})`);
+      fg.addColorStop(0.42, `rgba(251, 146, 40,${0.8})`);
+      fg.addColorStop(0.68, `rgba(220, 50, 10,${0.55})`);
+      fg.addColorStop(0.88, `rgba(120, 20, 5,${0.25})`);
+      fg.addColorStop(1, "rgba(0,0,0,0)");
+      c.globalAlpha = alpha * (0.55 + flicker * 0.4);
+      c.fillStyle = fg;
+      c.fill();
+
+      c.beginPath();
+      c.moveTo(cx - width * 0.18, baseY - height * 0.04);
+      c.bezierCurveTo(
+        cx - width * 0.28 + sway * 0.35,
+        baseY - height * 0.38,
+        cx + sway2 * 0.25,
+        tipY + height * 0.32,
+        cx,
+        tipY + height * 0.1
+      );
+      c.bezierCurveTo(
+        cx - sway2 * 0.25,
+        tipY + height * 0.32,
+        cx + width * 0.28 - sway * 0.35,
+        baseY - height * 0.38,
+        cx + width * 0.18,
+        baseY - height * 0.04
+      );
+      c.closePath();
+      const core = c.createLinearGradient(cx, tipY, cx, baseY);
+      core.addColorStop(0, "rgba(255,255,255,0.95)");
+      core.addColorStop(0.3, "rgba(254, 243, 160,0.8)");
+      core.addColorStop(0.7, "rgba(251, 146, 60,0.25)");
+      core.addColorStop(1, "rgba(0,0,0,0)");
+      c.globalAlpha = alpha * (0.3 + hot * 0.4);
+      c.fillStyle = core;
+      c.fill();
+
+      const tipFlash = flicker * hot;
+      if (tipFlash > peakGlow) {
+        peakGlow = tipFlash;
+        glowCx = cx;
+        glowCy = tipY + height * 0.25;
+      }
+    }
+
+    // Peak blaze wash into black (same blend approach as voidstorm lightning)
+    if (peakGlow > 0.45) {
+      const wash = c.createRadialGradient(
+        glowCx,
+        glowCy,
+        1,
+        glowCx,
+        glowCy,
+        Math.max(w, h) * (0.55 + peakGlow * 0.35)
+      );
+      wash.addColorStop(0, `rgba(255, 245, 200,${0.14 * peakGlow})`);
+      wash.addColorStop(0.35, `rgba(251, 146, 60,${0.08 * peakGlow})`);
+      wash.addColorStop(0.7, `rgba(127, 29, 29,${0.04 * peakGlow})`);
+      wash.addColorStop(1, "rgba(0,0,0,0)");
+      c.globalAlpha = alpha;
+      c.fillStyle = wash;
+      c.fillRect(x, y, w, h);
+    }
+
+    // Rising sparks / embers into the black void
+    for (let i = 0; i < 52; i++) {
+      const seed = i * 19.7;
+      const speed = 0.14 + (i % 9) * 0.04;
+      const drift = ((t * speed + i * 0.063) % 1);
+      const lane = (Math.sin(seed * 0.7 + t * 0.2) * 0.5 + 0.5) * 0.94 + 0.03;
+      const sx = x + lane * w + Math.sin(t * 2.1 + seed) * w * 0.04;
+      const sy = y + h * (0.95 - drift * 0.95);
+      const life = Math.max(0, 1 - drift);
+      const dens = Math.max(0.15, 1 - Math.abs(drift - 0.25) * 1.4);
+      const twinkle = 0.45 + Math.sin(t * 9 + seed) * 0.55;
+      const r = (0.25 + (i % 6) * 0.22 + twinkle * 0.3) * scale * (0.55 + life);
+      if (life < 0.04) continue;
+
+      const sg = c.createRadialGradient(sx, sy, 0, sx, sy, r * 3.2);
+      sg.addColorStop(0, `rgba(255, 230, 140,${0.55 * life * dens * twinkle})`);
+      sg.addColorStop(0.4, `rgba(251, 146, 60,${0.25 * life * dens})`);
+      sg.addColorStop(1, "rgba(0,0,0,0)");
+      c.globalAlpha = alpha;
+      c.fillStyle = sg;
+      c.beginPath();
+      c.arc(sx, sy, r * 3.2, 0, Math.PI * 2);
+      c.fill();
+
+      c.globalAlpha = alpha * life * dens * (0.4 + twinkle * 0.55);
+      c.fillStyle =
+        i % 5 === 0 ? "#fffbeb" : i % 5 === 1 ? "#fde68a" : i % 5 === 2 ? "#fb923c" : i % 5 === 3 ? "#f97316" : "#ea580c";
+      c.beginPath();
+      c.arc(sx, sy, r, 0, Math.PI * 2);
+      c.fill();
+    }
+  }
+
+  if (item.style === "skywyrm") {
+    const scale = Math.max(0.7, Math.min(3.6, Math.min(w, h) / 22));
+
+    // Sun bloom
+    const sunX = x + w * (0.78 + Math.sin(t * 0.15) * 0.03);
+    const sunY = y + h * (0.18 + Math.cos(t * 0.12) * 0.02);
+    const sun = c.createRadialGradient(sunX, sunY, 1, sunX, sunY, Math.max(w, h) * 0.55);
+    sun.addColorStop(0, `rgba(255, 251, 235,${0.55 + Math.sin(t * 1.2) * 0.08})`);
+    sun.addColorStop(0.25, "rgba(253, 224, 71, 0.28)");
+    sun.addColorStop(0.55, "rgba(125, 211, 252, 0.1)");
+    sun.addColorStop(1, "rgba(0,0,0,0)");
+    c.globalAlpha = alpha;
+    c.fillStyle = sun;
+    c.fillRect(x, y, w, h);
+    c.fillStyle = "rgba(255, 255, 255, 0.85)";
+    c.beginPath();
+    c.arc(sunX, sunY, Math.max(1.2, 2.2 * scale), 0, Math.PI * 2);
+    c.fill();
+
+    // Drifting clouds
+    for (let i = 0; i < 7; i++) {
+      const drift = ((t * (0.04 + (i % 3) * 0.02) + i * 0.17) % 1.4) - 0.2;
+      const cx = x + drift * w * 1.15;
+      const cy = y + h * (0.22 + (i % 4) * 0.16 + Math.sin(t * 0.3 + i) * 0.02);
+      const cw = w * (0.18 + (i % 3) * 0.07);
+      const ch = h * (0.06 + (i % 2) * 0.03);
+      const cg = c.createRadialGradient(cx, cy, 1, cx, cy, cw);
+      cg.addColorStop(0, `rgba(255,255,255,${0.45 - (i % 3) * 0.08})`);
+      cg.addColorStop(0.55, `rgba(226, 232, 240,${0.22})`);
+      cg.addColorStop(1, "rgba(255,255,255,0)");
+      c.globalAlpha = alpha * 0.9;
+      c.fillStyle = cg;
+      c.beginPath();
+      c.ellipse(cx, cy, cw, ch, 0, 0, Math.PI * 2);
+      c.fill();
+      c.beginPath();
+      c.ellipse(cx - cw * 0.35, cy + ch * 0.15, cw * 0.55, ch * 0.7, 0, 0, Math.PI * 2);
+      c.fill();
+      c.beginPath();
+      c.ellipse(cx + cw * 0.4, cy + ch * 0.1, cw * 0.5, ch * 0.65, 0, 0, Math.PI * 2);
+      c.fill();
+    }
+
+    // Distant red silhouette
+    {
+      const prog = ((t * 0.07) % 1.3) - 0.15;
+      const dx = x + prog * w * 1.2;
+      const dy = y + h * (0.26 + Math.sin(prog * Math.PI * 2) * 0.04);
+      const flap = Math.sin(t * 5.5);
+      drawSkywyrmDragon(
+        c,
+        dx,
+        dy,
+        scale * 0.55,
+        flap,
+        -0.08 + Math.sin(prog * 4) * 0.05,
+        alpha * 0.32,
+        0,
+        0
+      );
+    }
+
+    // Main large dragon + fire breath
+    {
+      const cycle = 8.5;
+      const prog = (t % cycle) / cycle;
+      const dx = x - w * 0.28 + prog * w * 1.5;
+      const dy = y + h * (0.5 + Math.sin(prog * Math.PI * 2) * 0.14 + Math.sin(t * 1.4) * 0.02);
+      const flap = Math.sin(t * 6.8);
+      const pitch = -0.1 + Math.cos(prog * Math.PI * 2) * 0.16;
+      const unit = scale * (1.55 + Math.min(1.6, Math.max(w, h) / 100) * 0.55);
+
+      // Fire breath cadence: open mouth, blast, close — every ~2.8s
+      const breathCycle = 2.8;
+      const bLocal = t % breathCycle;
+      let mouthOpen = 0;
+      let fireAmt = 0;
+      if (bLocal > 0.35 && bLocal < 1.55) {
+        const phase = (bLocal - 0.35) / 1.2;
+        mouthOpen = phase < 0.2 ? phase / 0.2 : phase > 0.75 ? (1 - phase) / 0.25 : 1;
+        fireAmt = phase < 0.15 ? 0 : phase < 0.35 ? (phase - 0.15) / 0.2 : phase > 0.7 ? Math.max(0, (1 - phase) / 0.3) : 1;
+        fireAmt *= 0.55 + Math.sin(t * 28) * 0.2;
+      }
+
+      // Warm aura when breathing
+      if (fireAmt > 0.1) {
+        const fireAura = c.createRadialGradient(dx + unit * 5, dy, 1, dx + unit * 5, dy, unit * 10);
+        fireAura.addColorStop(0, `rgba(255, 200, 80,${0.16 * fireAmt})`);
+        fireAura.addColorStop(0.45, `rgba(220, 38, 38,${0.08 * fireAmt})`);
+        fireAura.addColorStop(1, "rgba(0,0,0,0)");
+        c.globalAlpha = alpha;
+        c.fillStyle = fireAura;
+        c.fillRect(x, y, w, h);
+      }
+
+      // Wind streaks
+      c.globalAlpha = alpha * 0.16;
+      c.strokeStyle = "rgba(255,255,255,0.5)";
+      c.lineWidth = Math.max(0.6, 1.2 * scale);
+      for (let s = 0; s < 5; s++) {
+        const sy = dy + (s - 2) * scale * 1.4;
+        c.beginPath();
+        c.moveTo(dx - unit * (4.2 + s), sy);
+        c.lineTo(dx - unit * (1.4 + s * 0.35), sy + Math.sin(t * 4 + s) * scale);
+        c.stroke();
+      }
+
+      const aura = c.createRadialGradient(dx, dy, 1, dx, dy, unit * 8);
+      aura.addColorStop(0, "rgba(254, 202, 202, 0.14)");
+      aura.addColorStop(0.4, "rgba(248, 113, 113, 0.07)");
+      aura.addColorStop(1, "rgba(0,0,0,0)");
+      c.globalAlpha = alpha;
+      c.fillStyle = aura;
+      c.fillRect(x, y, w, h);
+
+      drawSkywyrmDragon(c, dx, dy, unit, flap, pitch, alpha * 0.98, mouthOpen, fireAmt);
+    }
+
+    // Bottom mist
+    const mist = c.createLinearGradient(x, y + h * 0.65, x, y + h);
+    mist.addColorStop(0, "rgba(224, 242, 254, 0)");
+    mist.addColorStop(0.55, "rgba(186, 230, 253, 0.12)");
+    mist.addColorStop(1, "rgba(125, 211, 252, 0.22)");
+    c.globalAlpha = alpha;
+    c.fillStyle = mist;
+    c.fillRect(x, y, w, h);
+  }
+
+  if (item.style === "obsidian") {
+    // CoD gun camo: full-surface liquid specular flow over fractured black glass
+    const scale = Math.max(0.55, Math.min(3.4, Math.min(w, h) / 24));
+    const area = Math.max(1, w * h);
+    const flowA = t * 0.85;
+    const flowB = t * 0.55;
+    const flowC = t * 1.15;
+
+    // Continuous CoD-style flow field across the whole surface
+    function obsidianFlow(u, v) {
+      const warpU = u + Math.sin(v * 3.4 + flowB) * 0.12 + Math.sin(v * 7.1 - flowA) * 0.05;
+      const warpV = v + Math.cos(u * 2.8 + flowA * 0.9) * 0.14 + Math.sin(u * 5.6 + flowC) * 0.06;
+      const a = Math.sin(warpU * 4.6 + flowA + Math.sin(warpV * 3.2 + flowB) * 1.6);
+      const b = Math.sin(warpV * 5.1 - flowB * 1.15 + warpU * 2.4);
+      const d = Math.sin((warpU * 1.3 + warpV) * 6.2 + flowC * 0.7);
+      const e = Math.sin(warpU * 9.5 - flowA * 1.2 + Math.cos(warpV * 8.2 + flowB) * 1.8);
+      const raw = a * 0.42 + b * 0.32 + d * 0.18 + e * 0.12;
+      return Math.max(0, Math.min(1, raw * 0.5 + 0.5));
+    }
+
+    // Soft full-bleed light pools that drift like liquid metal on a gun camo
+    for (let p = 0; p < 6; p++) {
+      const pu = (0.12 + p * 0.15 + Math.sin(flowA * 0.7 + p * 1.4) * 0.18 + Math.cos(flowB + p) * 0.1 + 1) % 1;
+      const pv = (0.18 + p * 0.13 + Math.cos(flowB * 0.85 + p * 1.1) * 0.2 + Math.sin(flowC * 0.5 + p) * 0.1 + 1) % 1;
+      const px = x + pu * w;
+      const py = y + pv * h;
+      const pr = Math.max(w, h) * (0.28 + (p % 3) * 0.08);
+      const pulse = 0.55 + Math.sin(flowC + p * 1.7) * 0.2;
+      const pool = c.createRadialGradient(px, py, 1, px, py, pr);
+      pool.addColorStop(0, `rgba(235,240,248,${0.16 * pulse})`);
+      pool.addColorStop(0.35, `rgba(160,170,185,${0.08 * pulse})`);
+      pool.addColorStop(0.7, `rgba(40,42,48,${0.04 * pulse})`);
+      pool.addColorStop(1, "rgba(0,0,0,0)");
+      c.globalAlpha = alpha;
+      c.fillStyle = pool;
+      c.fillRect(x, y, w, h);
+    }
+
+    // Dense cell grid: the whole background breathes with the flow (no line ribbons)
+    const cell = Math.max(3.2, Math.min(9.5, Math.min(w, h) / 14));
+    const cols = Math.ceil(w / cell) + 1;
+    const rows = Math.ceil(h / cell) + 1;
+    for (let row = 0; row < rows; row++) {
+      for (let col = 0; col < cols; col++) {
+        const u = (col + 0.5) / cols;
+        const v = (row + 0.5) / rows;
+        // Slight positional warp so the grid itself feels like fabric/liquid
+        const wu = u + Math.sin(v * Math.PI * 2 + flowA) * 0.035;
+        const wv = v + Math.cos(u * Math.PI * 2 - flowB) * 0.04;
+        const lit = obsidianFlow(wu, wv);
+        const hi = lit * lit;
+        if (hi < 0.08) continue;
+
+        const cx = x + wu * w;
+        const cy = y + wv * h;
+        const jitter = hashNoise(col * 13.1 + row * 7.7);
+        const rw = cell * (0.55 + jitter * 0.55 + hi * 0.35);
+        const rh = cell * (0.4 + hashNoise(col + row * 3.3) * 0.5 + hi * 0.3);
+        const rot = (jitter - 0.5) * 0.9 + Math.sin(flowA + col * 0.2 + row * 0.15) * 0.08;
+
+        c.save();
+        c.translate(cx, cy);
+        c.rotate(rot);
+        const g = c.createLinearGradient(-rw, -rh, rw, rh);
+        const s = Math.floor(12 + hi * 230);
+        const m = Math.floor(4 + hi * 140);
+        g.addColorStop(0, `rgba(${s},${Math.min(255, s + 6)},${Math.min(255, s + 14)},${0.2 + hi * 0.75})`);
+        g.addColorStop(0.5, `rgba(${m},${m + 4},${m + 10},${0.25 + hi * 0.45})`);
+        g.addColorStop(1, `rgba(0,0,0,${0.35 + (1 - hi) * 0.4})`);
+        c.globalAlpha = alpha * (0.35 + hi * 0.65);
+        c.fillStyle = g;
+        c.beginPath();
+        c.ellipse(0, 0, rw, rh, 0, 0, Math.PI * 2);
+        c.fill();
+        c.restore();
+      }
+    }
+
+    // Fractured glass chips — fixed texture, lit only by the flowing field
+    const facetN = Math.min(160, Math.max(40, Math.floor(area / 95)));
+    for (let i = 0; i < facetN; i++) {
+      const seed = i * 17.913 + 2.7;
+      const u0 = hashNoise(seed);
+      const v0 = hashNoise(seed + 3.1);
+      const lit = obsidianFlow(u0, v0);
+      const hi = Math.max(0, lit * 1.05 - 0.12);
+      if (hi < 0.05) continue;
+
+      const fx = x + u0 * w;
+      const fy = y + v0 * h;
+      const sz =
+        (0.85 + hashNoise(seed + 5.4) * 2.4 + (i % 6 === 0 ? 1.3 : 0)) *
+        scale *
+        (0.8 + Math.min(1.3, Math.max(w, h) / 150));
+      const ang = hashNoise(seed + 8.2) * Math.PI * 2;
+      const sides = i % 5 === 0 ? 3 : 4;
+
+      c.save();
+      c.translate(fx, fy);
+      c.rotate(ang);
+      c.beginPath();
+      for (let s = 0; s < sides; s++) {
+        const a = (s / sides) * Math.PI * 2;
+        const r = sz * (0.5 + hashNoise(seed + s * 1.7) * 0.75);
+        const px = Math.cos(a) * r;
+        const py = Math.sin(a) * r * (0.5 + hashNoise(seed + 14) * 0.55);
+        if (s === 0) c.moveTo(px, py);
+        else c.lineTo(px, py);
+      }
+      c.closePath();
+      c.globalAlpha = alpha * (0.25 + hi * 0.75);
+      c.fillStyle =
+        hi > 0.7
+          ? `rgba(245,248,255,${0.35 + hi * 0.55})`
+          : hi > 0.4
+            ? `rgba(170,180,195,${0.25 + hi * 0.4})`
+            : `rgba(30,32,38,${0.35 + hi * 0.25})`;
+      c.fill();
+      if (hi > 0.55) {
+        c.globalAlpha = alpha * (hi - 0.45) * 1.4;
+        c.strokeStyle = "rgba(255,255,255,0.85)";
+        c.lineWidth = Math.max(0.35, 0.55 * scale * hi);
+        c.stroke();
+      }
+      c.restore();
+    }
+
+    // Micro speculars only inside bright flow regions
+    const sparkN = Math.min(70, Math.max(18, Math.floor(area / 200)));
+    for (let i = 0; i < sparkN; i++) {
+      const seed = i * 23.7 + 9.1;
+      const u = hashNoise(seed);
+      const v = hashNoise(seed + 2.2);
+      const lit = obsidianFlow(u, v);
+      if (lit < 0.62) continue;
+      const sx = x + u * w;
+      const sy = y + v * h;
+      const tw = 0.6 + Math.sin(t * 7.5 + i * 2.1) * 0.4;
+      const r = (0.3 + hashNoise(seed + 4) * 1.2) * scale * lit;
+      c.globalAlpha = alpha * lit * lit * tw * 0.9;
+      c.fillStyle = i % 3 === 0 ? "#ffffff" : "#d8dee8";
+      c.beginPath();
+      c.moveTo(sx, sy - r * 1.5);
+      c.lineTo(sx + r * 0.5, sy);
+      c.lineTo(sx, sy + r * 1.5);
+      c.lineTo(sx - r * 0.5, sy);
+      c.closePath();
+      c.fill();
+    }
+  }
+
+  if (item.style === "chaosrift") {
+    const scale = Math.max(0.55, Math.min(3.6, Math.min(w, h) / 22));
+    const area = Math.max(1, w * h);
+    const flow = t * 1.35;
+
+    // Prismatic void wash
+    const wash = c.createRadialGradient(
+      x + w * (0.45 + Math.sin(flow * 0.4) * 0.12),
+      y + h * (0.5 + Math.cos(flow * 0.33) * 0.1),
+      1,
+      x + w * 0.5,
+      y + h * 0.5,
+      Math.max(w, h) * 0.9
+    );
+    wash.addColorStop(0, `rgba(236, 72, 153,${0.14 + Math.sin(flow) * 0.04})`);
+    wash.addColorStop(0.35, `rgba(34, 211, 238,${0.1})`);
+    wash.addColorStop(0.65, `rgba(168, 85, 247,${0.08})`);
+    wash.addColorStop(1, "rgba(0,0,0,0)");
+    c.globalAlpha = alpha;
+    c.fillStyle = wash;
+    c.fillRect(x, y, w, h);
+
+    // Jagged luminous rift cracks
+    for (let r = 0; r < 3; r++) {
+      const seed = r * 19.7 + 3.1;
+      const y0 = y + (0.18 + hashNoise(seed) * 0.64 + Math.sin(flow * 0.5 + r) * 0.04) * h;
+      c.beginPath();
+      const steps = Math.max(10, Math.floor(w / 8));
+      for (let sIdx = 0; sIdx <= steps; sIdx++) {
+        const u = sIdx / steps;
+        const px = x + u * w;
+        const py =
+          y0 +
+          Math.sin(u * Math.PI * (2.5 + r) + flow * (1.1 + r * 0.2)) * h * 0.08 +
+          (hashNoise(seed + sIdx * 0.7) - 0.5) * h * 0.05;
+        if (sIdx === 0) c.moveTo(px, py);
+        else c.lineTo(px, py);
+      }
+      const pulse = 0.55 + Math.sin(flow * 2 + r) * 0.25;
+      c.globalAlpha = alpha * (0.35 + pulse * 0.45);
+      c.strokeStyle = r === 0 ? "rgba(255,255,255,0.95)" : r === 1 ? "rgba(34,211,238,0.9)" : "rgba(244,114,182,0.85)";
+      c.lineWidth = Math.max(1.1, (2.2 - r * 0.4) * scale * 0.55);
+      c.lineJoin = "round";
+      c.stroke();
+      c.globalAlpha = alpha * 0.18 * pulse;
+      c.lineWidth = Math.max(3, 6 * scale * 0.45);
+      c.stroke();
+    }
+
+    // Chromatic glitch shards
+    const shardN = Math.min(140, Math.max(36, Math.floor(area / 70)));
+    for (let i = 0; i < shardN; i++) {
+      const seed = i * 13.3 + 1.7;
+      const u = (hashNoise(seed) + Math.sin(flow * 0.2 + i) * 0.03 + 1) % 1;
+      const v = (hashNoise(seed + 2.4) + Math.cos(flow * 0.17 + i * 0.4) * 0.03 + 1) % 1;
+      const sx = x + u * w;
+      const sy = y + v * h;
+      const sz = (0.7 + hashNoise(seed + 5) * 2.2) * scale;
+      const ang = hashNoise(seed + 8) * Math.PI * 2 + flow * 0.15;
+      const huePick = i % 3;
+      const col =
+        huePick === 0
+          ? `rgba(255,${80 + (i % 40)},${160 + (i % 50)},0.75)`
+          : huePick === 1
+            ? `rgba(${40 + (i % 50)},220,255,0.7)`
+            : `rgba(190,${90 + (i % 60)},255,0.72)`;
+      c.save();
+      c.translate(sx, sy);
+      c.rotate(ang);
+      c.globalAlpha = alpha * (0.25 + hashNoise(seed + 11) * 0.55);
+      c.fillStyle = col;
+      c.beginPath();
+      c.moveTo(0, -sz);
+      c.lineTo(sz * 0.55, sz * 0.35);
+      c.lineTo(-sz * 0.45, sz * 0.55);
+      c.closePath();
+      c.fill();
+      c.restore();
+    }
+
+    // RGB split sweep bands
+    for (let b = 0; b < 2; b++) {
+      const phase = flow * (0.7 + b * 0.25) + b * 2.1;
+      const bandX = x + ((Math.sin(phase) * 0.5 + 0.5) * 0.9 + 0.05) * w;
+      const band = c.createLinearGradient(bandX - w * 0.08, y, bandX + w * 0.08, y);
+      band.addColorStop(0, "rgba(255,0,80,0)");
+      band.addColorStop(0.35, `rgba(255,40,120,${0.08 + b * 0.03})`);
+      band.addColorStop(0.5, `rgba(0,255,255,${0.1})`);
+      band.addColorStop(0.65, `rgba(180,80,255,${0.08})`);
+      band.addColorStop(1, "rgba(0,0,0,0)");
+      c.globalAlpha = alpha;
+      c.fillStyle = band;
+      c.fillRect(x, y, w, h);
+    }
+
+    // Orbiting neon motes + ember sparks
+    const moteN = Math.min(55, Math.max(16, Math.floor(area / 180)));
+    for (let i = 0; i < moteN; i++) {
+      const orbit = flow * (1.2 + (i % 5) * 0.15) + i * 0.9;
+      const radius = 0.15 + (i % 7) * 0.05;
+      const mx = x + w * (0.5 + Math.cos(orbit) * radius);
+      const my = y + h * (0.5 + Math.sin(orbit * 1.15) * radius * 0.85);
+      const mr = (0.6 + (i % 4) * 0.35) * scale;
+      const glow = c.createRadialGradient(mx, my, 0, mx, my, mr * 3);
+      const hot = i % 2 === 0;
+      glow.addColorStop(0, hot ? "rgba(255,240,200,0.95)" : "rgba(180,255,255,0.9)");
+      glow.addColorStop(0.4, hot ? "rgba(251,113,133,0.35)" : "rgba(34,211,238,0.3)");
+      glow.addColorStop(1, "rgba(0,0,0,0)");
+      c.globalAlpha = alpha * (0.45 + Math.sin(orbit * 2) * 0.25);
+      c.fillStyle = glow;
+      c.beginPath();
+      c.arc(mx, my, mr * 3, 0, Math.PI * 2);
+      c.fill();
+    }
+
+    // Occasional rift flare
+    const flare = Math.max(0, Math.sin(flow * 1.8) * 1.4 - 0.7);
+    if (flare > 0) {
+      const fx = x + w * (0.35 + Math.sin(flow * 0.6) * 0.2);
+      const fy = y + h * 0.5;
+      const fr = Math.max(w, h) * (0.2 + flare * 0.15);
+      const fg = c.createRadialGradient(fx, fy, 1, fx, fy, fr);
+      fg.addColorStop(0, `rgba(255,255,255,${0.35 * flare})`);
+      fg.addColorStop(0.3, `rgba(244,114,182,${0.2 * flare})`);
+      fg.addColorStop(0.65, `rgba(34,211,238,${0.1 * flare})`);
+      fg.addColorStop(1, "rgba(0,0,0,0)");
+      c.globalAlpha = alpha;
+      c.fillStyle = fg;
+      c.fillRect(x, y, w, h);
+    }
+  }
+
+  if (item.style === "endurance") {
+    const scale = Math.max(0.55, Math.min(3.4, Math.min(w, h) / 22));
+    const area = Math.max(1, w * h);
+    const flow = t * 0.72;
+
+    // Warm dusk wash — gold into teal
+    const wash = c.createRadialGradient(
+      x + w * (0.42 + Math.sin(flow * 0.35) * 0.1),
+      y + h * (0.48 + Math.cos(flow * 0.28) * 0.08),
+      1,
+      x + w * 0.5,
+      y + h * 0.5,
+      Math.max(w, h) * 0.95
+    );
+    wash.addColorStop(0, `rgba(251, 191, 36,${0.12 + Math.sin(flow) * 0.03})`);
+    wash.addColorStop(0.4, `rgba(45, 212, 191,${0.1})`);
+    wash.addColorStop(0.7, `rgba(132, 204, 22,${0.07})`);
+    wash.addColorStop(1, "rgba(0,0,0,0)");
+    c.globalAlpha = alpha;
+    c.fillStyle = wash;
+    c.fillRect(x, y, w, h);
+
+    // Smooth flowing liquid bands (less glitchy than Chaos)
+    for (let b = 0; b < 4; b++) {
+      const phase = flow * (0.55 + b * 0.12) + b * 1.4;
+      c.beginPath();
+      const steps = Math.max(14, Math.floor(w / 5));
+      for (let sIdx = 0; sIdx <= steps; sIdx++) {
+        const u = sIdx / steps;
+        const px = x + u * w;
+        const py =
+          y +
+          h * (0.22 + b * 0.18) +
+          Math.sin(u * Math.PI * 2.2 + phase) * h * 0.07 +
+          Math.sin(u * Math.PI * 1.1 + phase * 0.6) * h * 0.035;
+        if (sIdx === 0) c.moveTo(px, py);
+        else c.lineTo(px, py);
+      }
+      const pulse = 0.55 + Math.sin(phase * 1.2) * 0.2;
+      c.globalAlpha = alpha * (0.28 + pulse * 0.35);
+      c.strokeStyle =
+        b % 2 === 0 ? "rgba(251,191,36,0.85)" : b === 1 ? "rgba(45,212,191,0.8)" : "rgba(190,242,100,0.75)";
+      c.lineWidth = Math.max(1.2, (2.4 - b * 0.25) * scale * 0.5);
+      c.lineJoin = "round";
+      c.lineCap = "round";
+      c.stroke();
+      c.globalAlpha = alpha * 0.12 * pulse;
+      c.lineWidth = Math.max(3, 5.5 * scale * 0.4);
+      c.stroke();
+    }
+
+    // Soft ember + teal motes drifting with the flow
+    const moteN = Math.min(70, Math.max(18, Math.floor(area / 140)));
+    for (let i = 0; i < moteN; i++) {
+      const seed = i * 11.7 + 2.3;
+      const drift = (hashNoise(seed) + flow * (0.08 + (i % 5) * 0.015)) % 1;
+      const lane = (hashNoise(seed + 3) + Math.sin(flow * 0.4 + i) * 0.04 + 1) % 1;
+      const mx = x + lane * w;
+      const my = y + ((drift + Math.sin(flow + i) * 0.02 + 1) % 1) * h;
+      const mr = (0.45 + hashNoise(seed + 6) * 1.4) * scale;
+      const hot = i % 3 !== 1;
+      const glow = c.createRadialGradient(mx, my, 0, mx, my, mr * 2.8);
+      glow.addColorStop(0, hot ? "rgba(255,236,180,0.9)" : "rgba(167,243,208,0.85)");
+      glow.addColorStop(0.45, hot ? "rgba(245,158,11,0.28)" : "rgba(45,212,191,0.28)");
+      glow.addColorStop(1, "rgba(0,0,0,0)");
+      c.globalAlpha = alpha * (0.35 + hashNoise(seed + 9) * 0.4);
+      c.fillStyle = glow;
+      c.beginPath();
+      c.arc(mx, my, mr * 2.8, 0, Math.PI * 2);
+      c.fill();
+    }
+
+    // Gentle highlight sheen sweeping the surface
+    const sheenPos = (Math.sin(flow * 0.65) * 0.5 + 0.5) * 0.7 + 0.1;
+    const sheen = c.createLinearGradient(x, y, x + w, y + h);
+    sheen.addColorStop(Math.max(0, sheenPos - 0.12), "rgba(255,255,255,0)");
+    sheen.addColorStop(sheenPos, `rgba(254,243,199,${0.14 + Math.sin(flow * 1.4) * 0.04})`);
+    sheen.addColorStop(Math.min(1, sheenPos + 0.12), "rgba(255,255,255,0)");
+    c.globalAlpha = alpha;
+    c.fillStyle = sheen;
+    c.fillRect(x, y, w, h);
+  }
+
   if (item.style === "heartbloom") {
     const scale = Math.max(0.7, Math.min(2.4, Math.min(w, h) / 28));
     for (let i = 0; i < 22; i++) {
@@ -1386,7 +2703,7 @@ function drawSwatch(item, el) {
     cctx.fillStyle = item.color || "#7c3aed";
     cctx.fillRect(0, 0, c.width, c.height);
   }
-  if (item.epic || item.legendary || item.secret) {
+  if (item.epic || item.legendary || item.chaos || item.survival || item.secret) {
     el.dataset.epicStyle = item.style;
     shopAnimSwatches.push(entry);
     if (shopAnimSwatches.length <= 3) {
@@ -1463,7 +2780,9 @@ function renderShop() {
     btn.type = "button";
     btn.className = "shop-item";
     if (item.epic) btn.classList.add("epic");
-    if (item.legendary) btn.classList.add("legendary");
+    if (item.chaos) btn.classList.add("chaos");
+    else if (item.survival) btn.classList.add("survival");
+    else if (item.legendary) btn.classList.add("legendary");
     if (item.secret) btn.classList.add("secret");
     if (item.limitedEdition) btn.classList.add("limited");
     if (equipped) btn.classList.add("equipped");
@@ -1471,14 +2790,16 @@ function renderShop() {
     const cantAfford = unlocked && !owned && !free && item.price > 0 && save.points < item.price;
     if (!unlocked) btn.classList.add("level-locked");
     else if (cantAfford) btn.classList.add("cant-afford");
-    if (item.epic || item.legendary || item.secret || item.limitedEdition) {
+    if (item.epic || item.legendary || item.chaos || item.survival || item.secret || item.limitedEdition) {
       epicCount += 1;
       if (cantAfford || !unlocked) cantAffordEpic += 1;
     }
     const swatch = document.createElement("div");
     swatch.className = "shop-swatch";
     if (item.epic) swatch.classList.add("epic-swatch");
-    if (item.legendary) swatch.classList.add("legendary-swatch");
+    if (item.chaos) swatch.classList.add("chaos-swatch");
+    else if (item.survival) swatch.classList.add("survival-swatch");
+    else if (item.legendary) swatch.classList.add("legendary-swatch");
     if (item.secret) swatch.classList.add("secret-swatch");
     if (item.limitedEdition) swatch.classList.add("limited-swatch");
     drawSwatch(item, swatch);
@@ -1489,10 +2810,13 @@ function renderShop() {
     btn.title = item.name;
     const price = document.createElement("div");
     price.className = "shop-price";
-    if (!unlocked) price.textContent = `LVL ${item.requireLevel}`;
-    else if (item.limitedEdition) price.textContent = owned ? "Limited edition" : "Hidden";
+    if (!unlocked) {
+      if (item.requireChaosLevel) price.textContent = `CHAOS L${item.requireChaosLevel}`;
+      else if (item.requireSurvivalLevel) price.textContent = `SURVIVAL L${item.requireSurvivalLevel}`;
+      else price.textContent = `LVL ${item.requireLevel}`;
+    } else if (item.limitedEdition) price.textContent = owned ? "Limited edition" : "Hidden";
     else if (item.secret) price.textContent = owned ? "Code unlock" : "Hidden";
-    else if (item.price === 0) price.textContent = owned || item.legendary ? "Unlocked" : "Free";
+    else if (item.price === 0) price.textContent = owned || item.legendary || item.chaos || item.survival ? "Unlocked" : "Free";
     else price.textContent = `${item.price} pts`;
 
     let rarityTag = null;
@@ -1504,6 +2828,14 @@ function renderShop() {
       rarityTag = document.createElement("span");
       rarityTag.className = "shop-rarity-tag shop-secret-tag";
       rarityTag.textContent = "SECRET";
+    } else if (item.chaos) {
+      rarityTag = document.createElement("span");
+      rarityTag.className = "shop-rarity-tag shop-chaos-tag";
+      rarityTag.textContent = "CHAOS";
+    } else if (item.survival) {
+      rarityTag = document.createElement("span");
+      rarityTag.className = "shop-rarity-tag shop-survival-tag";
+      rarityTag.textContent = "SURVIVAL";
     } else if (item.legendary) {
       rarityTag = document.createElement("span");
       rarityTag.className = "shop-rarity-tag shop-legendary-tag";
@@ -1520,7 +2852,11 @@ function renderShop() {
     if (!unlocked) {
       const lock = document.createElement("span");
       lock.className = "shop-lock-badge";
-      lock.textContent = `LOCKED · L${item.requireLevel}`;
+      lock.textContent = item.requireChaosLevel
+        ? `LOCKED · CHAOS L${item.requireChaosLevel}`
+        : item.requireSurvivalLevel
+          ? `LOCKED · SURVIVAL L${item.requireSurvivalLevel}`
+          : `LOCKED · L${item.requireLevel}`;
       btn.appendChild(lock);
     } else if (equipped) {
       const b = document.createElement("span");
@@ -1532,7 +2868,11 @@ function renderShop() {
       playMenuClick();
       if (!unlocked) {
         if (ui.shopMsg) {
-          ui.shopMsg.textContent = `${item.name} unlocks at player level ${item.requireLevel}. Reach L${item.requireLevel} by clearing bots.`;
+          ui.shopMsg.textContent = item.requireChaosLevel
+            ? `${item.name} unlocks at Chaos level ${item.requireChaosLevel}. Clear Chaos Mode levels to earn it.`
+            : item.requireSurvivalLevel
+              ? `${item.name} unlocks at Survival round ${item.requireSurvivalLevel}. Clear Survival Mode rounds to earn it.`
+              : `${item.name} unlocks at player level ${item.requireLevel}. Reach L${item.requireLevel} by clearing bots.`;
         }
         return;
       }
@@ -1599,8 +2939,12 @@ function setShopTab(tab) {
 function openCustomize() {
   hideOverlay(ui.menuOverlay);
   hideOverlay(ui.botLevelOverlay);
+  hideOverlay(ui.chaosLevelOverlay);
+  hideOverlay(ui.survivalLevelOverlay);
+  hideOverlay(ui.botModesOverlay);
   hideOverlay(ui.lobbyOverlay);
   hideOverlay(ui.settingsOverlay);
+  hideOverlay(ui.updatesOverlay);
   showOverlay(ui.customizeOverlay);
   setStagePlaying(false);
   updatePointsUI();
@@ -1611,7 +2955,7 @@ function openCustomize() {
     overlayHidden: ui.customizeOverlay.classList.contains("hidden"),
   });
   setShopTab(save.shopTab);
-  if (ui.shopMsg) ui.shopMsg.textContent = "Buy or equip a colour. Epic skins animate. Rose Gold unlocks at L20.";
+  if (ui.shopMsg) ui.shopMsg.textContent = "Buy or equip a colour. Legendaries: Rose Gold L20 · Void Storm L40 · Hearthflame L60 · Skywyrm L80 · Obsidian L100. Chaos Rift (Chaos L25). Endurance (Survival R25).";
   // #region agent log
   requestAnimationFrame(() => {
     const overlay = ui.customizeOverlay;
@@ -1752,6 +3096,7 @@ function refreshAdminPanel() {
   if (ui.abMegaPaddle) ui.abMegaPaddle.checked = save.abilities.megaPaddle;
   if (ui.abFreeShop) ui.abFreeShop.checked = save.abilities.freeShop;
   if (ui.abSlowBot) ui.abSlowBot.checked = save.abilities.slowBot;
+  if (ui.abPauseBot) ui.abPauseBot.checked = save.abilities.pauseBot;
   if (ui.abBonusPts) ui.abBonusPts.checked = save.abilities.bonusPts;
 }
 
@@ -1799,6 +3144,30 @@ function adminUnlockAllLevels() {
   if (ui.adminMsg) ui.adminMsg.textContent = "All bot levels unlocked (L100).";
 }
 
+function adminUnlockAllChaosLevels() {
+  if (!isAdmin()) return;
+  save.maxChaosCleared = CHAOS_MAX_LEVEL;
+  grantChaosRiftIfEligible();
+  sanitizeEquippedCosmetics();
+  persistSave();
+  updateNameUI();
+  refreshAdminPanel();
+  if (ui.chaosLevelGrid) renderChaosLevelGrid();
+  if (ui.adminMsg) ui.adminMsg.textContent = "All Chaos levels unlocked (L25) — Chaos Rift granted.";
+}
+
+function adminUnlockAllSurvivalRounds() {
+  if (!isAdmin()) return;
+  save.maxSurvivalCleared = SURVIVAL_MAX_ROUND;
+  grantEnduranceIfEligible();
+  sanitizeEquippedCosmetics();
+  persistSave();
+  updateNameUI();
+  refreshAdminPanel();
+  if (ui.survivalLevelGrid) renderSurvivalLevelGrid();
+  if (ui.adminMsg) ui.adminMsg.textContent = "All Survival rounds unlocked (R25) — Endurance granted.";
+}
+
 function adminSetPlayerLevel(n) {
   if (!isAdmin()) return;
   const lv = Math.max(0, Math.min(100, Math.floor(Number(n) || 0)));
@@ -1842,7 +3211,7 @@ function drawTableHalf(side) {
   if (style.id === "classic") return;
   const halfW = table.w / 2;
   const x = side === "p1" ? table.x : table.x + halfW;
-  const alpha = style.legendary || style.secret ? 0.62 : style.epic ? 0.58 : style.price >= 20 ? 0.5 : 0.38;
+  const alpha = style.chaos || style.survival ? 0.68 : style.legendary || style.secret ? 0.62 : style.epic ? 0.58 : style.price >= 20 ? 0.5 : 0.38;
   drawCosmeticFill(ctx, style, x, table.y, halfW, table.h, alpha);
 }
 
@@ -2031,22 +3400,27 @@ function updateBatBreakFx(dt) {
 
 function scorePointLocal(scorer) {
   if (s.gameOver) return;
+  bumpChaosShake(10);
   if (scorer === "p1") {
     s.p1.score += 1;
     ui.p1.textContent = String(s.p1.score);
     scoreFx("p1");
-    if (s.p1.score >= SCORE_LIMIT) endGame("p1");
-    else resetBall(true);
+    if (!isSurvivalMode() && s.p1.score >= SCORE_LIMIT) endGame("p1");
+    else {
+      resetBall(true);
+      if (isSurvivalMode()) updateSurvivalHud();
+    }
   } else {
     resetAbility();
     playPointLossSound();
     s.p2.score += 1;
     ui.p2.textContent = String(s.p2.score);
     scoreFx("p2", { silent: true });
-    if (s.p2.score >= SCORE_LIMIT) endGame("p2");
+    if (!isSurvivalMode() && s.p2.score >= SCORE_LIMIT) endGame("p2");
     else {
       resetBall(false);
-      ui.status.textContent = "Parry charge lost — " + serveHint();
+      if (isSurvivalMode()) updateSurvivalHud();
+      else ui.status.textContent = "Parry charge lost — " + serveHint();
     }
   }
 }
@@ -2120,7 +3494,26 @@ const ui = {
   p1Label: document.getElementById("p1Label"),
   p2Label: document.getElementById("p2Label"),
   status: document.getElementById("status"),
+  survivalTimer: document.getElementById("survivalTimer"),
   menuOverlay: document.getElementById("menuOverlay"),
+  botModesOverlay: document.getElementById("botModesOverlay"),
+  btnModeClassic: document.getElementById("btnModeClassic"),
+  btnModeChaos: document.getElementById("btnModeChaos"),
+  btnModeSurvival: document.getElementById("btnModeSurvival"),
+  btnModeBoss: document.getElementById("btnModeBoss"),
+  btnBotModesBack: document.getElementById("btnBotModesBack"),
+  modeSoonOverlay: document.getElementById("modeSoonOverlay"),
+  modeSoonLead: document.getElementById("modeSoonLead"),
+  btnModeSoonUpdates: document.getElementById("btnModeSoonUpdates"),
+  btnModeSoonBack: document.getElementById("btnModeSoonBack"),
+  chaosLevelOverlay: document.getElementById("chaosLevelOverlay"),
+  chaosLevelGrid: document.getElementById("chaosLevelGrid"),
+  chaosLevelHint: document.getElementById("chaosLevelHint"),
+  btnChaosLevelBack: document.getElementById("btnChaosLevelBack"),
+  survivalLevelOverlay: document.getElementById("survivalLevelOverlay"),
+  survivalLevelGrid: document.getElementById("survivalLevelGrid"),
+  survivalLevelHint: document.getElementById("survivalLevelHint"),
+  btnSurvivalLevelBack: document.getElementById("btnSurvivalLevelBack"),
   botLevelOverlay: document.getElementById("botLevelOverlay"),
   botLevelGrid: document.getElementById("botLevelGrid"),
   botLevelHint: document.getElementById("botLevelHint"),
@@ -2157,6 +3550,18 @@ const ui = {
   btnSettings: document.getElementById("btnSettings"),
   btnSettingsBack: document.getElementById("btnSettingsBack"),
   settingsOverlay: document.getElementById("settingsOverlay"),
+  btnUpdates: document.getElementById("btnUpdates"),
+  btnUpdatesBack: document.getElementById("btnUpdatesBack"),
+  updatesOverlay: document.getElementById("updatesOverlay"),
+  masterClearOverlay: document.getElementById("masterClearOverlay"),
+  confettiCanvas: document.getElementById("confettiCanvas"),
+  masterClearTitle: document.getElementById("masterClearTitle"),
+  masterClearLead: document.getElementById("masterClearLead"),
+  masterClearMsg: document.getElementById("masterClearMsg"),
+  masterClearReward: document.getElementById("masterClearReward"),
+  masterClearScore: document.getElementById("masterClearScore"),
+  btnMasterPlayAgain: document.getElementById("btnMasterPlayAgain"),
+  btnMasterMenu: document.getElementById("btnMasterMenu"),
   btnFullscreen: document.getElementById("btnFullscreen"),
   btnMusicToggle: document.getElementById("btnMusicToggle"),
   fullscreenHint: document.getElementById("fullscreenHint"),
@@ -2185,6 +3590,8 @@ const ui = {
   btnAdminUnlockAll: document.getElementById("btnAdminUnlockAll"),
   btnAdminMaxPts: document.getElementById("btnAdminMaxPts"),
   btnAdminUnlockLevels: document.getElementById("btnAdminUnlockLevels"),
+  btnAdminUnlockChaos: document.getElementById("btnAdminUnlockChaos"),
+  btnAdminUnlockSurvival: document.getElementById("btnAdminUnlockSurvival"),
   adminLevel: document.getElementById("adminLevel"),
   adminLevelInput: document.getElementById("adminLevelInput"),
   btnAdminSetLevel: document.getElementById("btnAdminSetLevel"),
@@ -2192,6 +3599,7 @@ const ui = {
   abMegaPaddle: document.getElementById("abMegaPaddle"),
   abFreeShop: document.getElementById("abFreeShop"),
   abSlowBot: document.getElementById("abSlowBot"),
+  abPauseBot: document.getElementById("abPauseBot"),
   abBonusPts: document.getElementById("abBonusPts"),
   passkeyOverlay: document.getElementById("passkeyOverlay"),
   passkeyInput: document.getElementById("passkeyInput"),
@@ -2455,6 +3863,7 @@ function expandState(d) {
 
 const s = {
   mode: "menu",
+  botMode: "classic",
   running: false,
   gameOver: false,
   botLevel: 1,
@@ -2463,6 +3872,8 @@ const s = {
   ai: { timer: 0, interval: 0.11, targetY: table.y + table.h / 2, errorPx: 28, speed: 560, track: 0.55 },
   ability: { parries: 0, ready: false, armed: false, smashing: false, breakFx: null, flames: [] },
   fx: { scoreT: 0, who: "p1", particles: [] },
+  chaos: { hitCount: 0, shake: 0, fogTimer: 0, fogHits: 0, nextFogAt: 6, nextSplitAt: 5 },
+  survival: { timeLeft: SURVIVAL_MATCH_SECONDS, active: false },
   p1: { x: table.x + paddle.inset, y: table.y + (table.h - paddle.h) / 2, score: 0 },
   p2: {
     x: table.x + table.w - paddle.inset - paddle.w,
@@ -2471,7 +3882,173 @@ const s = {
     broken: false,
   },
   ball: { x: table.x + table.w / 2, y: table.y + table.h / 2, vx: 0, vy: 0 },
+  balls: [],
 };
+
+function isChaosMode() {
+  return s.mode === "local" && s.botMode === "chaos";
+}
+
+function isSurvivalMode() {
+  return s.mode === "local" && s.botMode === "survival";
+}
+
+function chaosSpeed0() {
+  if (isSurvivalMode()) return ballCfg.speed0 * 1.45;
+  return isChaosMode() ? ballCfg.speed0 * 2 : ballCfg.speed0;
+}
+
+function chaosSpeedMax() {
+  if (isSurvivalMode()) return ballCfg.speedMax * 1.18;
+  return isChaosMode() ? ballCfg.speedMax * 1.35 : ballCfg.speedMax;
+}
+
+function formatSurvivalClock(sec) {
+  const t = Math.max(0, Math.ceil(sec));
+  const m = Math.floor(t / 60);
+  const ss = String(t % 60).padStart(2, "0");
+  return `${m}:${ss}`;
+}
+
+function setSurvivalTimerVisible(on) {
+  if (!ui.survivalTimer) return;
+  ui.survivalTimer.classList.toggle("hidden", !on);
+  if (!on) ui.survivalTimer.classList.remove("survival-urgent");
+}
+
+function updateSurvivalHud() {
+  if (!ui.survivalTimer) return;
+  if (!isSurvivalMode() || s.gameOver) {
+    setSurvivalTimerVisible(false);
+    return;
+  }
+  const clock = formatSurvivalClock(s.survival.timeLeft);
+  const urgent = s.survival.timeLeft <= 10;
+  setSurvivalTimerVisible(true);
+  ui.survivalTimer.textContent = clock;
+  ui.survivalTimer.classList.toggle("survival-urgent", urgent);
+}
+
+function resolveSurvivalTimeUp() {
+  if (!isSurvivalMode() || s.gameOver) return;
+  s.survival.timeLeft = 0;
+  s.survival.active = false;
+  s.running = false;
+  if (s.p1.score > s.p2.score) endGame("p1");
+  else if (s.p2.score > s.p1.score) endGame("p2");
+  else endGame(null, { draw: true });
+}
+
+function resetChaosFx(soft = false) {
+  s.chaos.hitCount = 0;
+  s.chaos.nextSplitAt = 4 + Math.floor(Math.random() * 3);
+  s.chaos.fogHits = 0;
+  s.chaos.nextFogAt = 5 + Math.floor(Math.random() * 5);
+  s.chaos.fogTimer = 0;
+  if (!soft) s.chaos.shake = 0;
+}
+
+function bumpChaosShake(amount) {
+  if (!isChaosMode()) return;
+  s.chaos.shake = Math.max(s.chaos.shake || 0, amount);
+}
+
+function chaosFogUnlocked() {
+  return isChaosMode() && s.botLevel >= 10;
+}
+
+function tryTriggerChaosFog() {
+  if (!chaosFogUnlocked()) return;
+  if (s.chaos.fogTimer > 0) return;
+  s.chaos.fogHits += 1;
+  if (s.chaos.fogHits < s.chaos.nextFogAt) return;
+  // Random chance after the hit threshold so it feels unpredictable
+  if (Math.random() > 0.72) {
+    s.chaos.nextFogAt = s.chaos.fogHits + 2 + Math.floor(Math.random() * 3);
+    return;
+  }
+  s.chaos.fogTimer = 2.6 + Math.random() * 1.6;
+  s.chaos.fogHits = 0;
+  s.chaos.nextFogAt = 5 + Math.floor(Math.random() * 5);
+  bumpChaosShake(5);
+  if (ui.status && s.running) ui.status.textContent = "FOG OF WAR!";
+}
+
+function drawChaosFogOfWar() {
+  if (!isChaosMode() || !(s.chaos.fogTimer > 0)) return;
+  const hx = table.x + table.w / 2;
+  const fadeOut = clamp(s.chaos.fogTimer / 0.55, 0, 1);
+  const fadeIn = clamp((3.5 - s.chaos.fogTimer) / 0.35, 0, 1);
+  const strength = Math.min(fadeIn, fadeOut);
+  const pulse = 0.92 + Math.sin(performance.now() * 0.008) * 0.04;
+
+  // Near-opaque smoke on the bot (opponent) half — hides the ball there
+  const fog = ctx.createLinearGradient(hx, table.y, table.x + table.w, table.y);
+  fog.addColorStop(0, `rgba(0,0,0,${0.55 * strength * pulse})`);
+  fog.addColorStop(0.2, `rgba(5,5,8,${0.88 * strength * pulse})`);
+  fog.addColorStop(0.55, `rgba(0,0,0,${0.96 * strength})`);
+  fog.addColorStop(1, `rgba(0,0,0,${0.99 * strength})`);
+  ctx.globalAlpha = 1;
+  ctx.fillStyle = fog;
+  ctx.fillRect(hx, table.y, table.w / 2, table.h);
+
+  // Soft smoke wisps
+  for (let i = 0; i < 7; i++) {
+    const t = performance.now() * 0.001;
+    const wx = hx + ((i * 0.13 + t * 0.08) % 1) * (table.w / 2);
+    const wy = table.y + ((Math.sin(t * 1.3 + i) * 0.5 + 0.5) * 0.85 + 0.08) * table.h;
+    const wr = table.h * (0.12 + (i % 3) * 0.04);
+    const wg = ctx.createRadialGradient(wx, wy, 1, wx, wy, wr);
+    wg.addColorStop(0, `rgba(30,30,35,${0.35 * strength})`);
+    wg.addColorStop(1, "rgba(0,0,0,0)");
+    ctx.fillStyle = wg;
+    ctx.beginPath();
+    ctx.arc(wx, wy, wr, 0, Math.PI * 2);
+    ctx.fill();
+  }
+}
+
+function syncPrimaryBall() {
+  if (s.balls && s.balls.length) s.ball = s.balls[0];
+}
+
+function activeBalls() {
+  if (s.balls && s.balls.length) return s.balls;
+  return [s.ball];
+}
+
+function pickThreatBall() {
+  const balls = activeBalls();
+  let best = balls[0];
+  let bestScore = -Infinity;
+  for (const b of balls) {
+    const towardBot = b.vx > 0 ? b.vx : b.vx * 0.15;
+    const proximity = 1 - clamp((s.p2.x - b.x) / table.w, 0, 1);
+    const score = towardBot * 2 + proximity * 400 + Math.abs(b.vy) * 0.05;
+    if (score > bestScore) {
+      bestScore = score;
+      best = b;
+    }
+  }
+  return best;
+}
+
+function tryChaosBallSplit(source) {
+  if (!isChaosMode() || !s.balls || s.balls.length >= 2) return;
+  s.chaos.hitCount += 1;
+  if (s.chaos.hitCount < s.chaos.nextSplitAt) return;
+  s.chaos.nextSplitAt = s.chaos.hitCount + 4 + Math.floor(Math.random() * 3);
+  const speed = Math.hypot(source.vx, source.vy) || chaosSpeed0();
+  const baseAng = Math.atan2(source.vy, source.vx);
+  const split = baseAng + (Math.random() > 0.5 ? 1 : -1) * (0.35 + Math.random() * 0.45);
+  s.balls.push({
+    x: source.x,
+    y: clamp(source.y + (Math.random() * 24 - 12), table.y + ballCfg.r + 2, table.y + table.h - ballCfg.r - 2),
+    vx: Math.cos(split) * speed,
+    vy: Math.sin(split) * speed,
+  });
+  bumpChaosShake(7);
+}
 
 function clamp(v, a, b) {
   return Math.max(a, Math.min(b, v));
@@ -2504,8 +4081,169 @@ function applyBotLevel(level) {
   if (isAdmin() && save.abilities.slowBot) s.ai.speed *= 0.45;
 }
 
+function applyChaosBotLevel(level) {
+  const lv = clamp(Math.round(Number(level) || 1), 1, CHAOS_MAX_LEVEL);
+  s.botLevel = lv;
+  // Map Chaos 1–25 onto Classic ~4–70 difficulty
+  const classicEquiv = 4 + ((lv - 1) / (CHAOS_MAX_LEVEL - 1)) * 66;
+  const t = (classicEquiv - 1) / 99;
+  s.ai.errorPx = 72 - t * 70;
+  s.ai.interval = 0.28 - t * 0.255;
+  s.ai.speed = 220 + t * 980;
+  s.ai.track = 0.35 + t * 0.62;
+  if (isAdmin() && save.abilities.slowBot) s.ai.speed *= 0.45;
+}
+
+function applySurvivalBotLevel(level) {
+  const lv = clamp(Math.round(Number(level) || 1), 1, SURVIVAL_MAX_ROUND);
+  s.botLevel = lv;
+  // Map Survival 1–25 onto Classic ~L6–L85
+  const classicEquiv = 6 + ((lv - 1) / (SURVIVAL_MAX_ROUND - 1)) * 79;
+  const t = (classicEquiv - 1) / 99;
+  s.ai.errorPx = 72 - t * 70;
+  s.ai.interval = 0.28 - t * 0.255;
+  s.ai.speed = 220 + t * 980;
+  s.ai.track = 0.35 + t * 0.62;
+  if (isAdmin() && save.abilities.slowBot) s.ai.speed *= 0.45;
+}
+
+function chaosLevelLabel(level) {
+  if (level <= 5) return "Wild opener";
+  if (level <= 10) return "Unstable court";
+  if (level <= 15) return "Mayhem rising";
+  if (level <= 20) return "Rift storm";
+  return "Absolute chaos";
+}
+
+function survivalRoundLabel(level) {
+  if (level <= 5) return "Warm-up pace";
+  if (level <= 10) return "Steady grind";
+  if (level <= 15) return "Pressure climb";
+  if (level <= 20) return "Endurance test";
+  return "Final stretch";
+}
+
+function openBotModes() {
+  hideOverlay(ui.menuOverlay);
+  hideOverlay(ui.botLevelOverlay);
+  hideOverlay(ui.chaosLevelOverlay);
+  hideOverlay(ui.survivalLevelOverlay);
+  hideOverlay(ui.modeSoonOverlay);
+  hideOverlay(ui.lobbyOverlay);
+  hideOverlay(ui.customizeOverlay);
+  hideOverlay(ui.settingsOverlay);
+  hideOverlay(ui.updatesOverlay);
+  hideOverlay(ui.adminOverlay);
+  hideOverlay(ui.passkeyOverlay);
+  hideOverlay(ui.gameOver);
+  showOverlay(ui.botModesOverlay);
+  setStagePlaying(false);
+  startMenuBg();
+  ui.hint.textContent = "Choose a bot game mode.";
+  updateNameUI();
+}
+
+function closeBotModes() {
+  hideOverlay(ui.botModesOverlay);
+  hideOverlay(ui.modeSoonOverlay);
+  showOverlay(ui.menuOverlay);
+  startMenuBg();
+  updateNameUI();
+}
+
+function openModeSoon(modeName) {
+  hideOverlay(ui.botModesOverlay);
+  if (ui.modeSoonLead) {
+    ui.modeSoonLead.textContent = `Sorry — ${modeName || "this mode"} is under construction.`;
+  }
+  showOverlay(ui.modeSoonOverlay);
+  setStagePlaying(false);
+  startMenuBg();
+  // #region agent log
+  requestAnimationFrame(() => {
+    const overlay = ui.modeSoonOverlay;
+    const card = overlay?.querySelector(".mode-soon-card, .overlay-card");
+    const title = overlay?.querySelector(".overlay-title");
+    if (!overlay || !card || !title) return;
+    const or = overlay.getBoundingClientRect();
+    const cr = card.getBoundingClientRect();
+    const tr = title.getBoundingClientRect();
+    const cs = getComputedStyle(card);
+    const ts = getComputedStyle(title);
+    const os = getComputedStyle(overlay);
+    const clippedByCard = tr.top < cr.top + 0.5;
+    const clippedByOverlay = tr.top < or.top + 0.5;
+    const clippedXByCard = tr.left < cr.left - 0.5 || tr.right > cr.right + 0.5;
+    const clippedXByOverlay = tr.left < or.left - 0.5 || tr.right > or.right + 0.5;
+    const titlePadTop = parseFloat(ts.paddingTop) || 0;
+    const cardPadTop = parseFloat(cs.paddingTop) || 0;
+    const data = {
+      hypothesisId: "A-E",
+      modeName: modeName || "",
+      phoneMode: document.body.classList.contains("phone-mode"),
+      clippedByCard,
+      clippedByOverlay,
+      clippedXByCard,
+      clippedXByOverlay,
+      titleFullyVisible:
+        tr.top >= cr.top - 0.5 &&
+        tr.bottom <= cr.bottom + 0.5 &&
+        tr.left >= cr.left - 0.5 &&
+        tr.right <= cr.right + 0.5,
+      titleTop: Math.round(tr.top * 10) / 10,
+      titleLeft: Math.round(tr.left * 10) / 10,
+      titleRight: Math.round(tr.right * 10) / 10,
+      cardTop: Math.round(cr.top * 10) / 10,
+      cardLeft: Math.round(cr.left * 10) / 10,
+      cardRight: Math.round(cr.right * 10) / 10,
+      overlayTop: Math.round(or.top * 10) / 10,
+      titleHeight: Math.round(tr.height * 10) / 10,
+      titleWidth: Math.round(tr.width * 10) / 10,
+      titleFontSize: ts.fontSize,
+      titleLineHeight: ts.lineHeight,
+      titlePadding: ts.padding,
+      titleOverflow: ts.overflow,
+      titleWhiteSpace: ts.whiteSpace,
+      cardPadding: cs.padding,
+      cardOverflow: cs.overflow,
+      cardOverflowX: cs.overflowX,
+      cardOverflowY: cs.overflowY,
+      cardMaxHeight: cs.maxHeight,
+      overlayOverflow: os.overflow,
+      overlayAlignItems: os.alignItems,
+      cardPadTop,
+      titlePadTop,
+      gapTitleAboveCardInner: Math.round((tr.top - (cr.top + cardPadTop)) * 10) / 10,
+    };
+    fetch("http://127.0.0.1:7263/ingest/7b680789-6fbf-44a7-9704-6ddeb5cf3ed6", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "38eb5e" },
+      body: JSON.stringify({
+        sessionId: "38eb5e",
+        runId: "post-fix",
+        hypothesisId: "D",
+        location: "game.js:openModeSoon",
+        message: "modeSoon title geometry",
+        data,
+        timestamp: Date.now(),
+      }),
+    }).catch(() => {});
+  });
+  // #endregion
+}
+
+function closeModeSoon() {
+  hideOverlay(ui.modeSoonOverlay);
+  showOverlay(ui.botModesOverlay);
+  startMenuBg();
+}
+
 function openBotLevelSelect() {
   hideOverlay(ui.menuOverlay);
+  hideOverlay(ui.botModesOverlay);
+  hideOverlay(ui.modeSoonOverlay);
+  hideOverlay(ui.chaosLevelOverlay);
+  hideOverlay(ui.survivalLevelOverlay);
   hideOverlay(ui.lobbyOverlay);
   hideOverlay(ui.customizeOverlay);
   hideOverlay(ui.settingsOverlay);
@@ -2582,7 +4320,7 @@ function openBotLevelSelect() {
 
 function closeBotLevelSelect() {
   hideOverlay(ui.botLevelOverlay);
-  showOverlay(ui.menuOverlay);
+  showOverlay(ui.botModesOverlay);
   startMenuBg();
   updateNameUI();
 }
@@ -2633,6 +4371,159 @@ function renderBotLevelGrid() {
       cleared >= 100
         ? "All 100 levels cleared. Master status!"
         : `Progress: L${cleared}/100 · Next unlock: L${nextUnlock} · Clear = +5 pts`;
+  }
+}
+
+function openChaosLevelSelect() {
+  hideOverlay(ui.menuOverlay);
+  hideOverlay(ui.botModesOverlay);
+  hideOverlay(ui.modeSoonOverlay);
+  hideOverlay(ui.botLevelOverlay);
+  hideOverlay(ui.survivalLevelOverlay);
+  hideOverlay(ui.lobbyOverlay);
+  hideOverlay(ui.customizeOverlay);
+  hideOverlay(ui.settingsOverlay);
+  hideOverlay(ui.adminOverlay);
+  hideOverlay(ui.passkeyOverlay);
+  hideOverlay(ui.gameOver);
+  showOverlay(ui.chaosLevelOverlay);
+  setStagePlaying(false);
+  startMenuBg();
+  renderChaosLevelGrid();
+  ui.hint.textContent = "Select a Chaos level.";
+  updateNameUI();
+}
+
+function closeChaosLevelSelect() {
+  hideOverlay(ui.chaosLevelOverlay);
+  showOverlay(ui.botModesOverlay);
+  startMenuBg();
+  updateNameUI();
+}
+
+function renderChaosLevelGrid() {
+  if (!ui.chaosLevelGrid) return;
+  ui.chaosLevelGrid.innerHTML = "";
+  const nextUnlock = Math.min(CHAOS_MAX_LEVEL, (save.maxChaosCleared || 0) + 1);
+  for (let i = 1; i <= CHAOS_MAX_LEVEL; i++) {
+    const unlocked = isChaosLevelUnlocked(i);
+    const cleared = i <= (save.maxChaosCleared || 0);
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = `bot-level-btn ${botTierClass(Math.min(100, Math.round(4 + ((i - 1) / 24) * 66)))}`;
+    if (!unlocked) btn.classList.add("locked");
+    if (cleared) btn.classList.add("cleared");
+    if (i === nextUnlock && unlocked) btn.classList.add("next");
+    btn.textContent = unlocked ? String(i) : "🔒";
+    btn.disabled = !unlocked;
+    const reward = chaosWinPoints(i);
+    btn.title = unlocked
+      ? `Chaos ${i} — ${chaosLevelLabel(i)} · ${reward} pts${cleared ? " (cleared)" : ""}`
+      : `Locked — clear Chaos ${i - 1} first`;
+    btn.addEventListener("click", () => {
+      if (!unlocked) {
+        if (ui.chaosLevelHint) {
+          ui.chaosLevelHint.textContent = `Locked. Clear Chaos ${i - 1} to unlock.`;
+        }
+        return;
+      }
+      playMenuClick();
+      startChaosMode(i);
+    });
+    btn.addEventListener("mouseenter", () => {
+      if (!ui.chaosLevelHint) return;
+      if (!unlocked) {
+        ui.chaosLevelHint.textContent = `Locked — beat Chaos ${i - 1} first.`;
+      } else if (cleared) {
+        ui.chaosLevelHint.textContent = `Chaos ${i} cleared — ${chaosLevelLabel(i)} · Rematch for ${reward} pts`;
+      } else {
+        ui.chaosLevelHint.textContent = `Chaos ${i} — ${chaosLevelLabel(i)} · Win for ${reward} pts`;
+      }
+    });
+    ui.chaosLevelGrid.appendChild(btn);
+  }
+  if (ui.chaosLevelHint) {
+    const cleared = save.maxChaosCleared || 0;
+    ui.chaosLevelHint.textContent =
+      cleared >= CHAOS_MAX_LEVEL
+        ? "All Chaos levels cleared — Chaos Rift unlocked!"
+        : `Progress: L${cleared}/${CHAOS_MAX_LEVEL} · Next: L${nextUnlock} · L25 unlocks Chaos Rift`;
+  }
+}
+
+function openSurvivalLevelSelect() {
+  hideOverlay(ui.menuOverlay);
+  hideOverlay(ui.botModesOverlay);
+  hideOverlay(ui.modeSoonOverlay);
+  hideOverlay(ui.botLevelOverlay);
+  hideOverlay(ui.chaosLevelOverlay);
+  hideOverlay(ui.lobbyOverlay);
+  hideOverlay(ui.customizeOverlay);
+  hideOverlay(ui.settingsOverlay);
+  hideOverlay(ui.adminOverlay);
+  hideOverlay(ui.passkeyOverlay);
+  hideOverlay(ui.gameOver);
+  showOverlay(ui.survivalLevelOverlay);
+  setStagePlaying(false);
+  startMenuBg();
+  renderSurvivalLevelGrid();
+  ui.hint.textContent = "Select a Survival round.";
+  updateNameUI();
+}
+
+function closeSurvivalLevelSelect() {
+  hideOverlay(ui.survivalLevelOverlay);
+  showOverlay(ui.botModesOverlay);
+  startMenuBg();
+  updateNameUI();
+}
+
+function renderSurvivalLevelGrid() {
+  if (!ui.survivalLevelGrid) return;
+  ui.survivalLevelGrid.innerHTML = "";
+  const nextUnlock = Math.min(SURVIVAL_MAX_ROUND, (save.maxSurvivalCleared || 0) + 1);
+  for (let i = 1; i <= SURVIVAL_MAX_ROUND; i++) {
+    const unlocked = isSurvivalRoundUnlocked(i);
+    const cleared = i <= (save.maxSurvivalCleared || 0);
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = `bot-level-btn ${botTierClass(Math.min(100, Math.round(6 + ((i - 1) / 24) * 79)))}`;
+    if (!unlocked) btn.classList.add("locked");
+    if (cleared) btn.classList.add("cleared");
+    if (i === nextUnlock && unlocked) btn.classList.add("next");
+    btn.textContent = unlocked ? String(i) : "🔒";
+    btn.disabled = !unlocked;
+    btn.title = unlocked
+      ? `Survival R${i} — ${survivalRoundLabel(i)} · +${POINTS_PER_SURVIVAL_WIN} pts${cleared ? " (cleared)" : ""}`
+      : `Locked — clear Survival R${i - 1} first`;
+    btn.addEventListener("click", () => {
+      if (!unlocked) {
+        if (ui.survivalLevelHint) {
+          ui.survivalLevelHint.textContent = `Locked. Clear Survival R${i - 1} to unlock.`;
+        }
+        return;
+      }
+      playMenuClick();
+      startSurvivalMode(i);
+    });
+    btn.addEventListener("mouseenter", () => {
+      if (!ui.survivalLevelHint) return;
+      if (!unlocked) {
+        ui.survivalLevelHint.textContent = `Locked — beat Survival R${i - 1} first.`;
+      } else if (cleared) {
+        ui.survivalLevelHint.textContent = `R${i} cleared — ${survivalRoundLabel(i)} · Rematch for +${POINTS_PER_SURVIVAL_WIN} pts`;
+      } else {
+        ui.survivalLevelHint.textContent = `R${i} — ${survivalRoundLabel(i)} · Win for +${POINTS_PER_SURVIVAL_WIN} pts`;
+      }
+    });
+    ui.survivalLevelGrid.appendChild(btn);
+  }
+  if (ui.survivalLevelHint) {
+    const cleared = save.maxSurvivalCleared || 0;
+    ui.survivalLevelHint.textContent =
+      cleared >= SURVIVAL_MAX_ROUND
+        ? "All Survival rounds cleared — Endurance unlocked!"
+        : `Progress: R${cleared}/${SURVIVAL_MAX_ROUND} · Next: R${nextUnlock} · R25 unlocks Endurance`;
   }
 }
 
@@ -3255,9 +5146,13 @@ function refreshSettingsUI() {
 function openSettings() {
   hideOverlay(ui.menuOverlay);
   hideOverlay(ui.botLevelOverlay);
+  hideOverlay(ui.chaosLevelOverlay);
+  hideOverlay(ui.survivalLevelOverlay);
+  hideOverlay(ui.botModesOverlay);
   hideOverlay(ui.lobbyOverlay);
   hideOverlay(ui.customizeOverlay);
   hideOverlay(ui.adminOverlay);
+  hideOverlay(ui.updatesOverlay);
   showOverlay(ui.settingsOverlay);
   setStagePlaying(false);
   refreshSettingsUI();
@@ -3547,7 +5442,7 @@ function requireName(action) {
 function showOverlay(el) {
   el.classList.remove("hidden");
   el.setAttribute("aria-hidden", "false");
-  if (stageEl && (el === ui.nameOverlay || el === ui.menuOverlay || el === ui.botLevelOverlay || el === ui.lobbyOverlay || el === ui.customizeOverlay || el === ui.settingsOverlay || el === ui.adminOverlay || el === ui.passkeyOverlay)) {
+  if (stageEl && (el === ui.nameOverlay || el === ui.menuOverlay || el === ui.botModesOverlay || el === ui.modeSoonOverlay || el === ui.botLevelOverlay || el === ui.chaosLevelOverlay || el === ui.survivalLevelOverlay || el === ui.lobbyOverlay || el === ui.customizeOverlay || el === ui.settingsOverlay || el === ui.updatesOverlay || el === ui.adminOverlay || el === ui.passkeyOverlay || el === ui.masterClearOverlay)) {
     stageEl.classList.add("menu-open");
   }
 }
@@ -3555,7 +5450,7 @@ function showOverlay(el) {
 function hideOverlay(el) {
   el.classList.add("hidden");
   el.setAttribute("aria-hidden", "true");
-  if (stageEl && (el === ui.nameOverlay || el === ui.menuOverlay || el === ui.botLevelOverlay || el === ui.lobbyOverlay || el === ui.customizeOverlay || el === ui.settingsOverlay || el === ui.adminOverlay || el === ui.passkeyOverlay)) {
+  if (stageEl && (el === ui.nameOverlay || el === ui.menuOverlay || el === ui.botModesOverlay || el === ui.modeSoonOverlay || el === ui.botLevelOverlay || el === ui.chaosLevelOverlay || el === ui.survivalLevelOverlay || el === ui.lobbyOverlay || el === ui.customizeOverlay || el === ui.settingsOverlay || el === ui.updatesOverlay || el === ui.adminOverlay || el === ui.passkeyOverlay || el === ui.masterClearOverlay)) {
     stageEl.classList.remove("menu-open");
   }
 }
@@ -3573,17 +5468,25 @@ function setStagePlaying(on) {
 }
 
 function resetBall(servingToRight = true) {
-  s.ball.x = table.x + table.w / 2;
-  s.ball.y = table.y + table.h / 2;
   const dir = servingToRight ? 1 : -1;
   const angle = (Math.random() * 0.6 - 0.3) * Math.PI;
-  const sp = ballCfg.speed0;
-  s.ball.vx = Math.cos(angle) * sp * dir;
-  s.ball.vy = Math.sin(angle) * sp;
+  const sp = chaosSpeed0();
+  const b = {
+    x: table.x + table.w / 2,
+    y: table.y + table.h / 2,
+    vx: Math.cos(angle) * sp * dir,
+    vy: Math.sin(angle) * sp,
+  };
+  s.balls = [b];
+  s.ball = b;
   s.running = false;
   s.ability.smashing = false;
   if (!s.ability.breakFx) s.p2.broken = false;
-  if (!s.gameOver) ui.status.textContent = serveHint();
+  if (isChaosMode()) resetChaosFx(true);
+  if (!s.gameOver) {
+    if (isSurvivalMode()) updateSurvivalHud();
+    ui.status.textContent = serveHint();
+  }
 }
 
 function scoreFx(who, opts = {}) {
@@ -3622,10 +5525,180 @@ function setGameOverReward(pts) {
   }
 }
 
+let confettiRaf = 0;
+let confettiPieces = [];
+let confettiRunning = false;
+let confettiCtx = null;
+
+const CONFETTI_COLORS = [
+  "#fef08a", "#fde047", "#ffffff", "#86efac", "#93c5fd",
+  "#f9a8d4", "#fdba74", "#c4b5fd", "#67e8f9", "#fca5a5",
+];
+
+function resizeConfettiCanvas() {
+  const canvas = ui.confettiCanvas;
+  if (!canvas || !ui.masterClearOverlay) return;
+  const rect = ui.masterClearOverlay.getBoundingClientRect();
+  const dpr = Math.min(2, window.devicePixelRatio || 1);
+  const w = Math.max(1, Math.floor(rect.width));
+  const h = Math.max(1, Math.floor(rect.height));
+  canvas.width = Math.floor(w * dpr);
+  canvas.height = Math.floor(h * dpr);
+  canvas.style.width = `${w}px`;
+  canvas.style.height = `${h}px`;
+  confettiCtx = canvas.getContext("2d");
+  if (confettiCtx) confettiCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  return { w, h };
+}
+
+function spawnConfettiBurst(count, w, h) {
+  for (let i = 0; i < count; i++) {
+    confettiPieces.push({
+      x: Math.random() * w,
+      y: -20 - Math.random() * h * 0.35,
+      w: 4 + Math.random() * 7,
+      h: 6 + Math.random() * 10,
+      vx: (Math.random() - 0.5) * 3.2,
+      vy: 1.2 + Math.random() * 3.4,
+      rot: Math.random() * Math.PI * 2,
+      vr: (Math.random() - 0.5) * 0.22,
+      color: CONFETTI_COLORS[(Math.random() * CONFETTI_COLORS.length) | 0],
+      flip: Math.random() * Math.PI * 2,
+      vf: 0.08 + Math.random() * 0.14,
+    });
+  }
+}
+
+function tickConfetti() {
+  if (!confettiRunning || !confettiCtx || !ui.confettiCanvas) {
+    confettiRaf = 0;
+    return;
+  }
+  const w = ui.confettiCanvas.clientWidth || 1;
+  const h = ui.confettiCanvas.clientHeight || 1;
+  confettiCtx.clearRect(0, 0, w, h);
+
+  if (confettiPieces.length < 140) {
+    spawnConfettiBurst(8, w, h);
+  }
+
+  for (let i = confettiPieces.length - 1; i >= 0; i--) {
+    const p = confettiPieces[i];
+    p.x += p.vx;
+    p.y += p.vy;
+    p.vy += 0.012;
+    p.vx += Math.sin(p.flip) * 0.015;
+    p.rot += p.vr;
+    p.flip += p.vf;
+    if (p.y > h + 30 || p.x < -40 || p.x > w + 40) {
+      confettiPieces.splice(i, 1);
+      continue;
+    }
+    const scaleX = Math.cos(p.flip);
+    confettiCtx.save();
+    confettiCtx.translate(p.x, p.y);
+    confettiCtx.rotate(p.rot);
+    confettiCtx.scale(scaleX, 1);
+    confettiCtx.fillStyle = p.color;
+    confettiCtx.globalAlpha = 0.75 + Math.abs(scaleX) * 0.25;
+    confettiCtx.fillRect(-p.w * 0.5, -p.h * 0.5, p.w, p.h);
+    confettiCtx.restore();
+  }
+
+  confettiRaf = requestAnimationFrame(tickConfetti);
+}
+
+function startConfetti() {
+  stopConfetti();
+  confettiRunning = true;
+  const size = resizeConfettiCanvas() || { w: 400, h: 600 };
+  confettiPieces = [];
+  spawnConfettiBurst(90, size.w, size.h);
+  confettiRaf = requestAnimationFrame(tickConfetti);
+}
+
+function stopConfetti() {
+  confettiRunning = false;
+  if (confettiRaf) {
+    cancelAnimationFrame(confettiRaf);
+    confettiRaf = 0;
+  }
+  confettiPieces = [];
+  if (confettiCtx && ui.confettiCanvas) {
+    confettiCtx.clearRect(0, 0, ui.confettiCanvas.width, ui.confettiCanvas.height);
+  }
+}
+
+function setMasterClearReward(pts) {
+  if (!ui.masterClearReward) return;
+  if (pts > 0) {
+    ui.masterClearReward.textContent = `+${pts} POINTS`;
+    ui.masterClearReward.classList.remove("hidden");
+  } else {
+    ui.masterClearReward.textContent = "";
+    ui.masterClearReward.classList.add("hidden");
+  }
+}
+
+function openMasterClearCelebration(totalPts, opts = {}) {
+  hideOverlay(ui.gameOver);
+  if (ui.masterClearTitle) {
+    ui.masterClearTitle.textContent = opts.title || "CONGRATULATIONS!";
+  }
+  if (ui.masterClearLead) {
+    ui.masterClearLead.textContent =
+      opts.lead || "You beat Master Bot — Level 100.";
+  }
+  if (ui.masterClearMsg) {
+    ui.masterClearMsg.textContent =
+      opts.msg ||
+      "More updates with more bots, abilities, and different levels are coming soon!";
+  }
+  if (ui.masterClearScore) {
+    ui.masterClearScore.textContent = `${s.p1.score} : ${s.p2.score}`;
+  }
+  setMasterClearReward(totalPts || 0);
+  showOverlay(ui.masterClearOverlay);
+  requestAnimationFrame(() => startConfetti());
+}
+
+function closeMasterClearCelebration() {
+  stopConfetti();
+  hideOverlay(ui.masterClearOverlay);
+}
+
+function openUpdates() {
+  hideOverlay(ui.menuOverlay);
+  hideOverlay(ui.botLevelOverlay);
+  hideOverlay(ui.chaosLevelOverlay);
+  hideOverlay(ui.survivalLevelOverlay);
+  hideOverlay(ui.botModesOverlay);
+  hideOverlay(ui.modeSoonOverlay);
+  hideOverlay(ui.lobbyOverlay);
+  hideOverlay(ui.customizeOverlay);
+  hideOverlay(ui.settingsOverlay);
+  hideOverlay(ui.adminOverlay);
+  hideOverlay(ui.masterClearOverlay);
+  stopConfetti();
+  showOverlay(ui.updatesOverlay);
+  setStagePlaying(false);
+  startMenuBg();
+}
+
+function closeUpdates() {
+  hideOverlay(ui.updatesOverlay);
+  showOverlay(ui.menuOverlay);
+  startMenuBg();
+}
+
 function endGame(winner, opts = {}) {
   const justEnded = !s.gameOver;
   s.gameOver = true;
   s.running = false;
+  if (isSurvivalMode()) {
+    s.survival.active = false;
+    setSurvivalTimerVisible(false);
+  }
   ui.status.textContent = "Game over";
   stopGameMusic();
   updateResignButton();
@@ -3636,7 +5709,11 @@ function endGame(winner, opts = {}) {
   let youWon = false;
   let clearBonus = 0;
   let winPts = 0;
-  if (opts.resigned) {
+  if (opts.draw) {
+    youWon = false;
+    ui.gameOverTitle.textContent = "DRAW";
+    setGameOverReward(0);
+  } else if (opts.resigned) {
     if (s.mode === "local") {
       youWon = false;
       ui.gameOverTitle.textContent = "YOU RESIGNED";
@@ -3651,15 +5728,46 @@ function endGame(winner, opts = {}) {
   } else if (s.mode === "local") {
     youWon = winner === "p1";
     if (justEnded && youWon) {
-      winPts = awardWinPoints(winner);
-      clearBonus = awardBotClear(s.botLevel);
-      const total = winPts + clearBonus;
-      if (clearBonus > 0) {
-        ui.gameOverTitle.textContent = `LEVEL ${s.botLevel} CLEARED`;
-        setGameOverReward(total);
+      if (s.botMode === "chaos") {
+        winPts = chaosWinPoints(s.botLevel);
+        if (isAdmin() && save.abilities.bonusPts) winPts = Math.max(winPts, 10);
+        save.points += winPts;
+        clearBonus = awardChaosClear(s.botLevel);
+        persistSave();
+        updatePointsUI();
+        const total = winPts + clearBonus;
+        if (clearBonus > 0) {
+          ui.gameOverTitle.textContent = `CHAOS L${s.botLevel} CLEARED`;
+          setGameOverReward(total);
+        } else {
+          ui.gameOverTitle.textContent = "YOU WIN";
+          setGameOverReward(winPts);
+        }
+      } else if (s.botMode === "survival") {
+        winPts = POINTS_PER_SURVIVAL_WIN;
+        if (isAdmin() && save.abilities.bonusPts) winPts = Math.max(winPts, 10);
+        save.points += winPts;
+        clearBonus = awardSurvivalClear(s.botLevel);
+        persistSave();
+        updatePointsUI();
+        if (clearBonus > 0) {
+          ui.gameOverTitle.textContent = `SURVIVAL R${s.botLevel} CLEARED`;
+          setGameOverReward(winPts);
+        } else {
+          ui.gameOverTitle.textContent = "YOU WIN";
+          setGameOverReward(winPts);
+        }
       } else {
-        ui.gameOverTitle.textContent = "YOU WIN";
-        setGameOverReward(winPts || POINTS_PER_WIN);
+        winPts = awardWinPoints(winner);
+        clearBonus = awardBotClear(s.botLevel);
+        const total = winPts + clearBonus;
+        if (clearBonus > 0) {
+          ui.gameOverTitle.textContent = `LEVEL ${s.botLevel} CLEARED`;
+          setGameOverReward(total);
+        } else {
+          ui.gameOverTitle.textContent = "YOU WIN";
+          setGameOverReward(winPts || POINTS_PER_WIN);
+        }
       }
     } else {
       ui.gameOverTitle.textContent = youWon ? "YOU WIN" : "BOT WINS";
@@ -3677,18 +5785,72 @@ function endGame(winner, opts = {}) {
 
   ui.gameOverScore.textContent = `${s.p1.score} : ${s.p2.score}`;
   if (ui.btnNextLevel) {
+    const maxLevel =
+      s.botMode === "chaos"
+        ? CHAOS_MAX_LEVEL
+        : s.botMode === "survival"
+          ? SURVIVAL_MAX_ROUND
+          : 100;
     const showNext =
-      s.mode === "local" && youWon && !opts.resigned && s.botLevel < 100;
+      s.mode === "local" && youWon && !opts.resigned && !opts.draw && s.botLevel < maxLevel;
     ui.btnNextLevel.classList.toggle("hidden", !showNext);
     if (showNext) {
-      ui.btnNextLevel.textContent = `Next level (L${s.botLevel + 1})`;
+      ui.btnNextLevel.textContent =
+        s.botMode === "chaos"
+          ? `Next Chaos (L${s.botLevel + 1})`
+          : s.botMode === "survival"
+            ? `Next round (R${s.botLevel + 1})`
+            : `Next level (L${s.botLevel + 1})`;
     }
   }
   if (justEnded) {
-    if (youWon) playWinSound();
+    if (opts.draw) playLossSound();
+    else if (youWon) playWinSound();
     else playLossSound();
   }
-  showOverlay(ui.gameOver);
+
+  const chaosRiftUnlock =
+    s.mode === "local" &&
+    s.botMode === "chaos" &&
+    youWon &&
+    !opts.resigned &&
+    s.botLevel === CHAOS_MAX_LEVEL &&
+    clearBonus > 0;
+  const survivalEnduranceUnlock =
+    s.mode === "local" &&
+    s.botMode === "survival" &&
+    youWon &&
+    !opts.resigned &&
+    s.botLevel === SURVIVAL_MAX_ROUND &&
+    clearBonus > 0;
+  const masterClear =
+    s.mode === "local" &&
+    s.botMode !== "chaos" &&
+    s.botMode !== "survival" &&
+    youWon &&
+    !opts.resigned &&
+    s.botLevel === 100;
+  if (chaosRiftUnlock) {
+    hideOverlay(ui.gameOver);
+    openMasterClearCelebration(justEnded ? winPts + clearBonus : 0, {
+      title: "CHAOS RIFT UNLOCKED",
+      lead: "You cleared Chaos Mode — Level 25.",
+      msg: "Chaos Rift legendary cosmetic is now yours in Customize. Boss Battles are still coming!",
+    });
+  } else if (survivalEnduranceUnlock) {
+    hideOverlay(ui.gameOver);
+    openMasterClearCelebration(justEnded ? winPts : 0, {
+      title: "SURVIVAL ENDURANCE UNLOCKED",
+      lead: "You cleared Survival Mode — Round 25.",
+      msg: "Endurance Survival cosmetic is now yours in Customize. Boss Battles are still coming!",
+    });
+  } else if (masterClear) {
+    hideOverlay(ui.gameOver);
+    openMasterClearCelebration(justEnded ? winPts + clearBonus : 0);
+  } else {
+    closeMasterClearCelebration();
+    showOverlay(ui.gameOver);
+  }
 }
 
 function resetLocalMatch() {
@@ -3698,8 +5860,18 @@ function resetLocalMatch() {
   ui.p1.textContent = "0";
   ui.p2.textContent = "0";
   hideOverlay(ui.gameOver);
+  closeMasterClearCelebration();
   resetAbility();
+  if (isChaosMode()) resetChaosFx();
+  if (isSurvivalMode()) {
+    s.survival.timeLeft = SURVIVAL_MATCH_SECONDS;
+    s.survival.active = true;
+  } else {
+    s.survival.active = false;
+    setSurvivalTimerVisible(false);
+  }
   resetBall(true);
+  if (isSurvivalMode()) updateSurvivalHud();
   ui.status.textContent = serveHint();
   setStagePlaying(true);
   startGameMusic();
@@ -3717,25 +5889,27 @@ function serve() {
 
   s.running = true;
   ui.status.textContent = "Playing";
+  if (isSurvivalMode()) updateSurvivalHud();
 }
 
 function rectsOverlap(ax, ay, aw, ah, bx, by, bw, bh) {
   return ax < bx + bw && ax + aw > bx && ay < by + bh && ay + ah > by;
 }
 
-function reflectFromPaddle(p, side) {
+function reflectFromPaddle(p, side, ball = s.ball) {
   const h = effectivePaddleH(side);
   const mid = p.y + h / 2;
-  const t = clamp((s.ball.y - mid) / (h / 2), -1, 1);
+  const t = clamp((ball.y - mid) / (h / 2), -1, 1);
   const fireSmash = side === "p1" && s.mode === "local" && s.ability.armed;
   const speed = fireSmash
     ? FIRE_SMASH_SPEED
-    : clamp(Math.hypot(s.ball.vx, s.ball.vy) * 1.065, ballCfg.speed0, ballCfg.speedMax);
+    : clamp(Math.hypot(ball.vx, ball.vy) * 1.065, chaosSpeed0(), chaosSpeedMax());
   const maxBounce = fireSmash ? 0.12 * Math.PI : 0.42 * Math.PI;
   const a = t * maxBounce;
   const dir = side === "p1" ? 1 : -1;
-  s.ball.vx = Math.cos(a) * speed * dir;
-  s.ball.vy = Math.sin(a) * speed;
+  ball.vx = Math.cos(a) * speed * dir;
+  ball.vy = Math.sin(a) * speed;
+  bumpChaosShake(fireSmash ? 12 : 4);
   if (fireSmash) {
     s.ability.armed = false;
     s.ability.smashing = true;
@@ -3746,20 +5920,22 @@ function reflectFromPaddle(p, side) {
   } else {
     playPaddleHit();
     if (side === "p1") registerParry();
+    tryChaosBallSplit(ball);
+    tryTriggerChaosFog();
   }
 }
 
-function tryLocalPaddleHit(p, side) {
+function tryLocalPaddleHit(p, side, ball = s.ball) {
   if (side === "p2" && s.ability.smashing) return false;
   if (side === "p2" && s.p2.broken) return false;
   const h = effectivePaddleH(side);
   const movingToward =
-    (side === "p1" && s.ball.vx < 0) || (side === "p2" && s.ball.vx > 0);
+    (side === "p1" && ball.vx < 0) || (side === "p2" && ball.vx > 0);
   if (!movingToward) return false;
-  if (!ballOverlapsPaddleRect(s.ball.x, s.ball.y, p.x, p.y, paddle.w, h)) return false;
-  if (side === "p1") s.ball.x = p.x + paddle.w + ballCfg.r;
-  else s.ball.x = p.x - ballCfg.r;
-  reflectFromPaddle(p, side);
+  if (!ballOverlapsPaddleRect(ball.x, ball.y, p.x, p.y, paddle.w, h)) return false;
+  if (side === "p1") ball.x = p.x + paddle.w + ballCfg.r;
+  else ball.x = p.x - ballCfg.r;
+  reflectFromPaddle(p, side, ball);
   return true;
 }
 
@@ -3767,14 +5943,42 @@ function updateLocal(dt) {
   const p1h = effectivePaddleH("p1");
   s.p1.y = clamp(s.mouseY - p1h / 2, table.y + 6, table.y + table.h - p1h - 6);
 
-  if (!s.gameOver && !s.p2.broken) {
+  if (isSurvivalMode() && s.survival.active && !s.gameOver) {
+    s.survival.timeLeft = Math.max(0, s.survival.timeLeft - dt);
+    updateSurvivalHud();
+    if (s.survival.timeLeft <= 0) {
+      resolveSurvivalTimeUp();
+      return;
+    }
+  }
+
+  if (isChaosMode() && s.chaos.shake > 0) {
+    s.chaos.shake = Math.max(0, s.chaos.shake - dt * 18);
+  }
+  if (isChaosMode() && s.chaos.fogTimer > 0) {
+    s.chaos.fogTimer = Math.max(0, s.chaos.fogTimer - dt);
+    if (s.chaos.fogTimer <= 0 && s.running && !s.gameOver && ui.status?.textContent === "FOG OF WAR!") {
+      ui.status.textContent = "Playing";
+    }
+  }
+
+  const threat = pickThreatBall();
+  if (threat) s.ball = threat;
+
+  if (!s.gameOver && !s.p2.broken && !(isAdmin() && save.abilities.pauseBot)) {
     const botSpeed = s.ai.speed;
     s.ai.timer -= dt;
     if (s.ai.timer <= 0) {
       s.ai.timer = s.ai.interval + (Math.random() * 0.04 - 0.015);
       const err = (Math.random() * 2 - 1) * s.ai.errorPx;
-      const lead = s.ball.vx > 0 ? s.ball.vy * 0.08 * ((s.botLevel - 1) / 99) : 0;
-      s.ai.targetY = s.ball.y + lead - paddle.h / 2 + err;
+      const trackBall = pickThreatBall() || s.ball;
+      const chaosT = isChaosMode()
+        ? (s.botLevel - 1) / Math.max(1, CHAOS_MAX_LEVEL - 1)
+        : isSurvivalMode()
+          ? (s.botLevel - 1) / Math.max(1, SURVIVAL_MAX_ROUND - 1)
+          : (s.botLevel - 1) / 99;
+      const lead = trackBall.vx > 0 ? trackBall.vy * 0.08 * chaosT : 0;
+      s.ai.targetY = trackBall.y + lead - paddle.h / 2 + err;
     }
     const dy = s.ai.targetY - s.p2.y;
     const maxStep = botSpeed * dt;
@@ -3789,33 +5993,45 @@ function updateLocal(dt) {
 
   if (!s.running || s.gameOver) return;
 
-  s.ball.x += s.ball.vx * dt;
-  s.ball.y += s.ball.vy * dt;
-
+  const balls = activeBalls();
   const top = table.y;
   const bottom = table.y + table.h;
-  if (s.ball.y - ballCfg.r <= top) {
-    s.ball.y = top + ballCfg.r;
-    s.ball.vy *= -1;
-  } else if (s.ball.y + ballCfg.r >= bottom) {
-    s.ball.y = bottom - ballCfg.r;
-    s.ball.vy *= -1;
+
+  for (let i = 0; i < balls.length; i++) {
+    const ball = balls[i];
+    ball.x += ball.vx * dt;
+    ball.y += ball.vy * dt;
+
+    if (ball.y - ballCfg.r <= top) {
+      ball.y = top + ballCfg.r;
+      ball.vy *= -1;
+    } else if (ball.y + ballCfg.r >= bottom) {
+      ball.y = bottom - ballCfg.r;
+      ball.vy *= -1;
+    }
+
+    tryLocalPaddleHit(s.p1, "p1", ball);
+    if (!s.ability.smashing) tryLocalPaddleHit(s.p2, "p2", ball);
+
+    if (s.ability.smashing && ball.vx > 0 && ball.x + ballCfg.r >= s.p2.x) {
+      s.ball = ball;
+      breakBotBatAndScore();
+      return;
+    }
+
+    if (ball.x < table.x - 40) {
+      scorePointLocal("p2");
+      return;
+    }
+    if (ball.x > table.x + table.w + 40) {
+      s.ball = ball;
+      if (s.ability.smashing) breakBotBatAndScore();
+      else scorePointLocal("p1");
+      return;
+    }
   }
 
-  tryLocalPaddleHit(s.p1, "p1");
-  if (!s.ability.smashing) tryLocalPaddleHit(s.p2, "p2");
-
-  if (s.ability.smashing && s.ball.vx > 0 && s.ball.x + ballCfg.r >= s.p2.x) {
-    breakBotBatAndScore();
-    return;
-  }
-
-  if (s.ball.x < table.x - 40) {
-    scorePointLocal("p2");
-  } else if (s.ball.x > table.x + table.w + 40) {
-    if (s.ability.smashing) breakBotBatAndScore();
-    else scorePointLocal("p1");
-  }
+  syncPrimaryBall();
 }
 
 function myPaddleY() {
@@ -3952,6 +6168,12 @@ function draw() {
   ctx.fillStyle = "#000";
   ctx.fillRect(0, 0, W, H);
 
+  ctx.save();
+  if (isChaosMode() && s.chaos.shake > 0) {
+    const sh = s.chaos.shake;
+    ctx.translate((Math.random() - 0.5) * 2 * sh, (Math.random() - 0.5) * 2 * sh);
+  }
+
   if (s.mode === "local" || s.mode === "online") {
     drawTableHalf("p1");
     drawTableHalf("p2");
@@ -3986,12 +6208,14 @@ function draw() {
     ctx.globalAlpha = 1;
   }
 
+  const drawBalls = activeBalls();
   if (s.mode === "local" && s.ability.smashing) {
     const t = performance.now() * 0.001;
+    const smashBall = s.ball;
     for (let i = 0; i < 5; i++) {
       const trail = i * 10;
-      const bx = s.ball.x - Math.sign(s.ball.vx || 1) * trail;
-      const by = s.ball.y - Math.sign(s.ball.vy || 0) * trail * 0.15;
+      const bx = smashBall.x - Math.sign(smashBall.vx || 1) * trail;
+      const by = smashBall.y - Math.sign(smashBall.vy || 0) * trail * 0.15;
       const g = ctx.createRadialGradient(bx, by, 0, bx, by, ballCfg.r + 8 - i);
       g.addColorStop(0, `rgba(255,220,120,${0.45 - i * 0.07})`);
       g.addColorStop(0.5, `rgba(255,90,0,${0.28 - i * 0.04})`);
@@ -4002,10 +6226,15 @@ function draw() {
       ctx.fill();
     }
   }
-  ctx.fillStyle = s.ability.smashing ? "#ffe08a" : "#fff";
-  ctx.beginPath();
-  ctx.arc(s.ball.x, s.ball.y, ballCfg.r, 0, Math.PI * 2);
-  ctx.fill();
+  for (const ball of drawBalls) {
+    ctx.fillStyle = s.ability.smashing && ball === s.ball ? "#ffe08a" : "#fff";
+    ctx.beginPath();
+    ctx.arc(ball.x, ball.y, ballCfg.r, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  // Fog drawn after balls so the opponent half is smoked out
+  drawChaosFogOfWar();
 
   if (!s.running && (s.mode === "local" || s.mode === "online") && !s.gameOver) {
     ctx.font = `${isTouchDevice ? 14 : 16}px system-ui, -apple-system, Segoe UI, Arial`;
@@ -4044,6 +6273,8 @@ function draw() {
     }
     ctx.restore();
   }
+
+  ctx.restore();
 }
 
 function frame(t) {
@@ -4285,10 +6516,15 @@ function startLocalMode(level = 1) {
     return;
   }
   stopMenuBg();
+  s.botMode = "classic";
+  s.survival.active = false;
   applyBotLevel(level);
   s.mode = "local";
   hideOverlay(ui.menuOverlay);
   hideOverlay(ui.botLevelOverlay);
+  hideOverlay(ui.chaosLevelOverlay);
+  hideOverlay(ui.survivalLevelOverlay);
+  hideOverlay(ui.botModesOverlay);
   hideOverlay(ui.lobbyOverlay);
   hideOverlay(ui.customizeOverlay);
   hideOverlay(ui.settingsOverlay);
@@ -4303,10 +6539,74 @@ function startLocalMode(level = 1) {
   resetLocalMatch();
 }
 
+function startChaosMode(level = 1) {
+  if (!isChaosLevelUnlocked(level)) {
+    openChaosLevelSelect();
+    if (ui.chaosLevelHint) ui.chaosLevelHint.textContent = `Chaos ${level} is locked.`;
+    return;
+  }
+  stopMenuBg();
+  s.botMode = "chaos";
+  s.survival.active = false;
+  applyChaosBotLevel(level);
+  s.mode = "local";
+  resetChaosFx();
+  hideOverlay(ui.menuOverlay);
+  hideOverlay(ui.botLevelOverlay);
+  hideOverlay(ui.chaosLevelOverlay);
+  hideOverlay(ui.survivalLevelOverlay);
+  hideOverlay(ui.botModesOverlay);
+  hideOverlay(ui.lobbyOverlay);
+  hideOverlay(ui.customizeOverlay);
+  hideOverlay(ui.settingsOverlay);
+  hideOverlay(ui.adminOverlay);
+  hideOverlay(ui.gameOver);
+  setScoreboardLabels(
+    formatNameWithLevel(getPlayerName() || "You", getPlayerLevel()),
+    `CHAOS L${s.botLevel}`,
+    { p1Level: getPlayerLevel(), p2Level: null }
+  );
+  ui.hint.textContent = `Chaos L${s.botLevel} — 2× speed · multi-ball · shake${s.botLevel >= 10 ? " · fog after rallies" : ""}. Win for ${chaosWinPoints(s.botLevel)} pts.`;
+  resetLocalMatch();
+}
+
+function startSurvivalMode(round = 1) {
+  if (!isSurvivalRoundUnlocked(round)) {
+    openSurvivalLevelSelect();
+    if (ui.survivalLevelHint) ui.survivalLevelHint.textContent = `Survival R${round} is locked.`;
+    return;
+  }
+  stopMenuBg();
+  s.botMode = "survival";
+  applySurvivalBotLevel(round);
+  s.mode = "local";
+  hideOverlay(ui.menuOverlay);
+  hideOverlay(ui.botLevelOverlay);
+  hideOverlay(ui.chaosLevelOverlay);
+  hideOverlay(ui.survivalLevelOverlay);
+  hideOverlay(ui.botModesOverlay);
+  hideOverlay(ui.lobbyOverlay);
+  hideOverlay(ui.customizeOverlay);
+  hideOverlay(ui.settingsOverlay);
+  hideOverlay(ui.adminOverlay);
+  hideOverlay(ui.gameOver);
+  setScoreboardLabels(
+    formatNameWithLevel(getPlayerName() || "You", getPlayerLevel()),
+    `SURVIVAL R${s.botLevel}`,
+    { p1Level: getPlayerLevel(), p2Level: null }
+  );
+  ui.hint.textContent = `Survival R${s.botLevel} — 2:00 · highest score wins · +${POINTS_PER_SURVIVAL_WIN} pts.`;
+  resetLocalMatch();
+}
+
 function openLobby() {
   stopMenuBg();
   hideOverlay(ui.menuOverlay);
   hideOverlay(ui.botLevelOverlay);
+  hideOverlay(ui.chaosLevelOverlay);
+  hideOverlay(ui.survivalLevelOverlay);
+  hideOverlay(ui.botModesOverlay);
+  hideOverlay(ui.modeSoonOverlay);
   hideOverlay(ui.customizeOverlay);
   hideOverlay(ui.settingsOverlay);
   hideOverlay(ui.adminOverlay);
@@ -4321,16 +6621,25 @@ function openLobby() {
 function backToMenu() {
   closeWs();
   stopGameMusic();
+  stopConfetti();
   s.mode = "menu";
   s.gameOver = false;
   s.running = false;
+  s.survival.active = false;
+  setSurvivalTimerVisible(false);
   hideOverlay(ui.gameOver);
   hideOverlay(ui.lobbyOverlay);
   hideOverlay(ui.botLevelOverlay);
+  hideOverlay(ui.chaosLevelOverlay);
+  hideOverlay(ui.survivalLevelOverlay);
+  hideOverlay(ui.botModesOverlay);
+  hideOverlay(ui.modeSoonOverlay);
   hideOverlay(ui.customizeOverlay);
   hideOverlay(ui.settingsOverlay);
+  hideOverlay(ui.updatesOverlay);
   hideOverlay(ui.adminOverlay);
   hideOverlay(ui.passkeyOverlay);
+  hideOverlay(ui.masterClearOverlay);
   showOverlay(ui.menuOverlay);
   setStagePlaying(false);
   setScoreboardLabels("LEFT", "RIGHT");
@@ -4366,6 +6675,8 @@ function bindAdminControls() {
   bind(ui.btnAdminUnlockAll, adminUnlockAll);
   bind(ui.btnAdminMaxPts, () => adminAddPoints(999));
   bind(ui.btnAdminUnlockLevels, adminUnlockAllLevels);
+  bind(ui.btnAdminUnlockChaos, adminUnlockAllChaosLevels);
+  bind(ui.btnAdminUnlockSurvival, adminUnlockAllSurvivalRounds);
   bind(ui.btnAdminSetLevel, () => {
     const n = parseInt(ui.adminLevelInput?.value, 10);
     adminSetPlayerLevel(Number.isFinite(n) ? n : 0);
@@ -4386,6 +6697,7 @@ function bindAdminControls() {
   bindToggle(ui.abMegaPaddle, "megaPaddle");
   bindToggle(ui.abFreeShop, "freeShop");
   bindToggle(ui.abSlowBot, "slowBot");
+  bindToggle(ui.abPauseBot, "pauseBot");
   bindToggle(ui.abBonusPts, "bonusPts");
 }
 
@@ -4438,11 +6750,57 @@ function bindUi() {
     });
   };
 
-  bind(ui.btnLocal, () => requireName(openBotLevelSelect));
+  bind(ui.btnLocal, () => requireName(openBotModes));
   bind(ui.btnOnline, () => requireName(openLobby));
   bind(ui.btnCustomize, () => requireName(openCustomize));
   bind(ui.btnSettings, openSettings);
   bind(ui.btnSettingsBack, closeSettings);
+  bind(ui.btnUpdates, openUpdates);
+  bind(ui.btnUpdatesBack, closeUpdates);
+  bind(ui.btnBotModesBack, closeBotModes);
+  bind(ui.btnModeClassic, openBotLevelSelect);
+  bind(ui.btnModeChaos, openChaosLevelSelect);
+  bind(ui.btnModeSurvival, openSurvivalLevelSelect);
+  bind(ui.btnModeBoss, () => openModeSoon("Boss Battles"));
+  bind(ui.btnModeSoonBack, closeModeSoon);
+  bind(ui.btnModeSoonUpdates, () => {
+    hideOverlay(ui.modeSoonOverlay);
+    hideOverlay(ui.botModesOverlay);
+    openUpdates();
+  });
+  bind(ui.btnChaosLevelBack, closeChaosLevelSelect);
+  bind(ui.btnSurvivalLevelBack, closeSurvivalLevelSelect);
+  document.querySelectorAll(".chaos-preset").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      playMenuClick();
+      const level = parseInt(btn.dataset.level, 10) || 1;
+      if (!isChaosLevelUnlocked(level)) {
+        if (ui.chaosLevelHint) {
+          ui.chaosLevelHint.textContent = `Locked — clear Chaos ${level - 1} first.`;
+        }
+        return;
+      }
+      startChaosMode(level);
+    });
+  });
+  document.querySelectorAll(".survival-preset").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      playMenuClick();
+      const level = parseInt(btn.dataset.level, 10) || 1;
+      if (!isSurvivalRoundUnlocked(level)) {
+        if (ui.survivalLevelHint) {
+          ui.survivalLevelHint.textContent = `Locked — clear Survival R${level - 1} first.`;
+        }
+        return;
+      }
+      startSurvivalMode(level);
+    });
+  });
+  bind(ui.btnMasterMenu, backToMenu);
+  bind(ui.btnMasterPlayAgain, () => {
+    closeMasterClearCelebration();
+    if (s.mode === "local") resetLocalMatch();
+  });
   bind(ui.btnRedeemCode, toggleRedeemPanel);
   bind(ui.btnRedeemSubmit, () => {
     redeemCode(ui.redeemInput?.value);
@@ -4534,11 +6892,45 @@ function bindUi() {
       updateResignButton();
       return;
     }
+    if (s.botMode === "chaos") {
+      applyChaosBotLevel(s.botLevel);
+      resetLocalMatch();
+      return;
+    }
+    if (s.botMode === "survival") {
+      applySurvivalBotLevel(s.botLevel);
+      resetLocalMatch();
+      return;
+    }
     applyBotLevel(s.botLevel);
     resetLocalMatch();
   });
   bind(ui.btnNextLevel, () => {
     if (s.mode !== "local") return;
+    if (s.botMode === "chaos") {
+      const next = Math.min(CHAOS_MAX_LEVEL, (s.botLevel || 1) + 1);
+      if (!isChaosLevelUnlocked(next)) {
+        openChaosLevelSelect();
+        if (ui.chaosLevelHint) {
+          ui.chaosLevelHint.textContent = `Chaos ${next} is locked. Clear Chaos ${next - 1} first.`;
+        }
+        return;
+      }
+      startChaosMode(next);
+      return;
+    }
+    if (s.botMode === "survival") {
+      const next = Math.min(SURVIVAL_MAX_ROUND, (s.botLevel || 1) + 1);
+      if (!isSurvivalRoundUnlocked(next)) {
+        openSurvivalLevelSelect();
+        if (ui.survivalLevelHint) {
+          ui.survivalLevelHint.textContent = `Survival R${next} is locked. Clear R${next - 1} first.`;
+        }
+        return;
+      }
+      startSurvivalMode(next);
+      return;
+    }
     const next = Math.min(100, (s.botLevel || 1) + 1);
     if (!isBotLevelUnlocked(next)) {
       openBotLevelSelect();
@@ -4810,6 +7202,7 @@ function stopMenuBg() {
 window.addEventListener("resize", () => {
   updatePhoneLayout();
   if (menuBg.active) resizeMenuBg();
+  if (confettiRunning) resizeConfettiCanvas();
 });
 
 async function boot() {

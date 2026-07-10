@@ -54,6 +54,8 @@ function defaultProfile() {
     name: "",
     points: 0,
     maxBotCleared: 0,
+    maxChaosCleared: 0,
+    maxSurvivalCleared: 0,
     owned: { paddle: ["white"], table: ["classic"] },
     equipped: { paddle: "white", table: "classic" },
     redeemedCodes: [],
@@ -83,12 +85,18 @@ function mergeProfileRecord(existing, incoming, { force = false } = {}) {
       ];
   const incomingLevel = Math.max(0, Math.min(100, Math.floor(Number(p.maxBotCleared) || 0)));
   const prevLevel = Math.max(0, Math.min(100, Math.floor(Number(prev.maxBotCleared) || 0)));
+  const incomingChaos = Math.max(0, Math.min(25, Math.floor(Number(p.maxChaosCleared) || 0)));
+  const prevChaos = Math.max(0, Math.min(25, Math.floor(Number(prev.maxChaosCleared) || 0)));
+  const incomingSurvival = Math.max(0, Math.min(25, Math.floor(Number(p.maxSurvivalCleared) || 0)));
+  const prevSurvival = Math.max(0, Math.min(25, Math.floor(Number(prev.maxSurvivalCleared) || 0)));
   const incomingPoints = Math.max(0, Math.floor(Number(p.points) || 0));
   const prevPoints = Math.max(0, Math.floor(Number(prev.points) || 0));
   return {
     name: sanitizeName(p.name || prev.name || ""),
     points: force ? incomingPoints : Math.max(prevPoints, incomingPoints),
     maxBotCleared: force ? incomingLevel : Math.max(prevLevel, incomingLevel),
+    maxChaosCleared: force ? incomingChaos : Math.max(prevChaos, incomingChaos),
+    maxSurvivalCleared: force ? incomingSurvival : Math.max(prevSurvival, incomingSurvival),
     owned: {
       paddle: ownedPaddle.includes("white") ? ownedPaddle : ["white", ...ownedPaddle],
       table: ownedTable.includes("classic") ? ownedTable : ["classic", ...ownedTable],
@@ -119,13 +127,13 @@ const VALID_PADDLE = new Set([
   "white", "blue", "pink", "orange", "red", "green", "yellow", "purple", "cyan",
   "galaxy", "moon", "sunset", "neon", "lava", "ice", "rainbow", "aurora",
   "nebula", "interstellar", "voidpulse", "solarflare", "plasma", "quantum", "darkmatter", "hypernova",
-  "rosegold", "voidstorm", "heartbloom", "blushgarden",
+  "rosegold", "voidstorm", "hearthflame", "skywyrm", "obsidian", "chaosrift", "endurance", "heartbloom", "blushgarden",
 ]);
 const VALID_TABLE = new Set([
   "classic", "blue", "pink", "orange", "red", "green", "yellow", "purple", "cyan",
   "galaxy", "moon", "sunset", "neon", "lava", "ice", "rainbow", "aurora",
   "nebula", "interstellar", "voidpulse", "solarflare", "plasma", "quantum", "darkmatter", "hypernova",
-  "rosegold", "voidstorm", "heartbloom", "blushgarden",
+  "rosegold", "voidstorm", "hearthflame", "skywyrm", "obsidian", "chaosrift", "endurance", "heartbloom", "blushgarden",
 ]);
 
 function sanitizeCosmetics(cos) {

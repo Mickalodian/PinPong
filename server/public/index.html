@@ -21,7 +21,7 @@
         display: none !important;
       }
     </style>
-    <link rel="stylesheet" href="style.css?v=20260710h" />
+    <link rel="stylesheet" href="style.css?v=20260710z" />
   </head>
   <body>
     <canvas id="menuBg" class="menu-bg" aria-hidden="true"></canvas>
@@ -33,6 +33,7 @@
 
       <div class="stage">
         <canvas id="game" width="900" height="520" aria-label="Pong game"></canvas>
+        <div class="survival-timer hidden" id="survivalTimer" aria-live="polite">2:00</div>
         <div class="ability-bar hidden" id="abilityBar" aria-live="polite">
           <div class="ability-label" id="abilityLabel">PARRY 0/10</div>
           <div class="ability-track">
@@ -59,8 +60,165 @@
             <button type="button" class="play-again secondary" id="btnOnline">Online 1v1</button>
             <button type="button" class="play-again secondary" id="btnCustomize">Customize</button>
             <button type="button" class="play-again secondary" id="btnSettings">Settings</button>
+            <button type="button" class="play-again secondary" id="btnUpdates">Updates</button>
             <button type="button" class="play-again secondary" id="btnAdmin">Admin</button>
             <button type="button" class="link-btn" id="btnChangeName">Change name</button>
+          </div>
+        </div>
+
+        <div class="overlay hidden" id="botModesOverlay" aria-hidden="true">
+          <div class="overlay-card menu-card">
+            <div class="overlay-title">PLAY VS BOT</div>
+            <p class="lobby-text">Pick a bot game mode.</p>
+            <button type="button" class="play-again" id="btnModeClassic">Classic Levels</button>
+            <button type="button" class="play-again secondary" id="btnModeChaos">Chaos Mode</button>
+            <button type="button" class="play-again secondary" id="btnModeSurvival">Survival Mode</button>
+            <button type="button" class="play-again secondary mode-soon-btn" id="btnModeBoss" data-mode="Boss Battles">
+              Boss Battles <span class="mode-soon-tag">Soon</span>
+            </button>
+            <button type="button" class="link-btn" id="btnBotModesBack">Back</button>
+          </div>
+        </div>
+
+        <div class="overlay hidden" id="chaosLevelOverlay" aria-hidden="true">
+          <div class="overlay-card menu-card bot-level-card chaos-level-card">
+            <div class="bot-level-header">
+              <div class="overlay-title">CHAOS MODE</div>
+              <p class="lobby-text">
+                2× speed · multi-ball · screen shake. From Chaos L10, fog of war can smoke out the bot side after a rally. Clear Chaos L25 to unlock Chaos Rift.
+              </p>
+              <div class="bot-level-presets">
+                <button type="button" class="play-again secondary chaos-preset" data-level="1">Chaos 1</button>
+                <button type="button" class="play-again secondary chaos-preset" data-level="8">Chaos 8</button>
+                <button type="button" class="play-again secondary chaos-preset" data-level="16">Chaos 16</button>
+                <button type="button" class="play-again secondary chaos-preset" data-level="25">Chaos 25</button>
+              </div>
+            </div>
+            <div class="bot-level-body">
+              <div class="bot-level-grid" id="chaosLevelGrid"></div>
+            </div>
+            <div class="bot-level-footer">
+              <p class="shop-msg" id="chaosLevelHint">Chaos 1 — Wild opener</p>
+              <button type="button" class="link-btn" id="btnChaosLevelBack">Back</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="overlay hidden" id="survivalLevelOverlay" aria-hidden="true">
+          <div class="overlay-card menu-card bot-level-card survival-level-card">
+            <div class="bot-level-header">
+              <div class="overlay-title">SURVIVAL</div>
+              <p class="lobby-text">
+                2 min · highest score wins · +5 pts per win · clear R25 for Endurance. No first-to-5 — race the clock.
+              </p>
+              <div class="bot-level-presets">
+                <button type="button" class="play-again secondary survival-preset" data-level="1">Round 1</button>
+                <button type="button" class="play-again secondary survival-preset" data-level="8">Round 8</button>
+                <button type="button" class="play-again secondary survival-preset" data-level="16">Round 16</button>
+                <button type="button" class="play-again secondary survival-preset" data-level="25">Round 25</button>
+              </div>
+            </div>
+            <div class="bot-level-body">
+              <div class="bot-level-grid" id="survivalLevelGrid"></div>
+            </div>
+            <div class="bot-level-footer">
+              <p class="shop-msg" id="survivalLevelHint">Round 1 — Warm-up pace</p>
+              <button type="button" class="link-btn" id="btnSurvivalLevelBack">Back</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="overlay hidden" id="modeSoonOverlay" aria-hidden="true">
+          <div class="overlay-card menu-card mode-soon-card">
+            <div class="overlay-title">UNDER CONSTRUCTION</div>
+            <p class="mode-soon-lead" id="modeSoonLead">Sorry — under construction.</p>
+            <p class="mode-soon-msg">
+              We know you're eager to try more. Please tune in under the Updates tab and see where we are at!
+            </p>
+            <button type="button" class="play-again" id="btnModeSoonUpdates">Open Updates</button>
+            <button type="button" class="link-btn" id="btnModeSoonBack">Back</button>
+          </div>
+        </div>
+
+        <div class="overlay hidden" id="updatesOverlay" aria-hidden="true">
+          <div class="overlay-card menu-card updates-card">
+            <div class="overlay-title updates-title">UPDATES</div>
+            <div class="updates-body" id="updatesBody">
+              <article class="update-entry">
+                <h3 class="update-heading">Patch — Survival Mode</h3>
+                <p class="update-date">July 10, 2026</p>
+                <ul class="update-list">
+                  <li>Survival Mode live: 25 rounds, 2:00 timer, highest score wins</li>
+                  <li>+5 shop points on every Survival win · ties are draws</li>
+                  <li>Clear Survival R25 to unlock Endurance (SURVIVAL rarity)</li>
+                  <li>Boss Battles still under construction</li>
+                </ul>
+              </article>
+              <article class="update-entry">
+                <h3 class="update-heading">Patch — Chaos Mode</h3>
+                <p class="update-date">July 6, 2026</p>
+                <ul class="update-list">
+                  <li>Chaos Mode live: 25 levels, 2× speed, multi-ball, shake</li>
+                  <li>Fog of war from Chaos L10 — smokes the bot side after rallies</li>
+                  <li>Win rewards scale from 2 to 50 points per clear</li>
+                  <li>Clear Chaos L25 to unlock Chaos Rift legendary cosmetic</li>
+                </ul>
+              </article>
+              <article class="update-entry">
+                <h3 class="update-heading">Coming Soon</h3>
+                <p class="update-date">Roadmap</p>
+                <ul class="update-list">
+                  <li>More bot levels beyond Master 100</li>
+                  <li>Boss Battles</li>
+                  <li>New paddle abilities and match power-ups</li>
+                  <li>Fresh legendary cosmetics and table themes</li>
+                  <li>Extra game modes and ranked seasons</li>
+                </ul>
+              </article>
+              <article class="update-entry">
+                <h3 class="update-heading">Developer Note</h3>
+                <p class="update-date">From the developer</p>
+                <p class="update-text">
+                  Thanks for playing and clearing the climb. Bigger updates with more bots, abilities,
+                  and different level types are on the way — stay tuned!
+                </p>
+              </article>
+              <article class="update-entry">
+                <h3 class="update-heading">Patch — Obsidian &amp; Master Clear</h3>
+                <p class="update-date">July 1, 2026</p>
+                <ul class="update-list">
+                  <li>Added Obsidian legendary cosmetic (Level 100)</li>
+                  <li>Master 100 clear celebration with confetti</li>
+                  <li>New Updates menu with changelog &amp; roadmap</li>
+                </ul>
+              </article>
+              <article class="update-entry">
+                <h3 class="update-heading">Patch — Legendaries</h3>
+                <p class="update-date">June 26, 2026</p>
+                <ul class="update-list">
+                  <li>Rose Gold (L20), Void Storm (L40), Hearthflame (L60), Skywyrm (L80)</li>
+                  <li>Level-gated cosmetics unlock as you clear bots</li>
+                </ul>
+              </article>
+              <article class="update-entry">
+                <h3 class="update-heading">Patch — Phone &amp; Online</h3>
+                <p class="update-date">June 20, 2026</p>
+                <ul class="update-list">
+                  <li>Improved phone layout, zoom, and court borders</li>
+                  <li>Online 1v1 rooms, search, and rematch flow</li>
+                  <li>Settings, music tracks, and redeem codes</li>
+                </ul>
+              </article>
+              <article class="update-entry">
+                <h3 class="update-heading">Launch</h3>
+                <p class="update-date">June 14, 2026</p>
+                <ul class="update-list">
+                  <li>Classic Pong with 100 bot difficulty levels</li>
+                  <li>Customize shop, points, and local / online play</li>
+                </ul>
+              </article>
+            </div>
+            <button type="button" class="link-btn" id="btnUpdatesBack">Back</button>
           </div>
         </div>
 
@@ -156,6 +314,8 @@
                 <button type="button" class="play-again secondary" id="btnAdminUnlockAll">Unlock all colours</button>
                 <button type="button" class="play-again secondary" id="btnAdminMaxPts">+999 points</button>
                 <button type="button" class="play-again secondary" id="btnAdminUnlockLevels">Unlock all bot levels</button>
+                <button type="button" class="play-again secondary" id="btnAdminUnlockChaos">Unlock all Chaos levels</button>
+                <button type="button" class="play-again secondary" id="btnAdminUnlockSurvival">Unlock all Survival rounds</button>
               </div>
               <p class="admin-section-label">Player level (0–100)</p>
               <p class="shop-points">Level: <span id="adminLevel">0</span></p>
@@ -168,6 +328,7 @@
                 <label class="admin-toggle"><input type="checkbox" id="abMegaPaddle" /> Mega paddle</label>
                 <label class="admin-toggle"><input type="checkbox" id="abFreeShop" /> Free shop</label>
                 <label class="admin-toggle"><input type="checkbox" id="abSlowBot" /> Slow bot</label>
+                <label class="admin-toggle"><input type="checkbox" id="abPauseBot" /> Pause bot</label>
                 <label class="admin-toggle"><input type="checkbox" id="abBonusPts" /> +10 pts per win</label>
               </div>
               <p class="shop-msg" id="adminMsg">Abilities are local. Points sync globally.</p>
@@ -228,6 +389,21 @@
             <button type="button" class="play-again secondary" id="backToMenu">Main menu</button>
           </div>
         </div>
+
+        <div class="overlay hidden" id="masterClearOverlay" aria-hidden="true">
+          <canvas id="confettiCanvas" class="confetti-canvas" aria-hidden="true"></canvas>
+          <div class="overlay-card menu-card master-clear-card">
+            <div class="overlay-title master-clear-title" id="masterClearTitle">CONGRATULATIONS!</div>
+            <p class="master-clear-lead" id="masterClearLead">You beat Master Bot — Level 100.</p>
+            <div class="overlay-reward hidden" id="masterClearReward" aria-live="polite"></div>
+            <div class="overlay-score" id="masterClearScore">5 : 0</div>
+            <p class="master-clear-msg" id="masterClearMsg">
+              More updates with more bots, abilities, and different levels are coming soon!
+            </p>
+            <button type="button" class="play-again" id="btnMasterPlayAgain">Play again</button>
+            <button type="button" class="play-again secondary" id="btnMasterMenu">Main menu</button>
+          </div>
+        </div>
       </div>
 
       <footer class="bottom">
@@ -250,6 +426,6 @@
       window.PONG_ADMIN = null;
     </script>
     <script src="admin.local.js"></script>
-    <script src="game.js?v=20260710h" defer></script>
+    <script src="game.js?v=20260710z" defer></script>
   </body>
 </html>
