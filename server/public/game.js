@@ -2215,7 +2215,8 @@ const MUSIC_TRACKS = {
 
 const PHONE_ZOOM_DEFAULT = 0.82;
 const PHONE_ZOOM_MIN = 0.55;
-const PHONE_ZOOM_MAX = 1.15;
+const PHONE_ZOOM_MAX = 1.35;
+const PHONE_PAN_LIMIT = 220;
 
 const settings = {
   musicOn: true,
@@ -2224,10 +2225,19 @@ const settings = {
   phoneZoom: PHONE_ZOOM_DEFAULT,
 };
 
+let phonePanX = 0;
+let phonePanY = 0;
+
 function clampPhoneZoom(v) {
   const n = Number(v);
   if (!Number.isFinite(n)) return PHONE_ZOOM_DEFAULT;
   return Math.max(PHONE_ZOOM_MIN, Math.min(PHONE_ZOOM_MAX, n));
+}
+
+function clampPhonePan(v) {
+  const n = Number(v);
+  if (!Number.isFinite(n)) return 0;
+  return Math.max(-PHONE_PAN_LIMIT, Math.min(PHONE_PAN_LIMIT, n));
 }
 
 function loadSettings() {
@@ -2882,10 +2892,8 @@ function fitGameStage() {
     padY +
     12;
   const availH = Math.max(120, window.innerHeight - chromeH);
-  const fitScale = Math.min(availW / W, availH / H);
-  // Default phone view is intentionally zoomed out; user can pinch/zoom further.
-  const zoom = clampPhoneZoom(settings.phoneZoom);
-  const scale = fitScale * zoom;
+  // Screen zoom is applied via CSS transform on .wrap; canvas only fits the stage.
+  const scale = Math.min(availW / W, availH / H);
   const drawW = Math.max(1, Math.floor(W * scale));
   const drawH = Math.max(1, Math.floor(H * scale));
   canvas.style.width = `${drawW}px`;
@@ -2896,6 +2904,27 @@ function fitGameStage() {
   stageEl.style.height = "auto";
 }
 
+function applyPhoneUiTransform() {
+  const phone = document.body.classList.contains("phone-mode");
+  const zoom = clampPhoneZoom(settings.phoneZoom);
+  settings.phoneZoom = zoom;
+  if (!phone) {
+    document.body.style.removeProperty("--phone-ui-scale");
+    document.body.style.removeProperty("--phone-pan-x");
+    document.body.style.removeProperty("--phone-pan-y");
+    return;
+  }
+  if (zoom <= PHONE_ZOOM_DEFAULT + 0.02) {
+    phonePanX = clampPhonePan(phonePanX * 0.85);
+    phonePanY = clampPhonePan(phonePanY * 0.85);
+    if (Math.abs(phonePanX) < 2) phonePanX = 0;
+    if (Math.abs(phonePanY) < 2) phonePanY = 0;
+  }
+  document.body.style.setProperty("--phone-ui-scale", String(zoom));
+  document.body.style.setProperty("--phone-pan-x", `${phonePanX}px`);
+  document.body.style.setProperty("--phone-pan-y", `${phonePanY}px`);
+}
+
 function refreshPhoneZoomUI() {
   const zoom = clampPhoneZoom(settings.phoneZoom);
   settings.phoneZoom = zoom;
@@ -2904,10 +2933,26 @@ function refreshPhoneZoomUI() {
   if (ui.btnZoomIn) ui.btnZoomIn.disabled = zoom >= PHONE_ZOOM_MAX - 0.001;
 }
 
-function setPhoneZoom(next, { persist = true } = {}) {
+function setPhoneZoom(next, { persist = true, panX = null, panY = null } = {}) {
   settings.phoneZoom = clampPhoneZoom(next);
+  if (panX != null) phonePanX = clampPhonePan(panX);
+  if (panY != null) phonePanY = clampPhonePan(panY);
   refreshPhoneZoomUI();
+  applyPhoneUiTransform();
   fitGameStage();
+  // #region agent log
+  if (persist) {
+    agentLog("H2", "game.js:setPhoneZoom", "phone ui zoom applied", {
+      zoom: settings.phoneZoom,
+      panX: phonePanX,
+      panY: phonePanY,
+      phoneMode: document.body.classList.contains("phone-mode"),
+      vw: window.innerWidth,
+      vh: window.innerHeight,
+      portrait: window.innerHeight >= window.innerWidth,
+    });
+  }
+  // #endregion
   if (persist) persistSettings();
 }
 
@@ -2918,6 +2963,10 @@ function nudgePhoneZoom(delta) {
 function bindPhonePinchZoom() {
   let pinchStartDist = 0;
   let pinchStartZoom = PHONE_ZOOM_DEFAULT;
+  let pinchMidStartX = 0;
+  let pinchMidStartY = 0;
+  let panStartX = 0;
+  let panStartY = 0;
 
   function touchDist(touches) {
     const a = touches[0];
@@ -2925,17 +2974,29 @@ function bindPhonePinchZoom() {
     return Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY);
   }
 
-  canvas.addEventListener(
+  function touchMid(touches) {
+    return {
+      x: (touches[0].clientX + touches[1].clientX) / 2,
+      y: (touches[0].clientY + touches[1].clientY) / 2,
+    };
+  }
+
+  document.addEventListener(
     "touchstart",
     (e) => {
       if (!document.body.classList.contains("phone-mode") || e.touches.length !== 2) return;
       pinchStartDist = touchDist(e.touches);
       pinchStartZoom = settings.phoneZoom;
+      const mid = touchMid(e.touches);
+      pinchMidStartX = mid.x;
+      pinchMidStartY = mid.y;
+      panStartX = phonePanX;
+      panStartY = phonePanY;
     },
     { passive: true }
   );
 
-  canvas.addEventListener(
+  document.addEventListener(
     "touchmove",
     (e) => {
       if (!document.body.classList.contains("phone-mode") || e.touches.length !== 2) return;
@@ -2943,17 +3004,30 @@ function bindPhonePinchZoom() {
       e.preventDefault();
       const dist = touchDist(e.touches);
       const ratio = dist / pinchStartDist;
-      setPhoneZoom(pinchStartZoom * ratio, { persist: false });
+      const mid = touchMid(e.touches);
+      setPhoneZoom(pinchStartZoom * ratio, {
+        persist: false,
+        panX: panStartX + (mid.x - pinchMidStartX),
+        panY: panStartY + (mid.y - pinchMidStartY),
+      });
     },
     { passive: false }
   );
 
-  canvas.addEventListener(
+  document.addEventListener(
     "touchend",
-    () => {
-      if (pinchStartDist) {
+    (e) => {
+      if (!pinchStartDist) return;
+      if (e.touches.length < 2) {
         pinchStartDist = 0;
         persistSettings();
+        // #region agent log
+        agentLog("H2", "game.js:bindPhonePinchZoom", "pinch ended", {
+          zoom: settings.phoneZoom,
+          panX: phonePanX,
+          panY: phonePanY,
+        });
+        // #endregion
       }
     },
     { passive: true }
@@ -2964,8 +3038,41 @@ function updatePhoneLayout() {
   const phone = isPhoneLike();
   document.body.classList.toggle("phone-mode", phone);
   document.body.classList.remove("phone-landscape", "phone-portrait", "ios-landscape-hint");
+  applyPhoneUiTransform();
   fitGameStage();
   if (menuBg.active) resizeMenuBg();
+  // #region agent log
+  if (phone) {
+    requestAnimationFrame(() => {
+      const overlay = document.querySelector(".overlay:not(.hidden)");
+      const card = overlay?.querySelector(".overlay-card");
+      const wrap = document.querySelector(".wrap");
+      if (!overlay || !card || !wrap) return;
+      const or = overlay.getBoundingClientRect();
+      const cr = card.getBoundingClientRect();
+      const wr = wrap.getBoundingClientRect();
+      const cs = getComputedStyle(overlay);
+      agentLog("H1", "game.js:updatePhoneLayout", "phone portrait center check", {
+        vw: window.innerWidth,
+        vh: window.innerHeight,
+        portrait: window.innerHeight >= window.innerWidth,
+        zoom: settings.phoneZoom,
+        panX: phonePanX,
+        panY: phonePanY,
+        overlayAlign: cs.alignItems,
+        overlayJustify: cs.justifyContent,
+        cardCenterX: Math.round(cr.left + cr.width / 2),
+        cardCenterY: Math.round(cr.top + cr.height / 2),
+        viewCenterX: Math.round(window.innerWidth / 2),
+        viewCenterY: Math.round(window.innerHeight / 2),
+        cardOffsetX: Math.round(cr.left + cr.width / 2 - window.innerWidth / 2),
+        cardOffsetY: Math.round(cr.top + cr.height / 2 - window.innerHeight / 2),
+        wrapTransform: getComputedStyle(wrap).transform,
+        uiScale: getComputedStyle(document.body).getPropertyValue("--phone-ui-scale").trim(),
+      });
+    });
+  }
+  // #endregion
 }
 
 function initPhoneExperience() {

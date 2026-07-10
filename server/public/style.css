@@ -32,6 +32,9 @@ body.phone-mode {
   overflow: hidden;
   height: 100dvh;
   max-height: 100dvh;
+  --phone-ui-scale: 0.82;
+  --phone-pan-x: 0px;
+  --phone-pan-y: 0px;
 }
 
 body.phone-mode .wrap {
@@ -41,8 +44,11 @@ body.phone-mode .wrap {
   height: 100dvh;
   gap: 4px;
   padding: 4px max(10px, env(safe-area-inset-right)) 4px max(10px, env(safe-area-inset-left));
-  overflow: hidden;
+  overflow: visible;
   grid-template-rows: auto minmax(0, 1fr) auto;
+  transform: translate(var(--phone-pan-x), var(--phone-pan-y)) scale(var(--phone-ui-scale));
+  transform-origin: center center;
+  will-change: transform;
 }
 
 body.phone-mode .stage {
@@ -57,6 +63,12 @@ body.phone-mode .stage {
   justify-content: center;
   min-height: 0;
   transform-origin: center center;
+}
+
+body.phone-mode .overlay {
+  align-items: center;
+  justify-content: center;
+  padding: max(10px, env(safe-area-inset-top)) 10px max(10px, env(safe-area-inset-bottom));
 }
 
 body.phone-mode .stage > canvas#game {
@@ -102,26 +114,36 @@ body.phone-mode p.phone-only-row {
 }
 
 body.phone-mode .top {
-  gap: 8px;
+  gap: 6px;
   min-height: 0;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
 }
 
 body.phone-mode .title-rainbow {
   font-size: clamp(0.95rem, 3.4vw, 1.25rem);
+  text-align: center;
 }
 
 body.phone-mode .hint {
   font-size: 11px;
   line-height: 1.25;
+  text-align: center;
+  width: 100%;
 }
 
 body.phone-mode .bottom {
-  gap: 8px;
+  gap: 10px;
+  justify-content: center;
+  align-items: center;
 }
 
 body.phone-mode .scoreboard {
   padding: 6px 8px;
   gap: 8px;
+  justify-content: center;
 }
 
 body.phone-mode .scorebox {
@@ -138,6 +160,8 @@ body.phone-mode .label {
 
 body.phone-mode .meta {
   font-size: 11px;
+  text-align: center;
+  max-width: none;
 }
 
 body.phone-mode .overlay-card {
@@ -1722,8 +1746,10 @@ body.ios-landscape-hint {
 
   .top {
     flex-direction: column;
-    align-items: flex-start;
+    align-items: center;
+    justify-content: center;
     gap: 4px;
+    text-align: center;
   }
 
   .top .hint {
@@ -1774,8 +1800,8 @@ body.ios-landscape-hint {
 
   .meta {
     font-size: 11px;
-    max-width: 42vw;
-    text-align: right;
+    max-width: none;
+    text-align: center;
     pointer-events: auto;
   }
 
