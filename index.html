@@ -25,7 +25,7 @@
         display: none !important;
       }
     </style>
-    <link rel="stylesheet" href="style.css?v=20260710ak" />
+    <link rel="stylesheet" href="style.css?v=20260710ax" />
   </head>
   <body>
     <canvas id="menuBg" class="menu-bg" aria-hidden="true"></canvas>
@@ -79,47 +79,204 @@
         <button type="button" class="resign-btn hidden" id="btnResign">Resign</button>
 
         <div class="overlay" id="nameOverlay">
-          <div class="overlay-card menu-card">
-            <div class="overlay-title">ENTER NAME</div>
-            <p class="lobby-text">Pick a name to play. Saved on this device.</p>
-            <input id="nameInput" class="room-input name-input" maxlength="16" placeholder="YOUR NAME" autocomplete="nickname" />
-            <p class="shop-msg" id="nameMsg"></p>
-            <button type="button" class="play-again" id="btnNameSubmit">Play</button>
+          <div class="overlay-card menu-card menu-panel">
+            <div class="menu-panel-header">
+              <div class="overlay-title">ENTER NAME</div>
+              <p class="lobby-text">Pick a name to play. Saved on this device.</p>
+            </div>
+            <div class="menu-stack">
+              <input id="nameInput" class="room-input name-input" maxlength="16" placeholder="YOUR NAME" autocomplete="nickname" />
+              <p class="shop-msg" id="nameMsg"></p>
+              <button type="button" class="play-again menu-action-btn" id="btnNameSubmit">Play</button>
+            </div>
           </div>
         </div>
 
         <div class="overlay hidden" id="menuOverlay">
-          <div class="overlay-card menu-card main-menu-card">
-            <div class="theme-switch" id="themeSwitch" role="group" aria-label="Color theme">
-              <button type="button" class="theme-switch-btn active" data-theme="dark" id="btnThemeDark" aria-pressed="true">Dark</button>
-              <button type="button" class="theme-switch-btn" data-theme="light" id="btnThemeLight" aria-pressed="false">Light</button>
+          <div class="overlay-card menu-card main-menu-card menu-panel">
+            <div class="menu-panel-header">
+              <div class="overlay-title">SELECT MODE</div>
+              <p class="lobby-text">Choose where to play or manage your account.</p>
             </div>
-            <div class="overlay-title">SELECT MODE</div>
-            <button type="button" class="play-again" id="btnLocal">Play vs Bot</button>
-            <button type="button" class="play-again secondary" id="btnOnline">Online 1v1</button>
-            <button type="button" class="play-again secondary" id="btnCustomize">Customize</button>
-            <button type="button" class="play-again secondary" id="btnSettings">Settings</button>
-            <button type="button" class="play-again secondary" id="btnUpdates">Updates</button>
-            <button type="button" class="play-again secondary" id="btnAdmin">Admin</button>
-            <button type="button" class="link-btn" id="btnChangeName">Change name</button>
+            <div class="menu-grid" role="navigation" aria-label="Main menu">
+              <button type="button" class="menu-tile menu-tile-accent" id="btnLocal">
+                <span class="menu-tile-kicker">Local</span>
+                <span class="menu-tile-label">Play vs Bot</span>
+                <span class="menu-tile-hint">Classic · Chaos · Survival · Boss</span>
+              </button>
+              <button type="button" class="menu-tile" id="btnOnline">
+                <span class="menu-tile-kicker">Multiplayer</span>
+                <span class="menu-tile-label">Online</span>
+                <span class="menu-tile-hint">Scoreboard · rooms · search</span>
+              </button>
+              <button type="button" class="menu-tile" id="btnProfile">
+                <span class="menu-tile-kicker">Account</span>
+                <span class="menu-tile-label">Profile</span>
+                <span class="menu-tile-hint">Name · XP · avatars · customize</span>
+              </button>
+              <button type="button" class="menu-tile" id="btnSettings">
+                <span class="menu-tile-kicker">Options</span>
+                <span class="menu-tile-label">Settings</span>
+                <span class="menu-tile-hint">Display · music · codes</span>
+              </button>
+              <button type="button" class="menu-tile" id="btnUpdates">
+                <span class="menu-tile-kicker">News</span>
+                <span class="menu-tile-label">Updates</span>
+                <span class="menu-tile-hint">Changelog and roadmap</span>
+              </button>
+              <button type="button" class="menu-tile hidden" id="btnAdmin" aria-hidden="true">
+                <span class="menu-tile-kicker">Owner</span>
+                <span class="menu-tile-label">Admin</span>
+                <span class="menu-tile-hint">Owner account only</span>
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <div class="overlay hidden" id="profileOverlay" aria-hidden="true">
+          <div class="overlay-card menu-card profile-card menu-panel">
+            <div class="menu-panel-header">
+              <div class="overlay-title">PROFILE</div>
+              <p class="lobby-text">Name, XP, avatars, and account sync.</p>
+            </div>
+            <div class="profile-body menu-panel-body">
+              <div class="profile-hero">
+                <div class="profile-avatar-wrap">
+                  <div class="profile-avatar" id="profileAvatarPreview" aria-hidden="true">P</div>
+                </div>
+                <div class="profile-hero-meta">
+                  <div class="profile-name-row">
+                    <input id="profileNameInput" class="room-input name-input" maxlength="16" placeholder="YOUR NAME" autocomplete="nickname" />
+                    <button type="button" class="play-again secondary profile-save-name" id="btnProfileSaveName">Save</button>
+                  </div>
+                  <div class="profile-xp-block">
+                    <div class="profile-xp-label" id="profileXpLabel">XP Level 1</div>
+                    <div class="profile-xp-track"><div class="profile-xp-fill" id="profileXpFill"></div></div>
+                    <div class="profile-xp-sub" id="profileXpSub">0 / 100 XP</div>
+                  </div>
+                  <p class="profile-account-status" id="profileAccountStatus">Playing as guest — create an account to sync across devices.</p>
+                </div>
+              </div>
+
+              <div class="profile-section">
+                <h3 class="profile-section-title">Account</h3>
+                <div class="profile-auth" id="profileAuthGuest">
+                  <input id="authUsername" class="room-input" maxlength="16" placeholder="Username" autocomplete="username" />
+                  <input id="authPassword" class="room-input" type="password" maxlength="64" placeholder="Password" autocomplete="current-password" />
+                  <div class="profile-auth-actions">
+                    <button type="button" class="play-again" id="btnAuthRegister">Create account</button>
+                    <button type="button" class="play-again secondary" id="btnAuthLogin">Log in</button>
+                  </div>
+                </div>
+                <div class="profile-auth hidden" id="profileAuthSignedIn">
+                  <p class="lobby-text" id="profileSignedInText">Signed in</p>
+                  <button type="button" class="play-again secondary" id="btnAuthLogout">Log out</button>
+                </div>
+                <p class="shop-msg" id="profileAuthMsg"></p>
+              </div>
+
+              <div class="profile-section">
+                <h3 class="profile-section-title">Avatar</h3>
+                <p class="lobby-text">Pick a portrait. More unlock with XP and mode clears. Upload your own when signed in.</p>
+                <div class="profile-avatar-grid" id="profileAvatarGrid"></div>
+                <div class="profile-upload-row">
+                  <label class="play-again secondary profile-upload-btn" for="profileAvatarFile">Upload image</label>
+                  <input type="file" id="profileAvatarFile" accept="image/png,image/jpeg,image/webp" hidden />
+                </div>
+              </div>
+
+              <div class="profile-section">
+                <h3 class="profile-section-title">Titles <span class="profile-wip-tag">WIP</span></h3>
+                <p class="lobby-text">
+                  Titles are coming soon. Clearing Classic levels, Chaos, Survival, and Boss Battles will unlock
+                  custom titles with unique colours and idle animations — think “Verdant Slayer”, “Chaos Riftwalker”,
+                  or “Overlord” glowing above your name in lobbies and on the scoreboard.
+                </p>
+                <div class="profile-title-preview" aria-hidden="true">
+                  <span class="title-chip title-chip-muted">???</span>
+                  <span class="title-chip title-chip-boss">Overlord</span>
+                  <span class="title-chip title-chip-chaos">Riftwalker</span>
+                </div>
+              </div>
+
+              <div class="profile-section profile-actions">
+                <button type="button" class="play-again" id="btnProfileCustomize">Customize paddles &amp; tables</button>
+              </div>
+            </div>
+            <div class="menu-panel-footer">
+              <button type="button" class="link-btn" id="btnProfileBack">Back</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="overlay hidden" id="profileViewOverlay" aria-hidden="true">
+          <div class="overlay-card menu-card profile-view-card menu-panel">
+            <div class="menu-panel-header">
+              <div class="overlay-title" id="profileViewTitle">PROFILE</div>
+            </div>
+            <div class="profile-view-body menu-panel-body">
+              <div class="profile-view-hero">
+                <div class="profile-avatar" id="profileViewAvatar" aria-hidden="true">?</div>
+                <div class="profile-view-meta">
+                  <div class="profile-view-name" id="profileViewName">Unknown</div>
+                  <div class="profile-view-kind" id="profileViewKind">Player</div>
+                  <div class="profile-xp-block">
+                    <div class="profile-xp-label" id="profileViewXpLabel">XP Level 1</div>
+                    <div class="profile-xp-track"><div class="profile-xp-fill" id="profileViewXpFill"></div></div>
+                    <div class="profile-xp-sub" id="profileViewXpSub">0 / 100 XP</div>
+                  </div>
+                  <div class="profile-view-rank" id="profileViewRank">Classic rank L0</div>
+                </div>
+              </div>
+              <p class="lobby-text" id="profileViewBio"></p>
+              <div class="profile-section">
+                <h3 class="profile-section-title">Accomplishments</h3>
+                <ul class="profile-view-list" id="profileViewAccomplishments"></ul>
+              </div>
+            </div>
+            <div class="menu-panel-footer">
+              <button type="button" class="link-btn" id="btnProfileViewBack">Close</button>
+            </div>
           </div>
         </div>
 
         <div class="overlay hidden" id="botModesOverlay" aria-hidden="true">
-          <div class="overlay-card menu-card">
-            <div class="overlay-title">PLAY VS BOT</div>
-            <p class="lobby-text">Pick a bot game mode.</p>
-            <button type="button" class="play-again" id="btnModeClassic">Classic Levels</button>
-            <button type="button" class="play-again secondary" id="btnModeChaos">Chaos Mode</button>
-            <button type="button" class="play-again secondary" id="btnModeSurvival">Survival Mode</button>
-            <button type="button" class="play-again secondary" id="btnModeBoss">Boss Battles</button>
-            <button type="button" class="link-btn" id="btnBotModesBack">Back</button>
+          <div class="overlay-card menu-card menu-panel">
+            <div class="menu-panel-header">
+              <div class="overlay-title">PLAY VS BOT</div>
+              <p class="lobby-text">Pick a bot game mode.</p>
+            </div>
+            <div class="menu-grid" role="navigation" aria-label="Bot modes">
+              <button type="button" class="menu-tile menu-tile-accent" id="btnModeClassic">
+                <span class="menu-tile-kicker">Standard</span>
+                <span class="menu-tile-label">Classic Levels</span>
+                <span class="menu-tile-hint">100 levels · first-to-5 · Fire Smash</span>
+              </button>
+              <button type="button" class="menu-tile" id="btnModeChaos">
+                <span class="menu-tile-kicker">Wild</span>
+                <span class="menu-tile-label">Chaos Mode</span>
+                <span class="menu-tile-hint">2× speed · multi-ball · fog</span>
+              </button>
+              <button type="button" class="menu-tile" id="btnModeSurvival">
+                <span class="menu-tile-kicker">Endurance</span>
+                <span class="menu-tile-label">Survival Mode</span>
+                <span class="menu-tile-hint">2:00 timer · highest score wins</span>
+              </button>
+              <button type="button" class="menu-tile" id="btnModeBoss">
+                <span class="menu-tile-kicker">Campaign</span>
+                <span class="menu-tile-label">Boss Battles</span>
+                <span class="menu-tile-hint">10 bosses · shop powers · Overlord</span>
+              </button>
+            </div>
+            <div class="menu-panel-footer">
+              <button type="button" class="link-btn" id="btnBotModesBack">Back</button>
+            </div>
           </div>
         </div>
 
         <div class="overlay hidden" id="chaosLevelOverlay" aria-hidden="true">
-          <div class="overlay-card menu-card bot-level-card chaos-level-card">
-            <div class="bot-level-header">
+          <div class="overlay-card menu-card bot-level-card chaos-level-card menu-panel">
+            <div class="bot-level-header menu-panel-header">
               <div class="overlay-title">CHAOS MODE</div>
               <p class="lobby-text">
                 2× speed · multi-ball · screen shake. From Chaos L10, fog of war can smoke out the bot side after a rally. Clear Chaos L25 to unlock Chaos Rift.
@@ -131,10 +288,10 @@
                 <button type="button" class="play-again secondary chaos-preset" data-level="25">Chaos 25</button>
               </div>
             </div>
-            <div class="bot-level-body">
+            <div class="bot-level-body menu-panel-body">
               <div class="bot-level-grid" id="chaosLevelGrid"></div>
             </div>
-            <div class="bot-level-footer">
+            <div class="bot-level-footer menu-panel-footer">
               <p class="shop-msg" id="chaosLevelHint">Chaos 1 — Wild opener</p>
               <button type="button" class="link-btn" id="btnChaosLevelBack">Back</button>
             </div>
@@ -142,8 +299,8 @@
         </div>
 
         <div class="overlay hidden" id="survivalLevelOverlay" aria-hidden="true">
-          <div class="overlay-card menu-card bot-level-card survival-level-card">
-            <div class="bot-level-header">
+          <div class="overlay-card menu-card bot-level-card survival-level-card menu-panel">
+            <div class="bot-level-header menu-panel-header">
               <div class="overlay-title">SURVIVAL</div>
               <p class="lobby-text">
                 2 min · highest score wins · +5 pts per win · clear R25 for Endurance. No first-to-5 — race the clock.
@@ -155,10 +312,10 @@
                 <button type="button" class="play-again secondary survival-preset" data-level="25">Round 25</button>
               </div>
             </div>
-            <div class="bot-level-body">
+            <div class="bot-level-body menu-panel-body">
               <div class="bot-level-grid" id="survivalLevelGrid"></div>
             </div>
-            <div class="bot-level-footer">
+            <div class="bot-level-footer menu-panel-footer">
               <p class="shop-msg" id="survivalLevelHint">Round 1 — Warm-up pace</p>
               <button type="button" class="link-btn" id="btnSurvivalLevelBack">Back</button>
             </div>
@@ -166,33 +323,49 @@
         </div>
 
         <div class="overlay hidden" id="bossHubOverlay" aria-hidden="true">
-          <div class="overlay-card menu-card boss-hub-card">
-            <div class="overlay-title">BOSS BATTLES</div>
-            <p class="lobby-text">
-              Climb 10 bosses · buy support powers in the Boss Shop · clear B10 for Overlord.
-            </p>
-            <button type="button" class="play-again" id="btnBossHubLevels">Boss Levels</button>
-            <button type="button" class="play-again secondary" id="btnBossHubShop">Boss Shop</button>
-            <button type="button" class="link-btn" id="btnBossHubBack">Back</button>
+          <div class="overlay-card menu-card boss-hub-card menu-panel">
+            <div class="menu-panel-header">
+              <div class="overlay-title">BOSS BATTLES</div>
+              <p class="lobby-text">Climb 10 bosses · buy support powers · clear B10 for Overlord.</p>
+            </div>
+            <div class="menu-grid" role="navigation" aria-label="Boss hub">
+              <button type="button" class="menu-tile menu-tile-accent" id="btnBossHubLevels">
+                <span class="menu-tile-kicker">Fight</span>
+                <span class="menu-tile-label">Boss Levels</span>
+                <span class="menu-tile-hint">10 bosses · 5 HP · unique kits</span>
+              </button>
+              <button type="button" class="menu-tile" id="btnBossHubShop">
+                <span class="menu-tile-kicker">Support</span>
+                <span class="menu-tile-label">Boss Shop</span>
+                <span class="menu-tile-hint">Block · Iron · Time Slow · Reflect</span>
+              </button>
+            </div>
+            <div class="menu-panel-footer">
+              <button type="button" class="link-btn" id="btnBossHubBack">Back</button>
+            </div>
           </div>
         </div>
 
         <div class="overlay hidden" id="bossShopOverlay" aria-hidden="true">
-          <div class="overlay-card menu-card boss-shop-card">
-            <div class="overlay-title">BOSS SHOP</div>
-            <p class="lobby-text">
-              Buy once, then tap/click the buttons under the table in Boss fights. Points:
-              <strong id="bossShopPoints">0</strong>
-            </p>
-            <div class="boss-shop-list" id="bossShopList"></div>
+          <div class="overlay-card menu-card boss-shop-card menu-panel">
+            <div class="menu-panel-header">
+              <div class="overlay-title">BOSS SHOP</div>
+              <p class="lobby-text">
+                Buy once, then use under the table in Boss fights. Points:
+                <strong id="bossShopPoints">0</strong>
+              </p>
+            </div>
+            <div class="boss-shop-list menu-panel-body" id="bossShopList"></div>
             <p class="shop-msg" id="bossShopHint">Powers help on the hardest bosses without lowering AI difficulty.</p>
-            <button type="button" class="link-btn" id="btnBossShopBack">Back</button>
+            <div class="menu-panel-footer">
+              <button type="button" class="link-btn" id="btnBossShopBack">Back</button>
+            </div>
           </div>
         </div>
 
         <div class="overlay hidden" id="bossLevelOverlay" aria-hidden="true">
-          <div class="overlay-card menu-card bot-level-card boss-level-card">
-            <div class="bot-level-header">
+          <div class="overlay-card menu-card bot-level-card boss-level-card menu-panel">
+            <div class="bot-level-header menu-panel-header">
               <div class="overlay-title">BOSS LEVELS</div>
               <p class="lobby-text">
                 5 HP each · unique boss abilities · +8 pts per win. Clear B10 Overlord to unlock the Overlord cosmetic.
@@ -204,10 +377,10 @@
                 <button type="button" class="play-again secondary boss-preset" data-level="10">Boss 10</button>
               </div>
             </div>
-            <div class="bot-level-body">
+            <div class="bot-level-body menu-panel-body">
               <div class="bot-level-grid" id="bossLevelGrid"></div>
             </div>
-            <div class="bot-level-footer">
+            <div class="bot-level-footer menu-panel-footer">
               <p class="shop-msg" id="bossLevelHint">Boss 1 — Verdant Warden</p>
               <button type="button" class="link-btn" id="btnBossLevelBack">Back</button>
             </div>
@@ -215,21 +388,40 @@
         </div>
 
         <div class="overlay hidden" id="modeSoonOverlay" aria-hidden="true">
-          <div class="overlay-card menu-card mode-soon-card">
-            <div class="overlay-title">UNDER CONSTRUCTION</div>
-            <p class="mode-soon-lead" id="modeSoonLead">Sorry — under construction.</p>
-            <p class="mode-soon-msg">
-              We know you're eager to try more. Please tune in under the Updates tab and see where we are at!
-            </p>
-            <button type="button" class="play-again" id="btnModeSoonUpdates">Open Updates</button>
-            <button type="button" class="link-btn" id="btnModeSoonBack">Back</button>
+          <div class="overlay-card menu-card mode-soon-card menu-panel">
+            <div class="menu-panel-header">
+              <div class="overlay-title">UNDER CONSTRUCTION</div>
+              <p class="mode-soon-lead" id="modeSoonLead">Sorry — under construction.</p>
+              <p class="lobby-text mode-soon-msg">
+                We know you're eager to try more. Please tune in under the Updates tab and see where we are at!
+              </p>
+            </div>
+            <div class="menu-stack">
+              <button type="button" class="play-again menu-action-btn" id="btnModeSoonUpdates">Open Updates</button>
+            </div>
+            <div class="menu-panel-footer">
+              <button type="button" class="link-btn" id="btnModeSoonBack">Back</button>
+            </div>
           </div>
         </div>
 
         <div class="overlay hidden" id="updatesOverlay" aria-hidden="true">
-          <div class="overlay-card menu-card updates-card">
-            <div class="overlay-title updates-title">UPDATES</div>
-            <div class="updates-body" id="updatesBody">
+          <div class="overlay-card menu-card updates-card menu-panel">
+            <div class="menu-panel-header">
+              <div class="overlay-title updates-title">UPDATES</div>
+              <p class="lobby-text">Changelog and roadmap for this build.</p>
+            </div>
+            <div class="updates-body menu-panel-body" id="updatesBody">
+              <article class="update-entry">
+                <h3 class="update-heading">Patch — Profile &amp; Accounts</h3>
+                <p class="update-date">July 10, 2026</p>
+                <ul class="update-list">
+                  <li>New Profile menu: name, XP, avatars, Customize moved here</li>
+                  <li>Create account / log in to keep progress on the server</li>
+                  <li>XP from wins unlocks more profile pictures</li>
+                  <li>Titles coming soon — unlock flair by clearing modes</li>
+                </ul>
+              </article>
               <article class="update-entry">
                 <h3 class="update-heading">Patch — Boss Battles</h3>
                 <p class="update-date">July 10, 2026</p>
@@ -313,14 +505,19 @@
                 </ul>
               </article>
             </div>
-            <button type="button" class="link-btn" id="btnUpdatesBack">Back</button>
+            <div class="menu-panel-footer">
+              <button type="button" class="link-btn" id="btnUpdatesBack">Back</button>
+            </div>
           </div>
         </div>
 
         <div class="overlay hidden" id="settingsOverlay" aria-hidden="true">
-          <div class="overlay-card menu-card settings-card">
-            <div class="overlay-title settings-title">SETTINGS</div>
-            <div class="settings-body">
+          <div class="overlay-card menu-card settings-card menu-panel">
+            <div class="menu-panel-header">
+              <div class="overlay-title settings-title">SETTINGS</div>
+              <p class="lobby-text">Display, music, and redeem codes.</p>
+            </div>
+            <div class="settings-body menu-panel-body">
               <div class="settings-row">
                 <span class="settings-label">Fullscreen</span>
                 <button type="button" class="settings-toggle" id="btnFullscreen" aria-pressed="false">Off</button>
@@ -354,13 +551,15 @@
                 <p class="shop-msg" id="redeemMsg"></p>
               </div>
             </div>
-            <button type="button" class="link-btn" id="btnSettingsBack">Back</button>
+            <div class="menu-panel-footer">
+              <button type="button" class="link-btn" id="btnSettingsBack">Back</button>
+            </div>
           </div>
         </div>
 
         <div class="overlay hidden" id="botLevelOverlay" aria-hidden="true">
-          <div class="overlay-card menu-card bot-level-card">
-            <div class="bot-level-header">
+          <div class="overlay-card menu-card bot-level-card menu-panel">
+            <div class="bot-level-header menu-panel-header">
               <div class="overlay-title">BOT LEVEL</div>
               <p class="lobby-text">Clear each level to unlock the next. First clear of a level gives +5 pts.</p>
               <div class="bot-level-presets">
@@ -371,10 +570,10 @@
                 <button type="button" class="play-again secondary bot-preset" data-level="100">Master 100</button>
               </div>
             </div>
-            <div class="bot-level-body">
+            <div class="bot-level-body menu-panel-body">
               <div class="bot-level-grid" id="botLevelGrid"></div>
             </div>
-            <div class="bot-level-footer">
+            <div class="bot-level-footer menu-panel-footer">
               <p class="shop-msg" id="botLevelHint">Level 1 — Slow &amp; clumsy</p>
               <button type="button" class="link-btn" id="btnBotLevelBack">Back</button>
             </div>
@@ -382,32 +581,46 @@
         </div>
 
         <div class="overlay hidden" id="passkeyOverlay" aria-hidden="true">
-          <div class="overlay-card menu-card">
-            <div class="overlay-title">OWNER ACCESS</div>
-            <p class="lobby-text">Enter owner passkey.</p>
-            <input id="passkeyInput" class="room-input" type="password" maxlength="8" placeholder="PASSKEY" autocomplete="off" />
-            <p class="shop-msg" id="passkeyMsg"></p>
-            <button type="button" class="play-again" id="btnPasskeySubmit">Unlock</button>
-            <button type="button" class="link-btn" id="btnPasskeyCancel">Cancel</button>
+          <div class="overlay-card menu-card menu-panel">
+            <div class="menu-panel-header">
+              <div class="overlay-title">OWNER ACCESS</div>
+              <p class="lobby-text">Enter owner passkey.</p>
+            </div>
+            <div class="menu-stack">
+              <input id="passkeyInput" class="room-input" type="password" maxlength="8" placeholder="PASSKEY" autocomplete="off" />
+              <p class="shop-msg" id="passkeyMsg"></p>
+              <button type="button" class="play-again menu-action-btn" id="btnPasskeySubmit">Unlock</button>
+            </div>
+            <div class="menu-panel-footer">
+              <button type="button" class="link-btn" id="btnPasskeyCancel">Cancel</button>
+            </div>
           </div>
         </div>
 
         <div class="overlay hidden" id="adminOverlay" aria-hidden="true">
-          <div class="overlay-card menu-card admin-card">
-            <div class="admin-header">
+          <div class="overlay-card menu-card admin-card menu-panel">
+            <div class="admin-header menu-panel-header">
               <div class="overlay-title">ADMIN</div>
-              <p class="admin-welcome" id="adminWelcome">Owner panel</p>
+              <p class="admin-welcome lobby-text" id="adminWelcome">Owner panel</p>
             </div>
-            <div class="admin-body">
+            <div class="admin-body menu-panel-body">
               <p class="shop-points">Points: <span id="adminPoints">0</span></p>
               <div class="admin-row">
                 <input id="adminPointsInput" class="room-input admin-input" type="number" min="0" placeholder="Amount" />
                 <button type="button" class="play-again secondary admin-btn" id="btnAdminAddPts">Add</button>
                 <button type="button" class="play-again secondary admin-btn" id="btnAdminSetPts">Set</button>
               </div>
+              <p class="admin-section-label">XP</p>
+              <p class="shop-points">XP: <span id="adminXp">0</span> · Level <span id="adminXpLevel">1</span></p>
+              <div class="admin-row">
+                <input id="adminXpInput" class="room-input admin-input" type="number" min="0" placeholder="XP amount" />
+                <button type="button" class="play-again secondary admin-btn" id="btnAdminAddXp">Add XP</button>
+                <button type="button" class="play-again secondary admin-btn" id="btnAdminSetXp">Set XP</button>
+              </div>
               <div class="admin-actions">
                 <button type="button" class="play-again secondary" id="btnAdminUnlockAll">Unlock all colours</button>
                 <button type="button" class="play-again secondary" id="btnAdminMaxPts">+999 points</button>
+                <button type="button" class="play-again secondary" id="btnAdminMaxXp">+999 XP</button>
                 <button type="button" class="play-again secondary" id="btnAdminUnlockLevels">Unlock all bot levels</button>
                 <button type="button" class="play-again secondary" id="btnAdminUnlockChaos">Unlock all Chaos levels</button>
                 <button type="button" class="play-again secondary" id="btnAdminUnlockSurvival">Unlock all Survival rounds</button>
@@ -429,13 +642,15 @@
               </div>
               <p class="shop-msg" id="adminMsg">Abilities are local. Points sync globally.</p>
             </div>
-            <button type="button" class="link-btn" id="btnAdminBack">Back</button>
+            <div class="menu-panel-footer">
+              <button type="button" class="link-btn" id="btnAdminBack">Back</button>
+            </div>
           </div>
         </div>
 
         <div class="overlay hidden" id="customizeOverlay" aria-hidden="true">
-          <div class="overlay-card menu-card shop-card">
-            <div class="shop-header">
+          <div class="overlay-card menu-card shop-card menu-panel">
+            <div class="shop-header menu-panel-header">
               <div class="overlay-title">CUSTOMIZE</div>
               <p class="shop-points">Points: <span id="shopPoints">0</span> <span class="shop-hint">(+2 per win · synced online)</span></p>
               <div class="shop-tabs">
@@ -443,35 +658,120 @@
                 <button type="button" class="shop-tab" data-tab="table">Table side</button>
               </div>
             </div>
-            <div class="shop-body">
+            <div class="shop-body menu-panel-body">
               <div class="shop-grid" id="shopGrid"></div>
             </div>
-            <div class="shop-footer">
+            <div class="shop-footer menu-panel-footer">
               <p class="shop-msg" id="shopMsg">Buy or equip a colour.</p>
               <button type="button" class="link-btn" id="btnCustomizeBack">Back</button>
             </div>
           </div>
         </div>
 
-        <div class="overlay hidden" id="lobbyOverlay" aria-hidden="true">
-          <div class="overlay-card menu-card">
-            <div class="overlay-title">ONLINE 1V1</div>
-            <p class="lobby-text">Create a room, join with a code, or search for an opponent.</p>
-            <div class="lobby-actions" id="lobbyActions">
-              <button type="button" class="play-again" id="btnCreateRoom">Create room</button>
-              <div class="join-row">
-                <input id="roomCodeInput" class="room-input" maxlength="4" placeholder="CODE" />
-                <button type="button" class="play-again secondary" id="btnJoinRoom">Join</button>
+        <div class="overlay hidden" id="onlineHubOverlay" aria-hidden="true">
+          <div class="overlay-card menu-card online-panel menu-panel">
+            <div class="online-panel-header menu-panel-header">
+              <div class="overlay-title">ONLINE</div>
+              <p class="lobby-text">Pick a destination. Everything syncs on this server.</p>
+            </div>
+            <div class="online-menu-grid menu-grid" role="navigation" aria-label="Online menu">
+              <button type="button" class="online-menu-tile menu-tile" id="btnOnlineScoreboard">
+                <span class="online-menu-tile-kicker menu-tile-kicker">Standings</span>
+                <span class="online-menu-tile-label menu-tile-label">Scoreboard</span>
+                <span class="online-menu-tile-hint menu-tile-hint">Wins · rank · XP · profiles</span>
+              </button>
+              <button type="button" class="online-menu-tile menu-tile" id="btnOnlineCreateRoom">
+                <span class="online-menu-tile-kicker menu-tile-kicker">Private</span>
+                <span class="online-menu-tile-label menu-tile-label">Create a room</span>
+                <span class="online-menu-tile-hint menu-tile-hint">Host or join with a code</span>
+              </button>
+              <button type="button" class="online-menu-tile online-menu-tile-accent menu-tile menu-tile-accent" id="btnOnlineSearch">
+                <span class="online-menu-tile-kicker menu-tile-kicker">Matchmaking</span>
+                <span class="online-menu-tile-label menu-tile-label">Online play</span>
+                <span class="online-menu-tile-hint menu-tile-hint">Search for a random opponent</span>
+              </button>
+            </div>
+            <div class="online-panel-footer menu-panel-footer">
+              <button type="button" class="link-btn" id="btnOnlineHubBack">Back</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="overlay hidden" id="scoreboardOverlay" aria-hidden="true">
+          <div class="overlay-card menu-card online-panel menu-panel scoreboard-card">
+            <div class="online-panel-header menu-panel-header">
+              <div class="overlay-title">SCOREBOARD</div>
+              <p class="lobby-text">Server-wide online players ranked by wins.</p>
+            </div>
+            <div class="online-scoreboard-shell">
+              <div class="online-scoreboard-cols" aria-hidden="true">
+                <span>#</span>
+                <span>Player</span>
+                <span>Record</span>
               </div>
-              <button type="button" class="play-again secondary" id="btnSearch">Search</button>
+              <div class="online-scoreboard-list" id="onlineScoreboardList" role="list"></div>
+            </div>
+            <p class="shop-msg online-scoreboard-msg" id="onlineScoreboardMsg">Loading…</p>
+            <div class="online-panel-footer online-panel-footer-split menu-panel-footer">
+              <button type="button" class="play-again secondary online-footer-btn" id="btnScoreboardRefresh">Refresh</button>
+              <button type="button" class="link-btn" id="btnScoreboardBack">Back</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="overlay hidden" id="lobbyOverlay" aria-hidden="true">
+          <div class="overlay-card menu-card online-panel menu-panel">
+            <div class="online-panel-header menu-panel-header">
+              <div class="overlay-title">CREATE A ROOM</div>
+              <p class="lobby-text">Host a private match or join a friend’s 4-letter code.</p>
+            </div>
+            <div class="online-stack" id="lobbyActions">
+              <button type="button" class="play-again online-action-btn" id="btnCreateRoom">Create room</button>
+              <div class="online-divider" aria-hidden="true"><span>or join</span></div>
+              <div class="join-row">
+                <input id="roomCodeInput" class="room-input" maxlength="4" placeholder="CODE" autocomplete="off" spellcheck="false" />
+                <button type="button" class="play-again secondary online-action-btn" id="btnJoinRoom">Join</button>
+              </div>
+            </div>
+            <p class="lobby-status online-status-pill" id="lobbyStatus">Not connected</p>
+            <div class="online-panel-footer menu-panel-footer">
+              <button type="button" class="link-btn" id="btnBackMenu">Back</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="overlay hidden" id="onlineSearchOverlay" aria-hidden="true">
+          <div class="overlay-card menu-card online-panel menu-panel">
+            <div class="online-panel-header menu-panel-header">
+              <div class="overlay-title">ONLINE PLAY</div>
+              <p class="lobby-text">Search for a random opponent on this server.</p>
+            </div>
+            <div class="online-stack" id="searchLobbyActions">
+              <button type="button" class="play-again online-action-btn" id="btnSearch">Search for opponent</button>
             </div>
             <div class="search-panel hidden" id="searchPanel">
               <p class="search-status" id="lobbySearchStatus">Searching for opponent...</p>
               <p class="search-timer" id="lobbySearchTimer">0:00</p>
               <button type="button" class="link-btn" id="btnCancelSearch">Cancel search</button>
             </div>
-            <p class="lobby-status" id="lobbyStatus">Not connected</p>
-            <button type="button" class="link-btn" id="btnBackMenu">Back</button>
+            <p class="lobby-status online-status-pill" id="searchLobbyStatus">Ready to search</p>
+            <div class="online-panel-footer menu-panel-footer">
+              <button type="button" class="link-btn" id="btnOnlineSearchBack">Back</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="overlay level-up-overlay hidden" id="levelUpOverlay" aria-hidden="true">
+          <div class="overlay-card menu-card level-up-card">
+            <div class="level-up-banner">LEVEL UP</div>
+            <div class="level-up-rank" id="levelUpRank">2</div>
+            <p class="level-up-sub" id="levelUpSub">XP Level 2</p>
+            <div class="level-up-unlocks hidden" id="levelUpUnlocksWrap">
+              <h3 class="level-up-unlocks-title">Unlocked</h3>
+              <ul class="level-up-unlocks-list" id="levelUpUnlocks"></ul>
+            </div>
+            <p class="lobby-text level-up-empty hidden" id="levelUpEmpty">Keep playing to unlock profile avatars and more.</p>
+            <button type="button" class="play-again" id="btnLevelUpContinue">Continue</button>
           </div>
         </div>
 
@@ -479,6 +779,7 @@
           <div class="overlay-card">
             <div class="overlay-title" id="gameOverTitle">YOU WIN</div>
             <div class="overlay-reward hidden" id="gameOverReward" aria-live="polite"></div>
+            <div class="overlay-reward overlay-xp hidden" id="gameOverXp" aria-live="polite"></div>
             <div class="overlay-score" id="gameOverScore">5 : 3</div>
             <button type="button" class="play-again hidden" id="btnNextLevel">Next level</button>
             <button type="button" class="play-again" id="playAgain">Play again</button>
@@ -492,6 +793,7 @@
             <div class="overlay-title master-clear-title" id="masterClearTitle">CONGRATULATIONS!</div>
             <p class="master-clear-lead" id="masterClearLead">You beat Master Bot — Level 100.</p>
             <div class="overlay-reward hidden" id="masterClearReward" aria-live="polite"></div>
+            <div class="overlay-reward overlay-xp hidden" id="masterClearXp" aria-live="polite"></div>
             <div class="overlay-score" id="masterClearScore">5 : 0</div>
             <p class="master-clear-msg" id="masterClearMsg">
               More updates with more bots, abilities, and different levels are coming soon!
@@ -505,12 +807,12 @@
       <footer class="bottom">
         <div class="scoreboard" aria-label="Scoreboard">
           <div class="scorebox">
-            <div class="label" id="p1Label">LEFT</div>
+            <button type="button" class="label score-profile-btn" id="p1Label" title="View profile">LEFT</button>
             <div class="value" id="p1">0</div>
           </div>
           <div class="divider" aria-hidden="true"></div>
           <div class="scorebox">
-            <div class="label" id="p2Label">RIGHT</div>
+            <button type="button" class="label score-profile-btn" id="p2Label" title="View profile">RIGHT</button>
             <div class="value" id="p2">0</div>
           </div>
         </div>
@@ -518,10 +820,15 @@
       </footer>
     </main>
 
+    <div class="theme-switch theme-switch-dock" id="themeSwitch" role="group" aria-label="Color theme">
+      <button type="button" class="theme-switch-btn active" data-theme="dark" id="btnThemeDark" aria-pressed="true">Dark</button>
+      <button type="button" class="theme-switch-btn" data-theme="light" id="btnThemeLight" aria-pressed="false">Light</button>
+    </div>
+
     <script>
       window.PONG_ADMIN = null;
     </script>
     <script src="admin.local.js"></script>
-    <script src="game.js?v=20260710ak" defer></script>
+    <script src="game.js?v=20260710ax" defer></script>
   </body>
 </html>

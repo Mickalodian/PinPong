@@ -2,6 +2,7 @@ const http = require("http");
 const fs = require("fs");
 const path = require("path");
 const { WebSocketServer } = require("ws");
+const authDb = require("./auth-db");
 
 const PORT = process.env.PORT || 3000;
 const ROOT = [path.join(__dirname, "public"), path.join(__dirname, "..")].find((dir) =>
@@ -25,12 +26,16 @@ const MIME = {
   ".js": "text/javascript",
   ".json": "application/json",
   ".ico": "image/x-icon",
+  ".png": "image/png",
+  ".jpg": "image/jpeg",
+  ".webp": "image/webp",
 };
 
 const rooms = new Map();
 const matchQueue = [];
 
 const PROFILES_PATH = path.join(__dirname, "profiles.json");
+const LEADERBOARD_PATH = path.join(__dirname, "leaderboard.json");
 const ADMIN_CODE = process.env.ADMIN_CODE || "4536";
 const adminSessions = new Map();
 
@@ -49,6 +54,184 @@ function saveProfiles(db) {
   fs.writeFileSync(PROFILES_PATH, JSON.stringify(db, null, 2));
 }
 
+function loadLeaderboard() {
+  try {
+    if (fs.existsSync(LEADERBOARD_PATH)) {
+      const data = JSON.parse(fs.readFileSync(LEADERBOARD_PATH, "utf8"));
+      return data && typeof data === "object" ? data : {};
+    }
+  } catch {
+    /* ignore */
+  }
+  return {};
+}
+
+function saveLeaderboard(db) {
+  fs.writeFileSync(LEADERBOARD_PATH, JSON.stringify(db, null, 2));
+}
+
+function xpLevelFromTotal(xpTotal) {
+  let xp = Math.max(0, Math.floor(Number(xpTotal) || 0));
+  let level = 1;
+  let need = 100;
+  while (xp >= need && level < 99) {
+    xp -= need;
+    level += 1;
+    need = Math.floor(100 * Math.pow(1.14, level - 1));
+  }
+  return level;
+}
+
+function sanitizeLeaderboardId(id) {
+  const s = String(id || "").trim();
+  if (!s || s.length < 8 || s.length > 80) return "";
+  return s.slice(0, 80);
+}
+
+function upsertLeaderboardPlayer(patch = {}, { createIfMissing = true } = {}) {
+  const playerId = sanitizeLeaderboardId(patch.playerId);
+  if (!playerId) return null;
+  const db = loadLeaderboard();
+  if (!db[playerId] && !createIfMissing) return null;
+  const prev = db[playerId] || {
+    playerId,
+    name: "Player",
+    rank: 0,
+    xp: 0,
+    xpLevel: 1,
+    avatar: "default",
+    customAvatarUrl: "",
+    wins: 0,
+    losses: 0,
+    draws: 0,
+    score: 0,
+    goalsFor: 0,
+    goalsAgainst: 0,
+    matches: 0,
+    lastPlayed: 0,
+    updatedAt: 0,
+  };
+  const next = { ...prev, playerId };
+  if (typeof patch.name === "string" && patch.name.trim()) {
+    next.name = String(patch.name).trim().slice(0, 24);
+  }
+  if (typeof patch.rank === "number" && Number.isFinite(patch.rank)) {
+    next.rank = Math.max(0, Math.min(100, Math.floor(patch.rank)));
+  }
+  if (typeof patch.xp === "number" && Number.isFinite(patch.xp)) {
+    next.xp = Math.max(0, Math.min(1e9, Math.floor(patch.xp)));
+    next.xpLevel = xpLevelFromTotal(next.xp);
+  }
+  if (typeof patch.xpLevel === "number" && Number.isFinite(patch.xpLevel)) {
+    next.xpLevel = Math.max(1, Math.min(99, Math.floor(patch.xpLevel)));
+  }
+  if (typeof patch.avatar === "string" && patch.avatar) {
+    next.avatar = String(patch.avatar).slice(0, 64);
+  }
+  if (typeof patch.customAvatarUrl === "string") {
+    const url = String(patch.customAvatarUrl).slice(0, 240);
+    next.customAvatarUrl =
+      url.startsWith("/avatars/") || url.startsWith("http://") || url.startsWith("https://") ? url : prev.customAvatarUrl || "";
+  }
+  if (typeof patch.winsDelta === "number") next.wins = Math.max(0, (next.wins || 0) + Math.floor(patch.winsDelta));
+  if (typeof patch.lossesDelta === "number") next.losses = Math.max(0, (next.losses || 0) + Math.floor(patch.lossesDelta));
+  if (typeof patch.drawsDelta === "number") next.draws = Math.max(0, (next.draws || 0) + Math.floor(patch.drawsDelta));
+  if (typeof patch.goalsForDelta === "number") {
+    next.goalsFor = Math.max(0, (next.goalsFor || 0) + Math.floor(patch.goalsForDelta));
+  }
+  if (typeof patch.goalsAgainstDelta === "number") {
+    next.goalsAgainst = Math.max(0, (next.goalsAgainst || 0) + Math.floor(patch.goalsAgainstDelta));
+  }
+  if (typeof patch.matchesDelta === "number") {
+    next.matches = Math.max(0, (next.matches || 0) + Math.floor(patch.matchesDelta));
+  }
+  next.score = Math.max(0, Math.floor(next.wins || 0));
+  next.lastPlayed = Date.now();
+  next.updatedAt = Date.now();
+  db[playerId] = next;
+  saveLeaderboard(db);
+  return next;
+}
+
+function leaderboardPublicList(limit = 100) {
+  const db = loadLeaderboard();
+  return Object.values(db)
+    .filter((e) => e && e.playerId)
+    .sort((a, b) => {
+      const aw = Number(a.wins) || 0;
+      const bw = Number(b.wins) || 0;
+      if (bw !== aw) return bw - aw;
+      const ax = Number(a.xp) || 0;
+      const bx = Number(b.xp) || 0;
+      if (bx !== ax) return bx - ax;
+      return String(a.name || "").localeCompare(String(b.name || ""));
+    })
+    .slice(0, Math.max(1, Math.min(200, limit)))
+    .map((e, i) => ({
+      place: i + 1,
+      playerId: e.playerId,
+      name: e.name || "Player",
+      rank: e.rank || 0,
+      xp: e.xp || 0,
+      xpLevel: e.xpLevel || xpLevelFromTotal(e.xp || 0),
+      avatar: e.avatar || "default",
+      customAvatarUrl: e.customAvatarUrl || "",
+      wins: e.wins || 0,
+      losses: e.losses || 0,
+      draws: e.draws || 0,
+      score: e.score ?? e.wins ?? 0,
+      goalsFor: e.goalsFor || 0,
+      goalsAgainst: e.goalsAgainst || 0,
+      matches: e.matches || 0,
+      lastPlayed: e.lastPlayed || 0,
+    }));
+}
+
+function playerSnapshotFromWs(ws) {
+  if (!ws) return null;
+  const playerId = sanitizeLeaderboardId(ws.playerId);
+  if (!playerId) return null;
+  return {
+    playerId,
+    name: ws.displayName || "Player",
+    rank: typeof ws.playerLevel === "number" ? ws.playerLevel : 0,
+    xp: typeof ws.profileXp === "number" ? ws.profileXp : 0,
+    xpLevel: typeof ws.profileXpLevel === "number" ? ws.profileXpLevel : xpLevelFromTotal(ws.profileXp || 0),
+    avatar: ws.profileAvatar || "default",
+    customAvatarUrl: ws.profileCustomAvatarUrl || "",
+  };
+}
+
+function recordOnlineMatch(room) {
+  if (!room || room.matchLogged || !room.state?.gameOver) return;
+  room.matchLogged = true;
+  const winner = room.state.winner;
+  const p0 = room.players[0];
+  const p1 = room.players[1];
+  const s0 = room.state.p1Score || 0;
+  const s1 = room.state.p2Score || 0;
+  const apply = (ws, goalsFor, goalsAgainst, result) => {
+    const snap = playerSnapshotFromWs(ws);
+    if (!snap) return;
+    upsertLeaderboardPlayer({
+      ...snap,
+      matchesDelta: 1,
+      goalsForDelta: goalsFor,
+      goalsAgainstDelta: goalsAgainst,
+      winsDelta: result === "win" ? 1 : 0,
+      lossesDelta: result === "loss" ? 1 : 0,
+      drawsDelta: result === "draw" ? 1 : 0,
+    });
+  };
+  if (!winner) {
+    apply(p0, s0, s1, "draw");
+    apply(p1, s1, s0, "draw");
+    return;
+  }
+  apply(p0, s0, s1, winner === "p1" ? "win" : "loss");
+  apply(p1, s1, s0, winner === "p2" ? "win" : "loss");
+}
+
 const VALID_BOSS_POWERS = new Set(["block", "iron", "timeslow", "reflect"]);
 
 function mergeBossPowers(prevList, nextList, force = false) {
@@ -58,10 +241,19 @@ function mergeBossPowers(prevList, nextList, force = false) {
   return clean([...(prevList || []), ...(nextList || [])]);
 }
 
+function mergeAvatarList(prevList, nextList, force = false) {
+  const clean = (list) =>
+    [...new Set((Array.isArray(list) ? list : []).map(String).filter(Boolean))];
+  if (force) return clean(nextList.length ? nextList : ["default"]);
+  const merged = clean([...(prevList || []), ...(nextList || []), "default"]);
+  return merged.length ? merged : ["default"];
+}
+
 function defaultProfile() {
   return {
     name: "",
     points: 0,
+    xp: 0,
     maxBotCleared: 0,
     maxChaosCleared: 0,
     maxSurvivalCleared: 0,
@@ -70,6 +262,10 @@ function defaultProfile() {
     equipped: { paddle: "white", table: "classic" },
     redeemedCodes: [],
     bossPowers: [],
+    avatar: "default",
+    ownedAvatars: ["default"],
+    customAvatarUrl: "",
+    title: "",
   };
 }
 
@@ -104,9 +300,12 @@ function mergeProfileRecord(existing, incoming, { force = false } = {}) {
   const prevBoss = Math.max(0, Math.min(10, Math.floor(Number(prev.maxBossCleared) || 0)));
   const incomingPoints = Math.max(0, Math.floor(Number(p.points) || 0));
   const prevPoints = Math.max(0, Math.floor(Number(prev.points) || 0));
+  const incomingXp = Math.max(0, Math.floor(Number(p.xp) || 0));
+  const prevXp = Math.max(0, Math.floor(Number(prev.xp) || 0));
   return {
     name: sanitizeName(p.name || prev.name || ""),
     points: force ? incomingPoints : Math.max(prevPoints, incomingPoints),
+    xp: force ? incomingXp : Math.max(prevXp, incomingXp),
     maxBotCleared: force ? incomingLevel : Math.max(prevLevel, incomingLevel),
     maxChaosCleared: force ? incomingChaos : Math.max(prevChaos, incomingChaos),
     maxSurvivalCleared: force ? incomingSurvival : Math.max(prevSurvival, incomingSurvival),
@@ -126,6 +325,10 @@ function mergeProfileRecord(existing, incoming, { force = false } = {}) {
       ]),
     ],
     bossPowers: mergeBossPowers(prev.bossPowers, p.bossPowers, force),
+    avatar: String(p.avatar || prev.avatar || "default").slice(0, 64),
+    ownedAvatars: mergeAvatarList(prev.ownedAvatars, p.ownedAvatars, force),
+    customAvatarUrl: String(p.customAvatarUrl || prev.customAvatarUrl || "").slice(0, 200),
+    title: String(p.title || prev.title || "").slice(0, 32),
     updatedAt: Date.now(),
   };
 }
@@ -167,6 +370,13 @@ function relayCosmetics(room, ws) {
       table: ws.cosmetics?.table || "classic",
       name: ws.displayName || "Opponent",
       level: ws.playerLevel || 0,
+      xp: ws.profileXp || 0,
+      avatar: ws.profileAvatar || "default",
+      customAvatarUrl: ws.profileCustomAvatarUrl || "",
+      maxBotCleared: ws.profileMaxBotCleared ?? ws.playerLevel ?? 0,
+      maxChaosCleared: ws.profileMaxChaosCleared || 0,
+      maxSurvivalCleared: ws.profileMaxSurvivalCleared || 0,
+      maxBossCleared: ws.profileMaxBossCleared || 0,
     }));
   }
 }
@@ -174,23 +384,25 @@ function relayCosmetics(room, ws) {
 function exchangeCosmetics(room) {
   const p0 = room.players[0];
   const p1 = room.players[1];
+  const pack = (from) => ({
+    type: "oCos",
+    paddle: from.cosmetics?.paddle || "white",
+    table: from.cosmetics?.table || "classic",
+    name: from.displayName || "Opponent",
+    level: from.playerLevel || 0,
+    xp: from.profileXp || 0,
+    avatar: from.profileAvatar || "default",
+    customAvatarUrl: from.profileCustomAvatarUrl || "",
+    maxBotCleared: from.profileMaxBotCleared ?? from.playerLevel ?? 0,
+    maxChaosCleared: from.profileMaxChaosCleared || 0,
+    maxSurvivalCleared: from.profileMaxSurvivalCleared || 0,
+    maxBossCleared: from.profileMaxBossCleared || 0,
+  });
   if (p0?.readyState === 1 && p1) {
-    p0.send(JSON.stringify({
-      type: "oCos",
-      paddle: p1.cosmetics?.paddle || "white",
-      table: p1.cosmetics?.table || "classic",
-      name: p1.displayName || "Opponent",
-      level: p1.playerLevel || 0,
-    }));
+    p0.send(JSON.stringify(pack(p1)));
   }
   if (p1?.readyState === 1 && p0) {
-    p1.send(JSON.stringify({
-      type: "oCos",
-      paddle: p0.cosmetics?.paddle || "white",
-      table: p0.cosmetics?.table || "classic",
-      name: p0.displayName || "Opponent",
-      level: p0.playerLevel || 0,
-    }));
+    p1.send(JSON.stringify(pack(p0)));
   }
 }
 
@@ -232,16 +444,91 @@ async function handleApi(req, res, urlPath) {
   }
 
   if (urlPath === "api/admin-auth") {
-    const code = String(body.code || "");
-    if (code !== ADMIN_CODE) {
+    // Passkey admin auth removed — Admin is owner-account only (MikLoit via /api/auth/login).
+    res.writeHead(200, { "Content-Type": "application/json" });
+    res.end(JSON.stringify({ ok: false, error: "Use owner account login" }));
+    return true;
+  }
+
+  if (urlPath === "api/auth/register") {
+    const result = authDb.registerAccount({
+      username: body.username,
+      password: body.password,
+      playerId: body.playerId,
+    });
+    res.writeHead(200, { "Content-Type": "application/json" });
+    res.end(JSON.stringify(result));
+    return true;
+  }
+
+  if (urlPath === "api/auth/login") {
+    const result = authDb.loginAccount({
+      username: body.username,
+      password: body.password,
+    });
+    if (result.ok) {
+      const db = loadProfiles();
+      result.profile = db[result.playerId] || defaultProfile();
+    }
+    res.writeHead(200, { "Content-Type": "application/json" });
+    res.end(JSON.stringify(result));
+    return true;
+  }
+
+  if (urlPath === "api/auth/logout") {
+    authDb.destroySession(body.token);
+    res.writeHead(200, { "Content-Type": "application/json" });
+    res.end(JSON.stringify({ ok: true }));
+    return true;
+  }
+
+  if (urlPath === "api/auth/me") {
+    const session = authDb.getSession(body.token);
+    if (!session) {
       res.writeHead(200, { "Content-Type": "application/json" });
       res.end(JSON.stringify({ ok: false }));
       return true;
     }
-    const token = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
-    adminSessions.set(token, Date.now() + 24 * 60 * 60 * 1000);
+    const acc = authDb.getAccount(session.username);
+    const isOwner = !!(session.isOwner || authDb.accountIsOwner(acc, session.username));
+    const displayName = (acc && acc.displayName) || session.username;
+    const db = loadProfiles();
     res.writeHead(200, { "Content-Type": "application/json" });
-    res.end(JSON.stringify({ ok: true, token, expiresIn: 86400 }));
+    res.end(
+      JSON.stringify({
+        ok: true,
+        username: displayName,
+        playerId: session.playerId,
+        isOwner,
+        profile: db[session.playerId] || defaultProfile(),
+      })
+    );
+    return true;
+  }
+
+  if (urlPath === "api/avatar/upload") {
+    const session = authDb.getSession(body.token);
+    const playerId = session?.playerId || String(body.playerId || "").trim();
+    if (!playerId || playerId.length < 8) {
+      res.writeHead(400, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ ok: false, error: "Sign in or play first" }));
+      return true;
+    }
+    const result = authDb.saveAvatarFile(playerId, body.imageData);
+    if (result.ok) {
+      const db = loadProfiles();
+      const prev = db[playerId] || defaultProfile();
+      prev.customAvatarUrl = result.avatarUrl;
+      prev.avatar = "custom";
+      if (!Array.isArray(prev.ownedAvatars)) prev.ownedAvatars = ["default"];
+      if (!prev.ownedAvatars.includes("custom")) prev.ownedAvatars.push("custom");
+      prev.updatedAt = Date.now();
+      db[playerId] = prev;
+      saveProfiles(db);
+      result.profile = prev;
+    }
+    res.writeHead(200, { "Content-Type": "application/json" });
+    res.end(JSON.stringify(result));
     return true;
   }
 
@@ -271,6 +558,13 @@ async function handleApi(req, res, urlPath) {
     }
     res.writeHead(400, { "Content-Type": "application/json" });
     res.end(JSON.stringify({ error: "Unknown action" }));
+    return true;
+  }
+
+  if (urlPath === "api/leaderboard") {
+    const limit = typeof body.limit === "number" ? body.limit : 100;
+    res.writeHead(200, { "Content-Type": "application/json" });
+    res.end(JSON.stringify({ ok: true, entries: leaderboardPublicList(limit) }));
     return true;
   }
 
@@ -605,6 +899,10 @@ function startLoop(room) {
       }
     }
 
+    if (room.state.gameOver && !room.matchLogged) {
+      recordOnlineMatch(room);
+    }
+
     room.broadcastAcc += frameDt;
     const ball = room.state.ball;
     const nearPaddle =
@@ -689,6 +987,30 @@ function serveStatic(req, res) {
         res.writeHead(500);
         res.end("Server error");
       });
+    return;
+  }
+
+  // Uploaded profile avatars
+  if (urlPath.startsWith("avatars/")) {
+    const avatarFile = authDb.resolveAvatarPath(urlPath.slice("avatars/".length));
+    if (!avatarFile) {
+      res.writeHead(404);
+      res.end("Not found");
+      return;
+    }
+    fs.readFile(avatarFile, (err, data) => {
+      if (err) {
+        res.writeHead(404);
+        res.end("Not found");
+        return;
+      }
+      const ext = path.extname(avatarFile);
+      res.writeHead(200, {
+        "Content-Type": MIME[ext] || "application/octet-stream",
+        "Cache-Control": "public, max-age=120",
+      });
+      res.end(data);
+    });
     return;
   }
 
@@ -830,6 +1152,38 @@ wss.on("connection", (ws) => {
       if (typeof msg.level === "number") {
         ws.playerLevel = Math.max(0, Math.min(100, Math.floor(msg.level)));
       }
+      if (typeof msg.xp === "number") ws.profileXp = Math.max(0, Math.min(1e9, Math.floor(msg.xp)));
+      if (typeof msg.xpLevel === "number") {
+        ws.profileXpLevel = Math.max(1, Math.min(99, Math.floor(msg.xpLevel)));
+      } else if (typeof msg.xp === "number") {
+        ws.profileXpLevel = xpLevelFromTotal(ws.profileXp);
+      }
+      if (typeof msg.avatar === "string" && msg.avatar) {
+        ws.profileAvatar = String(msg.avatar).slice(0, 64);
+      }
+      if (typeof msg.customAvatarUrl === "string") {
+        const url = String(msg.customAvatarUrl).slice(0, 240);
+        ws.profileCustomAvatarUrl = url.startsWith("/avatars/") || url.startsWith("http://") || url.startsWith("https://")
+          ? url
+          : "";
+      }
+      if (typeof msg.playerId === "string") {
+        ws.playerId = sanitizeLeaderboardId(msg.playerId);
+      }
+      if (typeof msg.maxBotCleared === "number") {
+        ws.profileMaxBotCleared = Math.max(0, Math.min(100, Math.floor(msg.maxBotCleared)));
+      }
+      if (typeof msg.maxChaosCleared === "number") {
+        ws.profileMaxChaosCleared = Math.max(0, Math.min(100, Math.floor(msg.maxChaosCleared)));
+      }
+      if (typeof msg.maxSurvivalCleared === "number") {
+        ws.profileMaxSurvivalCleared = Math.max(0, Math.min(100, Math.floor(msg.maxSurvivalCleared)));
+      }
+      if (typeof msg.maxBossCleared === "number") {
+        ws.profileMaxBossCleared = Math.max(0, Math.min(20, Math.floor(msg.maxBossCleared)));
+      }
+      const snap = playerSnapshotFromWs(ws);
+      if (snap) upsertLeaderboardPlayer(snap, { createIfMissing: false });
       if (room) relayCosmetics(room, ws);
       return;
     }
@@ -853,6 +1207,7 @@ wss.on("connection", (ws) => {
 
     if (msg.type === "rematch" && room.state.gameOver) {
       room.state = createState();
+      room.matchLogged = false;
       resetBall(room.state, true);
       sendState(room);
       startLoop(room);
@@ -864,6 +1219,7 @@ wss.on("connection", (ws) => {
       room.state.gameOver = true;
       room.state.winner = winner;
       room.state.running = false;
+      recordOnlineMatch(room);
       broadcast(room, {
         type: "resigned",
         by: ws.playerSlot + 1,

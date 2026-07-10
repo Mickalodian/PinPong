@@ -13,15 +13,20 @@ const ballCfg = { r: 8, speed0: 430, speedMax: 1180 };
 const SAVE_CACHE_KEY = "pong-bw-save";
 const PLAYER_ID_KEY = "pong-player-id";
 const PLAYER_NAME_KEY = "pong-player-name";
-const ADMIN_SESSION_KEY = "pong-admin-until";
-const ADMIN_PASSKEY = "4536";
 const ABILITIES_KEY = "pong-bw-abilities";
 const SETTINGS_KEY = "pong-bw-settings";
+const AUTH_TOKEN_KEY = "pong-auth-token";
+const AUTH_USER_KEY = "pong-auth-user";
 const POINTS_PER_WIN = 2;
 const POINTS_PER_BOT_CLEAR = 5;
 const POINTS_PER_CHAOS_CLEAR = 3;
 const POINTS_PER_SURVIVAL_WIN = 5;
 const POINTS_PER_BOSS_WIN = 8;
+const XP_PER_CLASSIC_WIN = 18;
+const XP_PER_BOT_CLEAR = 45;
+const XP_PER_CHAOS_WIN = 22;
+const XP_PER_SURVIVAL_WIN = 28;
+const XP_PER_BOSS_WIN = 55;
 const CHAOS_MAX_LEVEL = 25;
 const SURVIVAL_MAX_ROUND = 25;
 const BOSS_MAX_LEVEL = 10;
@@ -56,6 +61,20 @@ const BOSS_SHOP = [
     price: 500,
     desc: "Next hit launches the ball. If it strikes the boss, freeze them 10s. 20s cooldown.",
   },
+];
+
+const AVATAR_DEFS = [
+  { id: "default", label: "P", emoji: "P", unlock: { type: "free" } },
+  { id: "smile", label: "Smile", emoji: "☺", unlock: { type: "xp", level: 2 } },
+  { id: "cool", label: "Cool", emoji: "◆", unlock: { type: "xp", level: 4 } },
+  { id: "bolt", label: "Bolt", emoji: "⚡", unlock: { type: "xp", level: 7 } },
+  { id: "robot", label: "Bot", emoji: "▣", unlock: { type: "xp", level: 10 } },
+  { id: "flame", label: "Flame", emoji: "▲", unlock: { type: "chaos", level: 10 } },
+  { id: "crown", label: "Crown", emoji: "♛", unlock: { type: "classic", level: 50 } },
+  { id: "rift", label: "Rift", emoji: "◈", unlock: { type: "chaos", level: 25 } },
+  { id: "endurance", label: "Endurance", emoji: "∞", unlock: { type: "survival", level: 25 } },
+  { id: "overlord", label: "Overlord", emoji: "👁", unlock: { type: "boss", level: 10 } },
+  { id: "custom", label: "Upload", emoji: "+", unlock: { type: "upload" } },
 ];
 
 const SHOP = {
@@ -309,6 +328,7 @@ const REDEEM_CODES = {
 const save = {
   name: "",
   points: 0,
+  xp: 0,
   maxBotCleared: 0,
   maxChaosCleared: 0,
   maxSurvivalCleared: 0,
@@ -318,12 +338,17 @@ const save = {
   redeemedCodes: [],
   shopTab: "paddle",
   bossPowers: [],
+  avatar: "default",
+  ownedAvatars: ["default"],
+  customAvatarUrl: "",
+  title: "",
   abilities: { megaPaddle: false, freeShop: false, slowBot: false, pauseBot: false, bonusPts: false },
 };
 
+let authState = { token: "", username: "", isOwner: false };
+
 function isAdmin() {
-  const until = parseInt(sessionStorage.getItem(ADMIN_SESSION_KEY) || "0", 10);
-  return Date.now() < until;
+  return !!(authState.token && authState.isOwner);
 }
 
 function sanitizeName(name) {
@@ -388,6 +413,11 @@ function applyProfile(data, { replace = false } = {}) {
     save.points = replace ? incoming : Math.max(save.points || 0, incoming);
   }
 
+  if (typeof data.xp === "number" && Number.isFinite(data.xp)) {
+    const incoming = Math.max(0, Math.floor(data.xp));
+    save.xp = replace ? incoming : Math.max(save.xp || 0, incoming);
+  }
+
   if (typeof data.maxBotCleared === "number" && Number.isFinite(data.maxBotCleared)) {
     const incoming = Math.max(0, Math.min(100, Math.floor(data.maxBotCleared)));
     save.maxBotCleared = replace ? incoming : Math.max(save.maxBotCleared || 0, incoming);
@@ -431,13 +461,223 @@ function applyProfile(data, { replace = false } = {}) {
       save.bossPowers = [...merged];
     }
   }
+  if (typeof data.avatar === "string" && data.avatar) save.avatar = String(data.avatar).slice(0, 64);
+  if (typeof data.customAvatarUrl === "string") save.customAvatarUrl = String(data.customAvatarUrl).slice(0, 200);
+  if (typeof data.title === "string") save.title = String(data.title).slice(0, 32);
+  if (Array.isArray(data.ownedAvatars)) {
+    const merged = new Set([...(save.ownedAvatars || ["default"]), ...data.ownedAvatars.map(String), "default"]);
+    save.ownedAvatars = replace
+      ? [...new Set([...data.ownedAvatars.map(String), "default"])]
+      : [...merged];
+  }
   if (!save.owned.paddle.includes("white")) save.owned.paddle.unshift("white");
   if (!save.owned.table.includes("classic")) save.owned.table.unshift("classic");
+  if (!Array.isArray(save.ownedAvatars) || !save.ownedAvatars.length) save.ownedAvatars = ["default"];
   sanitizeEquippedCosmetics();
+  refreshAvatarUnlocks();
 }
 
 function getPlayerLevel() {
   return Math.max(0, Math.min(100, save.maxBotCleared || 0));
+}
+
+function getXpProgress(xpTotal = save.xp || 0) {
+  let xp = Math.max(0, Math.floor(xpTotal));
+  let level = 1;
+  let need = 100;
+  while (xp >= need && level < 99) {
+    xp -= need;
+    level += 1;
+    need = Math.floor(100 * Math.pow(1.14, level - 1));
+  }
+  return { level, into: xp, need, total: Math.max(0, Math.floor(xpTotal)) };
+}
+
+function getXpLevel() {
+  return getXpProgress().level;
+}
+
+function getXpLevelUnlocks(fromLevel, toLevel) {
+  const from = Math.max(0, Math.floor(fromLevel || 0));
+  const to = Math.max(from, Math.floor(toLevel || 0));
+  const unlocks = [];
+  for (const def of AVATAR_DEFS) {
+    const u = def.unlock || {};
+    if (u.type !== "xp") continue;
+    const need = Math.max(1, Math.floor(u.level || 1));
+    if (need > from && need <= to) {
+      unlocks.push({
+        kind: "Profile avatar",
+        id: def.id,
+        label: def.label,
+        emoji: def.emoji || "P",
+        color: "",
+      });
+    }
+  }
+  return unlocks;
+}
+
+function playLevelUpSound() {
+  ensureAudio();
+  if (!audioCtx) return;
+  const t = audioCtx.currentTime;
+  try {
+    const noiseLen = Math.floor(audioCtx.sampleRate * 0.28);
+    const buffer = audioCtx.createBuffer(1, noiseLen, audioCtx.sampleRate);
+    const data = buffer.getChannelData(0);
+    for (let i = 0; i < noiseLen; i++) {
+      data[i] = (Math.random() * 2 - 1) * (1 - i / noiseLen);
+    }
+    const noise = audioCtx.createBufferSource();
+    noise.buffer = buffer;
+    const noiseFilter = audioCtx.createBiquadFilter();
+    noiseFilter.type = "bandpass";
+    noiseFilter.frequency.setValueAtTime(900, t);
+    noiseFilter.frequency.exponentialRampToValueAtTime(2400, t + 0.22);
+    noiseFilter.Q.value = 0.7;
+    const noiseGain = audioCtx.createGain();
+    noiseGain.gain.setValueAtTime(0.0001, t);
+    noiseGain.gain.exponentialRampToValueAtTime(0.22, t + 0.03);
+    noiseGain.gain.exponentialRampToValueAtTime(0.0001, t + 0.28);
+    noise.connect(noiseFilter);
+    noiseFilter.connect(noiseGain);
+    noiseGain.connect(audioCtx.destination);
+    noise.start(t);
+    noise.stop(t + 0.3);
+  } catch {
+    /* ignore */
+  }
+  playTone(70, t, 0.28, "sine", 0.38);
+  playTone(110, t + 0.02, 0.22, "triangle", 0.18);
+  const climb = [392, 523.25, 659.25, 783.99, 1046.5];
+  climb.forEach((freq, i) => {
+    const at = t + 0.1 + i * 0.085;
+    playTone(freq, at, 0.16, "square", 0.11);
+    playTone(freq * 2, at + 0.01, 0.12, "sine", 0.05);
+  });
+  playTone(523.25, t + 0.58, 0.55, "sawtooth", 0.07);
+  playTone(659.25, t + 0.58, 0.55, "triangle", 0.1);
+  playTone(783.99, t + 0.58, 0.6, "sine", 0.12);
+  playTone(1046.5, t + 0.62, 0.35, "square", 0.06);
+}
+
+function paintLevelUpUnlocks(unlocks) {
+  const list = ui.levelUpUnlocks;
+  const wrap = ui.levelUpUnlocksWrap;
+  const empty = ui.levelUpEmpty;
+  if (!list || !wrap) return;
+  list.innerHTML = "";
+  const items = Array.isArray(unlocks) ? unlocks : [];
+  if (!items.length) {
+    wrap.classList.add("hidden");
+    if (empty) empty.classList.remove("hidden");
+    return;
+  }
+  wrap.classList.remove("hidden");
+  if (empty) empty.classList.add("hidden");
+  items.forEach((item, i) => {
+    const li = document.createElement("li");
+    li.className = "level-up-unlock-item";
+    li.style.animationDelay = `${0.12 + i * 0.08}s`;
+    const icon = document.createElement("div");
+    icon.className = "level-up-unlock-icon profile-avatar";
+    icon.textContent = item.emoji || "?";
+    const def = AVATAR_DEFS.find((a) => a.id === item.id);
+    if (def) icon.style.background = avatarCssBackground(def);
+    const text = document.createElement("div");
+    text.className = "level-up-unlock-text";
+    const label = document.createElement("div");
+    label.className = "level-up-unlock-label";
+    label.textContent = item.label || "Unlock";
+    const kind = document.createElement("div");
+    kind.className = "level-up-unlock-kind";
+    kind.textContent = item.kind || "Reward";
+    text.append(label, kind);
+    li.append(icon, text);
+    list.appendChild(li);
+  });
+}
+
+let levelUpTimer = 0;
+
+function openLevelUpOverlay(fromLevel, toLevel) {
+  if (!ui.levelUpOverlay) return;
+  const from = Math.max(1, Math.floor(fromLevel || 1));
+  const to = Math.max(from + 1, Math.floor(toLevel || from + 1));
+  if (ui.levelUpRank) ui.levelUpRank.textContent = String(to);
+  if (ui.levelUpSub) {
+    ui.levelUpSub.textContent =
+      to - from > 1 ? `XP Level ${from} → ${to}` : `XP Level ${to}`;
+  }
+  paintLevelUpUnlocks(getXpLevelUnlocks(from, to));
+  showOverlay(ui.levelUpOverlay);
+  playLevelUpSound();
+}
+
+function closeLevelUpOverlay() {
+  if (levelUpTimer) {
+    clearTimeout(levelUpTimer);
+    levelUpTimer = 0;
+  }
+  hideOverlay(ui.levelUpOverlay);
+}
+
+function scheduleLevelUpCelebration(fromLevel, toLevel) {
+  if (!Number.isFinite(toLevel) || toLevel <= fromLevel) return;
+  if (levelUpTimer) clearTimeout(levelUpTimer);
+  levelUpTimer = setTimeout(() => {
+    levelUpTimer = 0;
+    openLevelUpOverlay(fromLevel, toLevel);
+  }, 650);
+}
+
+function awardXp(amount) {
+  const gain = Math.max(0, Math.floor(amount || 0));
+  if (!gain) return 0;
+  const before = getXpLevel();
+  save.xp = Math.max(0, (save.xp || 0) + gain);
+  refreshAvatarUnlocks();
+  persistSave();
+  const after = getXpLevel();
+  if (after > before && ui.status && s.mode !== "menu") {
+    ui.status.textContent = `XP LEVEL ${after}!`;
+  }
+  return gain;
+}
+
+function avatarUnlocked(def) {
+  if (!def) return false;
+  if (def.id === "custom") return !!(save.customAvatarUrl || (save.ownedAvatars || []).includes("custom"));
+  if ((save.ownedAvatars || []).includes(def.id)) return true;
+  const u = def.unlock || { type: "free" };
+  if (u.type === "free") return true;
+  if (u.type === "xp") return getXpLevel() >= (u.level || 1);
+  if (u.type === "classic") return (save.maxBotCleared || 0) >= (u.level || 1);
+  if (u.type === "chaos") return (save.maxChaosCleared || 0) >= (u.level || 1);
+  if (u.type === "survival") return (save.maxSurvivalCleared || 0) >= (u.level || 1);
+  if (u.type === "boss") return (save.maxBossCleared || 0) >= (u.level || 1);
+  if (u.type === "upload") return !!(authState.token || save.customAvatarUrl);
+  return false;
+}
+
+function refreshAvatarUnlocks() {
+  if (!Array.isArray(save.ownedAvatars)) save.ownedAvatars = ["default"];
+  let changed = false;
+  for (const def of AVATAR_DEFS) {
+    if (def.id === "custom") continue;
+    if (avatarUnlocked(def) && !save.ownedAvatars.includes(def.id)) {
+      save.ownedAvatars.push(def.id);
+      changed = true;
+    }
+  }
+  if (save.avatar && !avatarUnlocked(AVATAR_DEFS.find((a) => a.id === save.avatar) || { id: save.avatar, unlock: { type: "free" } })) {
+    if (save.avatar !== "custom" || !save.customAvatarUrl) {
+      save.avatar = "default";
+      changed = true;
+    }
+  }
+  return changed;
 }
 
 function itemUnlocked(item) {
@@ -600,6 +840,7 @@ function awardBotClear(level) {
   if (lv <= save.maxBotCleared) return 0;
   save.maxBotCleared = lv;
   save.points += POINTS_PER_BOT_CLEAR;
+  awardXp(XP_PER_BOT_CLEAR);
   sanitizeEquippedCosmetics();
   persistSave();
   updatePointsUI();
@@ -613,6 +854,7 @@ function awardChaosClear(level) {
   if (lv <= (save.maxChaosCleared || 0)) return 0;
   save.maxChaosCleared = lv;
   save.points += POINTS_PER_CHAOS_CLEAR;
+  awardXp(Math.round(XP_PER_CHAOS_WIN * 0.5) + lv);
   grantChaosRiftIfEligible();
   sanitizeEquippedCosmetics();
   persistSave();
@@ -627,6 +869,7 @@ function awardSurvivalClear(round) {
   if (lv <= (save.maxSurvivalCleared || 0)) return 0;
   save.maxSurvivalCleared = lv;
   grantEnduranceIfEligible();
+  awardXp(20 + lv);
   sanitizeEquippedCosmetics();
   persistSave();
   updatePointsUI();
@@ -640,6 +883,7 @@ function awardBossClear(level) {
   if (lv <= (save.maxBossCleared || 0)) return 0;
   save.maxBossCleared = lv;
   grantOverlordIfEligible();
+  awardXp(30 + lv * 3);
   sanitizeEquippedCosmetics();
   persistSave();
   updatePointsUI();
@@ -651,6 +895,7 @@ function profilePayload() {
   return {
     name: save.name,
     points: save.points,
+    xp: save.xp || 0,
     maxBotCleared: save.maxBotCleared,
     maxChaosCleared: save.maxChaosCleared || 0,
     maxSurvivalCleared: save.maxSurvivalCleared || 0,
@@ -659,6 +904,10 @@ function profilePayload() {
     equipped: save.equipped,
     redeemedCodes: Array.isArray(save.redeemedCodes) ? save.redeemedCodes : [],
     bossPowers: Array.isArray(save.bossPowers) ? save.bossPowers.filter((id) => VALID_BOSS_POWERS.has(id)) : [],
+    avatar: save.avatar || "default",
+    ownedAvatars: Array.isArray(save.ownedAvatars) ? save.ownedAvatars : ["default"],
+    customAvatarUrl: save.customAvatarUrl || "",
+    title: save.title || "",
   };
 }
 
@@ -759,6 +1008,7 @@ async function syncProfileToServer(opts = {}) {
 
 async function loadSave() {
   loadAbilities();
+  loadAuthState();
   try {
     const raw = localStorage.getItem(PLAYER_NAME_KEY);
     if (raw) save.name = sanitizeName(raw);
@@ -775,6 +1025,7 @@ async function loadSave() {
   } catch {
     /* ignore */
   }
+  await restoreAuthSession();
   await syncProfileFromServer();
   // Always write the merged progress back to local cache.
   try {
@@ -814,6 +1065,7 @@ function awardWinPoints(winner) {
   if (!won) return 0;
   const gain = isAdmin() && save.abilities.bonusPts ? 10 : POINTS_PER_WIN;
   save.points += gain;
+  awardXp(XP_PER_CLASSIC_WIN);
   persistSave();
   updatePointsUI();
   return gain;
@@ -3115,8 +3367,596 @@ function setShopTab(tab) {
   renderShop();
 }
 
+function loadAuthState() {
+  try {
+    authState.token = localStorage.getItem(AUTH_TOKEN_KEY) || "";
+    authState.username = localStorage.getItem(AUTH_USER_KEY) || "";
+    // Never trust a cached owner flag — server /api/auth/me must confirm.
+    authState.isOwner = false;
+  } catch {
+    authState.token = "";
+    authState.username = "";
+    authState.isOwner = false;
+  }
+}
+
+function persistAuthState() {
+  try {
+    if (authState.token) localStorage.setItem(AUTH_TOKEN_KEY, authState.token);
+    else localStorage.removeItem(AUTH_TOKEN_KEY);
+    if (authState.username) localStorage.setItem(AUTH_USER_KEY, authState.username);
+    else localStorage.removeItem(AUTH_USER_KEY);
+  } catch {
+    /* ignore */
+  }
+}
+
+function setAuthMsg(msg) {
+  if (ui.profileAuthMsg) ui.profileAuthMsg.textContent = msg || "";
+}
+
+function avatarCssBackground(def) {
+  if (!def) return "";
+  if (def.id === "custom" && save.customAvatarUrl) return `url("${save.customAvatarUrl}")`;
+  const colors = {
+    default: "#14532d",
+    smile: "#1d4ed8",
+    cool: "#6d28d9",
+    bolt: "#b45309",
+    robot: "#334155",
+    flame: "#9a3412",
+    crown: "#a16207",
+    rift: "#9d174d",
+    endurance: "#0f766e",
+    overlord: "#7f1d1d",
+  };
+  return colors[def.id] || "#222";
+}
+
+function paintAvatarPreview() {
+  const el = ui.profileAvatarPreview;
+  if (!el) return;
+  const def = AVATAR_DEFS.find((a) => a.id === save.avatar) || AVATAR_DEFS[0];
+  el.textContent = "";
+  el.style.backgroundImage = "";
+  if (def.id === "custom" && save.customAvatarUrl) {
+    el.style.backgroundImage = `url("${save.customAvatarUrl}")`;
+    el.textContent = "";
+  } else {
+    el.style.background = avatarCssBackground(def);
+    el.textContent = def.emoji || "P";
+  }
+}
+
+function renderProfileAvatarGrid() {
+  if (!ui.profileAvatarGrid) return;
+  refreshAvatarUnlocks();
+  ui.profileAvatarGrid.innerHTML = "";
+  for (const def of AVATAR_DEFS) {
+    const unlocked = avatarUnlocked(def);
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = `profile-avatar-btn${unlocked ? "" : " locked"}${save.avatar === def.id ? " selected" : ""}`;
+    btn.title = unlocked
+      ? def.label
+      : def.unlock?.type === "xp"
+        ? `Unlock at XP Level ${def.unlock.level}`
+        : def.unlock?.type === "classic"
+          ? `Clear Classic L${def.unlock.level}`
+          : def.unlock?.type === "chaos"
+            ? `Clear Chaos L${def.unlock.level}`
+            : def.unlock?.type === "survival"
+              ? `Clear Survival R${def.unlock.level}`
+              : def.unlock?.type === "boss"
+                ? `Clear Boss B${def.unlock.level}`
+                : def.unlock?.type === "upload"
+                  ? "Upload an image (account recommended)"
+                  : "Locked";
+    if (def.id === "custom" && save.customAvatarUrl) {
+      btn.style.backgroundImage = `url("${save.customAvatarUrl}")`;
+    } else {
+      btn.style.background = avatarCssBackground(def);
+      btn.textContent = def.emoji || "?";
+    }
+    if (!unlocked) {
+      const lock = document.createElement("span");
+      lock.className = "lock-dot";
+      lock.textContent = "🔒";
+      btn.appendChild(lock);
+    }
+    btn.addEventListener("click", () => {
+      if (!unlocked) {
+        setAuthMsg(btn.title);
+        return;
+      }
+      if (def.id === "custom" && !save.customAvatarUrl) {
+        ui.profileAvatarFile?.click();
+        return;
+      }
+      save.avatar = def.id;
+      persistSave();
+      paintAvatarPreview();
+      renderProfileAvatarGrid();
+      setAuthMsg(`Avatar set to ${def.label}.`);
+    });
+    ui.profileAvatarGrid.appendChild(btn);
+  }
+}
+
+function refreshProfilePanel() {
+  refreshAvatarUnlocks();
+  const xp = getXpProgress();
+  if (ui.profileNameInput) ui.profileNameInput.value = getPlayerName();
+  if (ui.profileXpLabel) ui.profileXpLabel.textContent = `XP Level ${xp.level}`;
+  if (ui.profileXpFill) ui.profileXpFill.style.width = `${Math.min(100, (xp.into / Math.max(1, xp.need)) * 100)}%`;
+  if (ui.profileXpSub) ui.profileXpSub.textContent = `${xp.into} / ${xp.need} XP · total ${xp.total}`;
+  if (ui.profileAccountStatus) {
+    ui.profileAccountStatus.textContent = authState.token
+      ? `Signed in as ${authState.username} · progress syncs to your account.`
+      : "Playing as guest — create an account to sync across devices.";
+  }
+  if (ui.profileAuthGuest) ui.profileAuthGuest.classList.toggle("hidden", !!authState.token);
+  if (ui.profileAuthSignedIn) ui.profileAuthSignedIn.classList.toggle("hidden", !authState.token);
+  if (ui.profileSignedInText) ui.profileSignedInText.textContent = `Signed in as ${authState.username}`;
+  paintAvatarPreview();
+  renderProfileAvatarGrid();
+}
+
+function refreshProfileUI() {
+  refreshProfilePanel();
+}
+
+function openProfile() {
+  hideOverlay(ui.menuOverlay);
+  hideOverlay(ui.customizeOverlay);
+  hideOverlay(ui.settingsOverlay);
+  hideOverlay(ui.updatesOverlay);
+  hideOverlay(ui.botModesOverlay);
+  hideOverlay(ui.adminOverlay);
+  hideOverlay(ui.profileViewOverlay);
+  showOverlay(ui.profileOverlay);
+  setStagePlaying(false);
+  startMenuBg();
+  refreshProfileUI();
+  setAuthMsg("");
+  ui.hint.textContent = "Profile — name, XP, avatars, account.";
+  updateNameUI();
+}
+
+function closeProfile() {
+  hideOverlay(ui.profileOverlay);
+  showOverlay(ui.menuOverlay);
+  startMenuBg();
+  updateNameUI();
+}
+
+function formatAccomplishmentsFromStats(stats = {}) {
+  const list = [];
+  const classic = Math.max(0, Math.floor(stats.maxBotCleared || 0));
+  const chaos = Math.max(0, Math.floor(stats.maxChaosCleared || 0));
+  const survival = Math.max(0, Math.floor(stats.maxSurvivalCleared || 0));
+  const boss = Math.max(0, Math.floor(stats.maxBossCleared || 0));
+  const xp = getXpProgress(stats.xp || 0);
+  if (classic > 0) list.push(`Cleared Classic L${classic}`);
+  if (chaos > 0) list.push(`Cleared Chaos L${chaos}`);
+  if (survival > 0) list.push(`Cleared Survival R${survival}`);
+  if (boss > 0) list.push(`Defeated Boss B${boss}${boss >= 10 ? " — Overlord" : ""}`);
+  list.push(`Reached XP Level ${xp.level}`);
+  if (classic >= 50) list.push("Classic Crown unlocked");
+  if (chaos >= 25) list.push("Chaos Rift cleared");
+  if (survival >= 25) list.push("Endurance survivor");
+  if (boss >= 10) list.push("Boss Overlord conquered");
+  return list;
+}
+
+function buildSelfProfileView() {
+  const xp = getXpProgress();
+  const classic = getPlayerLevel();
+  return {
+    name: getPlayerName() || "You",
+    kind: "Player",
+    bio: authState.token
+      ? `Signed-in player · account ${authState.username}.`
+      : "Local player profile.",
+    rankLabel: `Classic rank L${classic}`,
+    xpTotal: xp.total,
+    avatarId: save.avatar || "default",
+    customAvatarUrl: save.customAvatarUrl || "",
+    avatarColor: "",
+    avatarEmoji: "",
+    accomplishments: formatAccomplishmentsFromStats({
+      xp: save.xp || 0,
+      maxBotCleared: save.maxBotCleared || 0,
+      maxChaosCleared: save.maxChaosCleared || 0,
+      maxSurvivalCleared: save.maxSurvivalCleared || 0,
+      maxBossCleared: save.maxBossCleared || 0,
+    }),
+  };
+}
+
+function buildOnlineOpponentProfileView() {
+  const p = net.opponentProfile || {};
+  const name = net.opponentName || "Opponent";
+  const classic = Math.max(0, Math.floor(net.opponentLevel || p.maxBotCleared || 0));
+  const xpTotal = Math.max(0, Math.floor(p.xp || 0));
+  return {
+    name,
+    kind: "Online opponent",
+    bio: "Matched online. Stats shared from their cosmetics profile.",
+    rankLabel: `Classic rank L${classic}`,
+    xpTotal,
+    avatarId: p.avatar || "default",
+    customAvatarUrl: p.customAvatarUrl || "",
+    avatarColor: "",
+    avatarEmoji: "",
+    accomplishments: formatAccomplishmentsFromStats({
+      xp: xpTotal,
+      maxBotCleared: classic,
+      maxChaosCleared: p.maxChaosCleared || 0,
+      maxSurvivalCleared: p.maxSurvivalCleared || 0,
+      maxBossCleared: p.maxBossCleared || 0,
+    }),
+  };
+}
+
+function bossAbilityAccomplishments(def) {
+  if (!def) return [];
+  const list = [`Boss Battle #${def.id}`, `Threat rating ~ Classic L${def.classicEquiv || 50}`];
+  if (def.decoy) list.push(def.doubleDecoy ? "Double Decoy master" : "Decoy specialist");
+  if (def.teleport) list.push("Blink teleport");
+  if (def.grow) list.push("Paddle growth surge");
+  if (def.laser) list.push(def.laserTrack ? "Tracking laser" : "Iris laser");
+  if (def.decoyCurve) list.push("Curving decoy balls");
+  if (def.shake) list.push("Court-shaking presence");
+  if (def.fog) list.push("Fog of war");
+  if (def.slowField) list.push("Chrono slow-field");
+  if (def.id >= 10) list.push("Final Overlord of the arena");
+  return list;
+}
+
+function buildBossProfileView() {
+  const def = bossDef() || BOSS_DEFS[s.botLevel] || BOSS_DEFS[1];
+  const xpEstimate = Math.floor(800 + (def.id || 1) * 420 + (def.classicEquiv || 50) * 18);
+  return {
+    name: def.name || `Boss ${s.botLevel}`,
+    kind: `Boss · B${def.id || s.botLevel}`,
+    bio: `${def.name} rules Boss Battles. Tap the scoreboard name anytime to scout their profile.`,
+    rankLabel: `Boss rank B${def.id || s.botLevel}`,
+    xpTotal: xpEstimate,
+    avatarId: "",
+    customAvatarUrl: "",
+    avatarColor: def.eyeColor || "#14532d",
+    avatarEmoji: def.id >= 10 ? "👁" : "◆",
+    accomplishments: bossAbilityAccomplishments(def),
+  };
+}
+
+function buildBotProfileView() {
+  if (isBossMode()) return buildBossProfileView();
+  const level = Math.max(1, Math.floor(s.botLevel || 1));
+  const mode = s.botMode || "classic";
+  let name = `BOT L${level}`;
+  let kind = "Classic bot";
+  let bio = "Training bot for Classic Levels.";
+  let rankLabel = `Classic bot L${level}`;
+  let avatarId = "robot";
+  let avatarEmoji = "▣";
+  let avatarColor = "";
+  const feats = [];
+  if (mode === "chaos") {
+    name = `CHAOS L${level}`;
+    kind = "Chaos bot";
+    bio = "High-speed multi-ball chaos opponent.";
+    rankLabel = `Chaos bot L${level}`;
+    avatarId = level >= 25 ? "rift" : "flame";
+    avatarEmoji = level >= 25 ? "◈" : "▲";
+    feats.push(`Chaos intensity L${level}`);
+    if (level >= 10) feats.push("Fog of war enabled");
+    if (level >= 25) feats.push("Rift-tier chaos");
+  } else if (mode === "survival") {
+    name = `SURVIVAL R${level}`;
+    kind = "Survival bot";
+    bio = "Two-minute endurance opponent. Highest score wins.";
+    rankLabel = `Survival bot R${level}`;
+    avatarId = "endurance";
+    avatarEmoji = "∞";
+    feats.push(`Survival round ${level}`);
+    if (level >= 25) feats.push("Endurance apex");
+  } else {
+    feats.push(`Classic AI L${level}`);
+    if (level >= 50) feats.push("Crown-tier difficulty");
+    if (level >= 100) feats.push("Max classic pressure");
+  }
+  const xpEstimate = Math.floor(120 + level * level * 3.2 + level * 40);
+  feats.push(`Estimated XP Level ${getXpProgress(xpEstimate).level}`);
+  feats.push("Parry-ready paddle AI");
+  return {
+    name,
+    kind,
+    bio,
+    rankLabel,
+    xpTotal: xpEstimate,
+    avatarId,
+    customAvatarUrl: "",
+    avatarColor,
+    avatarEmoji,
+    accomplishments: feats,
+  };
+}
+
+function paintProfileViewAvatar(profile) {
+  const el = ui.profileViewAvatar;
+  if (!el) return;
+  el.textContent = "";
+  el.style.backgroundImage = "";
+  el.style.background = "";
+  if (profile.customAvatarUrl) {
+    el.style.backgroundImage = `url("${profile.customAvatarUrl}")`;
+    return;
+  }
+  if (profile.avatarColor) {
+    el.style.background = profile.avatarColor;
+    el.textContent = profile.avatarEmoji || "?";
+    return;
+  }
+  const def = AVATAR_DEFS.find((a) => a.id === profile.avatarId) || AVATAR_DEFS[0];
+  if (def.id === "custom") {
+    el.style.background = "#222";
+    el.textContent = "+";
+    return;
+  }
+  el.style.background = avatarCssBackground(def);
+  el.textContent = profile.avatarEmoji || def.emoji || "?";
+}
+
+function paintProfileView(profile) {
+  if (!profile) return;
+  const xp = getXpProgress(profile.xpTotal || 0);
+  if (ui.profileViewTitle) ui.profileViewTitle.textContent = "PROFILE";
+  if (ui.profileViewName) ui.profileViewName.textContent = profile.name || "Unknown";
+  if (ui.profileViewKind) ui.profileViewKind.textContent = profile.kind || "Player";
+  if (ui.profileViewXpLabel) ui.profileViewXpLabel.textContent = `XP Level ${xp.level}`;
+  if (ui.profileViewXpFill) {
+    ui.profileViewXpFill.style.width = `${Math.min(100, (xp.into / Math.max(1, xp.need)) * 100)}%`;
+  }
+  if (ui.profileViewXpSub) ui.profileViewXpSub.textContent = `${xp.into} / ${xp.need} XP · total ${xp.total}`;
+  if (ui.profileViewRank) ui.profileViewRank.textContent = profile.rankLabel || "";
+  if (ui.profileViewBio) ui.profileViewBio.textContent = profile.bio || "";
+  paintProfileViewAvatar(profile);
+  if (ui.profileViewAccomplishments) {
+    ui.profileViewAccomplishments.innerHTML = "";
+    const items = profile.accomplishments?.length ? profile.accomplishments : ["No accomplishments listed."];
+    for (const text of items) {
+      const li = document.createElement("li");
+      li.textContent = text;
+      ui.profileViewAccomplishments.appendChild(li);
+    }
+  }
+}
+
+let profileViewResumeLocal = false;
+
+function openProfileView(profile) {
+  if (!profile || !ui.profileViewOverlay) return;
+  paintProfileView(profile);
+  showOverlay(ui.profileViewOverlay);
+  if (s.mode === "local" && s.running && !s.gameOver) {
+    profileViewResumeLocal = true;
+    s.running = false;
+    if (ui.status) ui.status.textContent = "Paused — profile";
+  }
+}
+
+function closeProfileView() {
+  hideOverlay(ui.profileViewOverlay);
+  if (profileViewResumeLocal) {
+    profileViewResumeLocal = false;
+    if (s.mode === "local" && !s.gameOver) {
+      s.running = true;
+      if (ui.status) ui.status.textContent = "Playing";
+    }
+  }
+}
+
+function resolveScoreboardProfile(side) {
+  if (s.mode === "online") {
+    const meLeft = net.player === 1;
+    const isMe = (side === "p1" && meLeft) || (side === "p2" && !meLeft);
+    return isMe ? buildSelfProfileView() : buildOnlineOpponentProfileView();
+  }
+  if (s.mode === "local") {
+    if (side === "p1") return buildSelfProfileView();
+    return buildBotProfileView();
+  }
+  return null;
+}
+
+function onScoreboardProfileClick(side) {
+  if (s.mode !== "local" && s.mode !== "online") return;
+  if (ui.profileOverlay && !ui.profileOverlay.classList.contains("hidden")) return;
+  const profile = resolveScoreboardProfile(side);
+  if (!profile) return;
+  openProfileView(profile);
+}
+
+async function authRegister() {
+  if (!location.host) {
+    setAuthMsg("Start the game server to create an account.");
+    return;
+  }
+  const username = ui.authUsername?.value || "";
+  const password = ui.authPassword?.value || "";
+  setAuthMsg("Creating account…");
+  try {
+    const res = await fetch("/api/auth/register", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ username, password, playerId: getPlayerId() }),
+    });
+    const data = await res.json();
+    if (!data.ok) {
+      setAuthMsg(data.error || "Could not create account.");
+      return;
+    }
+    authState.token = data.token;
+    authState.username = data.username;
+    authState.isOwner = !!data.isOwner;
+    persistAuthState();
+    persistSave({ force: true });
+    setAuthMsg("Account created — you're signed in.");
+    refreshProfileUI();
+    updateAdminVisibility();
+  } catch {
+    setAuthMsg("Network error — try again.");
+  }
+}
+
+async function authLogin() {
+  if (!location.host) {
+    setAuthMsg("Start the game server to log in.");
+    return;
+  }
+  const username = ui.authUsername?.value || "";
+  const password = ui.authPassword?.value || "";
+  setAuthMsg("Logging in…");
+  try {
+    const res = await fetch("/api/auth/login", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ username, password }),
+    });
+    const data = await res.json();
+    if (!data.ok) {
+      setAuthMsg(data.error || "Login failed.");
+      return;
+    }
+    authState.token = data.token;
+    authState.username = data.username;
+    authState.isOwner = !!data.isOwner;
+    persistAuthState();
+    if (data.playerId) {
+      try {
+        localStorage.setItem(PLAYER_ID_KEY, data.playerId);
+      } catch {
+        /* ignore */
+      }
+    }
+    if (data.profile) applyProfile(data.profile, { replace: true });
+    persistSave({ force: true });
+    updatePointsUI();
+    updateNameUI();
+    setAuthMsg(data.isOwner ? "Welcome back, Owner." : "Welcome back!");
+    refreshProfileUI();
+    updateAdminVisibility();
+  } catch {
+    setAuthMsg("Network error — try again.");
+  }
+}
+
+async function authLogout() {
+  try {
+    if (location.host && authState.token) {
+      await fetch("/api/auth/logout", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ token: authState.token }),
+      });
+    }
+  } catch {
+    /* ignore */
+  }
+  authState.token = "";
+  authState.username = "";
+  authState.isOwner = false;
+  persistAuthState();
+  setAuthMsg("Logged out. Guest progress stays on this device.");
+  refreshProfileUI();
+  updateAdminVisibility();
+}
+
+async function restoreAuthSession() {
+  loadAuthState();
+  updateAdminVisibility();
+  if (!authState.token || !location.host) return;
+  try {
+    const res = await fetch("/api/auth/me", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ token: authState.token }),
+    });
+    const data = await res.json();
+    if (!data.ok) {
+      authState.token = "";
+      authState.username = "";
+      authState.isOwner = false;
+      persistAuthState();
+      updateAdminVisibility();
+      return;
+    }
+    authState.username = data.username || authState.username;
+    authState.isOwner = !!data.isOwner;
+    persistAuthState();
+    updateAdminVisibility();
+    if (data.playerId) {
+      try {
+        localStorage.setItem(PLAYER_ID_KEY, data.playerId);
+      } catch {
+        /* ignore */
+      }
+    }
+    if (data.profile) applyProfile(data.profile);
+  } catch {
+    /* offline — keep signed-in UI but no admin until server confirms */
+    authState.isOwner = false;
+    updateAdminVisibility();
+  }
+}
+
+function uploadProfileAvatar(file) {
+  if (!file) return;
+  if (!location.host) {
+    setAuthMsg("Start the game server to upload avatars.");
+    return;
+  }
+  if (file.size > 350000) {
+    setAuthMsg("Image too large — keep under ~350KB.");
+    return;
+  }
+  const reader = new FileReader();
+  reader.onload = async () => {
+    setAuthMsg("Uploading…");
+    try {
+      const res = await fetch("/api/avatar/upload", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          token: authState.token,
+          playerId: getPlayerId(),
+          imageData: reader.result,
+        }),
+      });
+      const data = await res.json();
+      if (!data.ok) {
+        setAuthMsg(data.error || "Upload failed.");
+        return;
+      }
+      if (data.profile) applyProfile(data.profile, { replace: false });
+      save.customAvatarUrl = data.avatarUrl || save.customAvatarUrl;
+      save.avatar = "custom";
+      if (!save.ownedAvatars.includes("custom")) save.ownedAvatars.push("custom");
+      persistSave({ force: true });
+      setAuthMsg("Custom avatar uploaded!");
+      refreshProfileUI();
+    } catch {
+      setAuthMsg("Upload failed — try again.");
+    }
+  };
+  reader.readAsDataURL(file);
+}
+
 function openCustomize() {
   hideOverlay(ui.menuOverlay);
+  hideOverlay(ui.profileOverlay);
   hideOverlay(ui.botLevelOverlay);
   hideOverlay(ui.chaosLevelOverlay);
   hideOverlay(ui.survivalLevelOverlay);
@@ -3199,13 +4039,14 @@ function openCustomize() {
 function closeCustomize() {
   shopAnimSwatches.length = 0;
   hideOverlay(ui.customizeOverlay);
-  showOverlay(ui.menuOverlay);
+  showOverlay(ui.profileOverlay || ui.menuOverlay);
   setStagePlaying(false);
+  if (ui.profileOverlay && !ui.profileOverlay.classList.contains("hidden")) refreshProfileUI();
 }
 
 function openAdmin() {
   if (!isAdmin()) {
-    openPasskeyOverlay();
+    updateAdminVisibility();
     return;
   }
   hideOverlay(ui.menuOverlay);
@@ -3275,6 +4116,12 @@ function refreshAdminPanel() {
   if (!isAdmin()) return;
   if (ui.adminWelcome) ui.adminWelcome.textContent = "Welcome, Owner";
   if (ui.adminPoints) ui.adminPoints.textContent = String(save.points);
+  const xp = getXpProgress();
+  if (ui.adminXp) ui.adminXp.textContent = String(xp.total);
+  if (ui.adminXpLevel) ui.adminXpLevel.textContent = String(xp.level);
+  if (ui.adminXpInput && document.activeElement !== ui.adminXpInput) {
+    ui.adminXpInput.value = String(xp.total);
+  }
   if (ui.adminLevel) ui.adminLevel.textContent = String(getPlayerLevel());
   if (ui.adminLevelInput && document.activeElement !== ui.adminLevelInput) {
     ui.adminLevelInput.value = String(getPlayerLevel());
@@ -3302,6 +4149,34 @@ function adminSetPoints(n) {
   updatePointsUI();
   refreshAdminPanel();
   if (ui.adminMsg) ui.adminMsg.textContent = `Points set to ${save.points}.`;
+}
+
+function adminAddXp(n) {
+  if (!isAdmin()) return;
+  const gain = Math.max(0, Math.floor(n || 0));
+  if (!gain) {
+    if (ui.adminMsg) ui.adminMsg.textContent = "Enter an XP amount to add.";
+    return;
+  }
+  const before = getXpLevel();
+  save.xp = Math.max(0, (save.xp || 0) + gain);
+  refreshAvatarUnlocks();
+  persistSave();
+  refreshAdminPanel();
+  const after = getXpLevel();
+  if (ui.adminMsg) {
+    ui.adminMsg.textContent =
+      after > before ? `Added ${gain} XP · XP Level ${before} → ${after}.` : `Added ${gain} XP.`;
+  }
+}
+
+function adminSetXp(n) {
+  if (!isAdmin()) return;
+  save.xp = Math.max(0, Math.floor(n || 0));
+  refreshAvatarUnlocks();
+  persistSave({ force: true });
+  refreshAdminPanel();
+  if (ui.adminMsg) ui.adminMsg.textContent = `XP set to ${save.xp} (Level ${getXpLevel()}).`;
 }
 
 function adminUnlockAll() {
@@ -3386,14 +4261,26 @@ function setAdminAbility(key, on) {
   if (ui.adminMsg) ui.adminMsg.textContent = on ? "Ability enabled." : "Ability disabled.";
 }
 
-function initAdminUi() {
+function updateAdminVisibility() {
   if (!ui.btnAdmin) return;
-  ui.btnAdmin.classList.remove("hidden");
+  const show = isAdmin();
+  ui.btnAdmin.classList.toggle("hidden", !show);
+  ui.btnAdmin.setAttribute("aria-hidden", show ? "false" : "true");
+  if (show) {
+    loadAbilities();
+    bindAdminControls();
+  } else {
+    hideOverlay(ui.adminOverlay);
+    hideOverlay(ui.passkeyOverlay);
+  }
+}
+
+function initAdminUi() {
+  updateAdminVisibility();
 }
 
 function openAdminOrPasskey() {
   if (isAdmin()) openAdmin();
-  else openPasskeyOverlay();
 }
 
 function equippedForSide(side) {
@@ -3759,6 +4646,40 @@ const ui = {
   btnModeSurvival: document.getElementById("btnModeSurvival"),
   btnModeBoss: document.getElementById("btnModeBoss"),
   btnBotModesBack: document.getElementById("btnBotModesBack"),
+  btnProfile: document.getElementById("btnProfile"),
+  profileOverlay: document.getElementById("profileOverlay"),
+  profileAvatarPreview: document.getElementById("profileAvatarPreview"),
+  profileNameInput: document.getElementById("profileNameInput"),
+  btnProfileSaveName: document.getElementById("btnProfileSaveName"),
+  profileXpLabel: document.getElementById("profileXpLabel"),
+  profileXpFill: document.getElementById("profileXpFill"),
+  profileXpSub: document.getElementById("profileXpSub"),
+  profileAccountStatus: document.getElementById("profileAccountStatus"),
+  profileAuthGuest: document.getElementById("profileAuthGuest"),
+  profileAuthSignedIn: document.getElementById("profileAuthSignedIn"),
+  profileSignedInText: document.getElementById("profileSignedInText"),
+  authUsername: document.getElementById("authUsername"),
+  authPassword: document.getElementById("authPassword"),
+  btnAuthRegister: document.getElementById("btnAuthRegister"),
+  btnAuthLogin: document.getElementById("btnAuthLogin"),
+  btnAuthLogout: document.getElementById("btnAuthLogout"),
+  profileAuthMsg: document.getElementById("profileAuthMsg"),
+  profileAvatarGrid: document.getElementById("profileAvatarGrid"),
+  profileAvatarFile: document.getElementById("profileAvatarFile"),
+  btnProfileCustomize: document.getElementById("btnProfileCustomize"),
+  btnProfileBack: document.getElementById("btnProfileBack"),
+  profileViewOverlay: document.getElementById("profileViewOverlay"),
+  profileViewTitle: document.getElementById("profileViewTitle"),
+  profileViewAvatar: document.getElementById("profileViewAvatar"),
+  profileViewName: document.getElementById("profileViewName"),
+  profileViewKind: document.getElementById("profileViewKind"),
+  profileViewXpLabel: document.getElementById("profileViewXpLabel"),
+  profileViewXpFill: document.getElementById("profileViewXpFill"),
+  profileViewXpSub: document.getElementById("profileViewXpSub"),
+  profileViewRank: document.getElementById("profileViewRank"),
+  profileViewBio: document.getElementById("profileViewBio"),
+  profileViewAccomplishments: document.getElementById("profileViewAccomplishments"),
+  btnProfileViewBack: document.getElementById("btnProfileViewBack"),
   modeSoonOverlay: document.getElementById("modeSoonOverlay"),
   modeSoonLead: document.getElementById("modeSoonLead"),
   btnModeSoonUpdates: document.getElementById("btnModeSoonUpdates"),
@@ -3791,6 +4712,20 @@ const ui = {
   lobbyOverlay: document.getElementById("lobbyOverlay"),
   lobbyStatus: document.getElementById("lobbyStatus"),
   lobbyActions: document.getElementById("lobbyActions"),
+  onlineHubOverlay: document.getElementById("onlineHubOverlay"),
+  btnOnlineScoreboard: document.getElementById("btnOnlineScoreboard"),
+  btnOnlineCreateRoom: document.getElementById("btnOnlineCreateRoom"),
+  btnOnlineSearch: document.getElementById("btnOnlineSearch"),
+  btnOnlineHubBack: document.getElementById("btnOnlineHubBack"),
+  scoreboardOverlay: document.getElementById("scoreboardOverlay"),
+  onlineScoreboardList: document.getElementById("onlineScoreboardList"),
+  onlineScoreboardMsg: document.getElementById("onlineScoreboardMsg"),
+  btnScoreboardRefresh: document.getElementById("btnScoreboardRefresh"),
+  btnScoreboardBack: document.getElementById("btnScoreboardBack"),
+  onlineSearchOverlay: document.getElementById("onlineSearchOverlay"),
+  searchLobbyActions: document.getElementById("searchLobbyActions"),
+  searchLobbyStatus: document.getElementById("searchLobbyStatus"),
+  btnOnlineSearchBack: document.getElementById("btnOnlineSearchBack"),
   searchPanel: document.getElementById("searchPanel"),
   lobbySearchStatus: document.getElementById("lobbySearchStatus"),
   lobbySearchTimer: document.getElementById("lobbySearchTimer"),
@@ -3800,7 +4735,15 @@ const ui = {
   gameOver: document.getElementById("gameOver"),
   gameOverTitle: document.getElementById("gameOverTitle"),
   gameOverReward: document.getElementById("gameOverReward"),
+  gameOverXp: document.getElementById("gameOverXp"),
   gameOverScore: document.getElementById("gameOverScore"),
+  levelUpOverlay: document.getElementById("levelUpOverlay"),
+  levelUpRank: document.getElementById("levelUpRank"),
+  levelUpSub: document.getElementById("levelUpSub"),
+  levelUpUnlocksWrap: document.getElementById("levelUpUnlocksWrap"),
+  levelUpUnlocks: document.getElementById("levelUpUnlocks"),
+  levelUpEmpty: document.getElementById("levelUpEmpty"),
+  btnLevelUpContinue: document.getElementById("btnLevelUpContinue"),
   playAgain: document.getElementById("playAgain"),
   btnNextLevel: document.getElementById("btnNextLevel"),
   backToMenu: document.getElementById("backToMenu"),
@@ -3829,6 +4772,7 @@ const ui = {
   masterClearLead: document.getElementById("masterClearLead"),
   masterClearMsg: document.getElementById("masterClearMsg"),
   masterClearReward: document.getElementById("masterClearReward"),
+  masterClearXp: document.getElementById("masterClearXp"),
   masterClearScore: document.getElementById("masterClearScore"),
   btnMasterPlayAgain: document.getElementById("btnMasterPlayAgain"),
   btnMasterMenu: document.getElementById("btnMasterMenu"),
@@ -3858,10 +4802,16 @@ const ui = {
   adminWelcome: document.getElementById("adminWelcome"),
   adminPoints: document.getElementById("adminPoints"),
   adminPointsInput: document.getElementById("adminPointsInput"),
+  adminXp: document.getElementById("adminXp"),
+  adminXpLevel: document.getElementById("adminXpLevel"),
+  adminXpInput: document.getElementById("adminXpInput"),
   btnAdminAddPts: document.getElementById("btnAdminAddPts"),
   btnAdminSetPts: document.getElementById("btnAdminSetPts"),
+  btnAdminAddXp: document.getElementById("btnAdminAddXp"),
+  btnAdminSetXp: document.getElementById("btnAdminSetXp"),
   btnAdminUnlockAll: document.getElementById("btnAdminUnlockAll"),
   btnAdminMaxPts: document.getElementById("btnAdminMaxPts"),
+  btnAdminMaxXp: document.getElementById("btnAdminMaxXp"),
   btnAdminUnlockLevels: document.getElementById("btnAdminUnlockLevels"),
   btnAdminUnlockChaos: document.getElementById("btnAdminUnlockChaos"),
   btnAdminUnlockSurvival: document.getElementById("btnAdminUnlockSurvival"),
@@ -4048,6 +4998,7 @@ const net = {
   opponentCosmetics: null,
   opponentName: "",
   opponentLevel: 0,
+  opponentProfile: null,
   searching: false,
   searchStartedAt: 0,
 };
@@ -4079,16 +5030,26 @@ function stopSearchTimer() {
   }
 }
 
+function setOnlineStatus(msg, where = "both") {
+  if (where === "lobby" || where === "both") {
+    if (ui.lobbyStatus) ui.lobbyStatus.textContent = msg;
+  }
+  if (where === "search" || where === "both") {
+    if (ui.searchLobbyStatus) ui.searchLobbyStatus.textContent = msg;
+  }
+}
+
 function beginSearchUI(startedAt) {
   net.searching = true;
   net.searchStartedAt = startedAt || Date.now();
   ui.lobbyActions?.classList.add("hidden");
+  ui.searchLobbyActions?.classList.add("hidden");
   ui.searchPanel?.classList.remove("hidden");
   if (ui.lobbySearchStatus) {
     ui.lobbySearchStatus.textContent = "Searching for opponent...";
     ui.lobbySearchStatus.classList.remove("match-found");
   }
-  if (ui.lobbyStatus) ui.lobbyStatus.textContent = "Looking for an active player...";
+  setOnlineStatus("Looking for an active player...", "search");
   startSearchTimer();
 }
 
@@ -4100,7 +5061,7 @@ function showMatchFoundUI() {
     ui.lobbySearchStatus.classList.add("match-found");
   }
   updateSearchTimerDisplay();
-  if (ui.lobbyStatus) ui.lobbyStatus.textContent = "Starting match...";
+  setOnlineStatus("Starting match...", "search");
 }
 
 function stopSearchUI() {
@@ -4108,6 +5069,7 @@ function stopSearchUI() {
   net.searchStartedAt = 0;
   stopSearchTimer();
   ui.lobbyActions?.classList.remove("hidden");
+  ui.searchLobbyActions?.classList.remove("hidden");
   ui.searchPanel?.classList.add("hidden");
   if (ui.lobbySearchStatus) ui.lobbySearchStatus.classList.remove("match-found");
   if (ui.lobbySearchTimer) ui.lobbySearchTimer.textContent = "0:00";
@@ -4120,7 +5082,7 @@ function startMatchSearch() {
 function cancelMatchSearch() {
   if (net.searching) sendWs({ type: "cancelSearch" });
   stopSearchUI();
-  if (ui.lobbyStatus) ui.lobbyStatus.textContent = "Create or join a room.";
+  setOnlineStatus("Search cancelled. Try again when ready.", "search");
 }
 
 const NET_INTERP_MS = 58;
@@ -4963,36 +5925,43 @@ function drawBossFx() {
         ctx.shadowBlur = 0;
       }
     } else {
+      const tipX = overlord ? laser.beamX ?? x0 : x1;
       ctx.globalAlpha = 0.95;
-      const beam = ctx.createLinearGradient(x0, y0, x1, y0);
-      beam.addColorStop(0, "rgba(255,255,255,0.95)");
-      beam.addColorStop(0.35, def.eyeColor || "#86efac");
-      beam.addColorStop(1, overlord ? "rgba(239,68,68,0.85)" : "rgba(220,38,38,0.15)");
+      const beam = ctx.createLinearGradient(x0, y0, tipX, y0);
+      beam.addColorStop(0, "rgba(255,255,255,0.35)");
+      beam.addColorStop(0.55, def.eyeColor || "#86efac");
+      beam.addColorStop(1, overlord ? "rgba(239,68,68,0.95)" : "rgba(220,38,38,0.15)");
       ctx.strokeStyle = beam;
-      ctx.lineWidth = overlord ? 12 : 10;
+      ctx.lineWidth = overlord ? 10 : 10;
       ctx.shadowColor = def.eyeColor || "#4ade80";
       ctx.shadowBlur = 18;
       ctx.beginPath();
       ctx.moveTo(x0, y0);
-      ctx.lineTo(x1, y0);
-      ctx.stroke();
-      ctx.lineWidth = 3;
-      ctx.strokeStyle = "#fff";
-      ctx.shadowBlur = 0;
-      ctx.beginPath();
-      ctx.moveTo(x0, y0);
-      ctx.lineTo(x1, y0);
+      ctx.lineTo(tipX, y0);
       ctx.stroke();
       if (overlord) {
-        // Bright tip of the traveling shot.
+        // Laser ball projectile — travels the full locked line.
+        const r = 10;
         ctx.globalAlpha = 1;
         ctx.fillStyle = "#fff";
         ctx.shadowColor = def.eyeColor || "#86efac";
-        ctx.shadowBlur = 22;
+        ctx.shadowBlur = 26;
         ctx.beginPath();
-        ctx.arc(x1, y0, 7, 0, Math.PI * 2);
+        ctx.arc(tipX, y0, r, 0, Math.PI * 2);
         ctx.fill();
         ctx.shadowBlur = 0;
+        ctx.fillStyle = def.eyeColor || "#86efac";
+        ctx.beginPath();
+        ctx.arc(tipX, y0, r * 0.45, 0, Math.PI * 2);
+        ctx.fill();
+      } else {
+        ctx.lineWidth = 3;
+        ctx.strokeStyle = "#fff";
+        ctx.shadowBlur = 0;
+        ctx.beginPath();
+        ctx.moveTo(x0, y0);
+        ctx.lineTo(tipX, y0);
+        ctx.stroke();
       }
     }
     ctx.restore();
@@ -6905,7 +7874,7 @@ function requireName(action) {
 function showOverlay(el) {
   el.classList.remove("hidden");
   el.setAttribute("aria-hidden", "false");
-  if (stageEl && (el === ui.nameOverlay || el === ui.menuOverlay || el === ui.botModesOverlay || el === ui.modeSoonOverlay || el === ui.botLevelOverlay || el === ui.chaosLevelOverlay || el === ui.survivalLevelOverlay || el === ui.bossHubOverlay || el === ui.bossShopOverlay || el === ui.bossLevelOverlay || el === ui.lobbyOverlay || el === ui.customizeOverlay || el === ui.settingsOverlay || el === ui.updatesOverlay || el === ui.adminOverlay || el === ui.passkeyOverlay || el === ui.masterClearOverlay)) {
+  if (stageEl && (el === ui.nameOverlay || el === ui.menuOverlay || el === ui.botModesOverlay || el === ui.modeSoonOverlay || el === ui.botLevelOverlay || el === ui.chaosLevelOverlay || el === ui.survivalLevelOverlay || el === ui.bossHubOverlay || el === ui.bossShopOverlay || el === ui.bossLevelOverlay || el === ui.lobbyOverlay || el === ui.onlineHubOverlay || el === ui.onlineSearchOverlay || el === ui.scoreboardOverlay || el === ui.customizeOverlay || el === ui.profileOverlay || el === ui.settingsOverlay || el === ui.updatesOverlay || el === ui.adminOverlay || el === ui.passkeyOverlay || el === ui.masterClearOverlay)) {
     stageEl.classList.add("menu-open");
   }
 }
@@ -6913,7 +7882,7 @@ function showOverlay(el) {
 function hideOverlay(el) {
   el.classList.add("hidden");
   el.setAttribute("aria-hidden", "true");
-  if (stageEl && (el === ui.nameOverlay || el === ui.menuOverlay || el === ui.botModesOverlay || el === ui.modeSoonOverlay || el === ui.botLevelOverlay || el === ui.chaosLevelOverlay || el === ui.survivalLevelOverlay || el === ui.bossHubOverlay || el === ui.bossShopOverlay || el === ui.bossLevelOverlay || el === ui.lobbyOverlay || el === ui.customizeOverlay || el === ui.settingsOverlay || el === ui.updatesOverlay || el === ui.adminOverlay || el === ui.passkeyOverlay || el === ui.masterClearOverlay)) {
+  if (stageEl && (el === ui.nameOverlay || el === ui.menuOverlay || el === ui.botModesOverlay || el === ui.modeSoonOverlay || el === ui.botLevelOverlay || el === ui.chaosLevelOverlay || el === ui.survivalLevelOverlay || el === ui.bossHubOverlay || el === ui.bossShopOverlay || el === ui.bossLevelOverlay || el === ui.lobbyOverlay || el === ui.onlineHubOverlay || el === ui.onlineSearchOverlay || el === ui.scoreboardOverlay || el === ui.customizeOverlay || el === ui.profileOverlay || el === ui.settingsOverlay || el === ui.updatesOverlay || el === ui.adminOverlay || el === ui.passkeyOverlay || el === ui.masterClearOverlay)) {
     stageEl.classList.remove("menu-open");
   }
 }
@@ -6987,6 +7956,17 @@ function setGameOverReward(pts) {
   } else {
     ui.gameOverReward.textContent = "";
     ui.gameOverReward.classList.add("hidden");
+  }
+}
+
+function setGameOverXp(xp) {
+  if (!ui.gameOverXp) return;
+  if (xp > 0) {
+    ui.gameOverXp.textContent = `+${xp} XP`;
+    ui.gameOverXp.classList.remove("hidden");
+  } else {
+    ui.gameOverXp.textContent = "";
+    ui.gameOverXp.classList.add("hidden");
   }
 }
 
@@ -7094,14 +8074,24 @@ function stopConfetti() {
   }
 }
 
-function setMasterClearReward(pts) {
-  if (!ui.masterClearReward) return;
-  if (pts > 0) {
-    ui.masterClearReward.textContent = `+${pts} POINTS`;
-    ui.masterClearReward.classList.remove("hidden");
-  } else {
-    ui.masterClearReward.textContent = "";
-    ui.masterClearReward.classList.add("hidden");
+function setMasterClearReward(pts, xp = 0) {
+  if (ui.masterClearReward) {
+    if (pts > 0) {
+      ui.masterClearReward.textContent = `+${pts} POINTS`;
+      ui.masterClearReward.classList.remove("hidden");
+    } else {
+      ui.masterClearReward.textContent = "";
+      ui.masterClearReward.classList.add("hidden");
+    }
+  }
+  if (ui.masterClearXp) {
+    if (xp > 0) {
+      ui.masterClearXp.textContent = `+${xp} XP`;
+      ui.masterClearXp.classList.remove("hidden");
+    } else {
+      ui.masterClearXp.textContent = "";
+      ui.masterClearXp.classList.add("hidden");
+    }
   }
 }
 
@@ -7122,7 +8112,7 @@ function openMasterClearCelebration(totalPts, opts = {}) {
   if (ui.masterClearScore) {
     ui.masterClearScore.textContent = `${s.p1.score} : ${s.p2.score}`;
   }
-  setMasterClearReward(totalPts || 0);
+  setMasterClearReward(totalPts || 0, opts.xp || 0);
   showOverlay(ui.masterClearOverlay);
   requestAnimationFrame(() => startConfetti());
 }
@@ -7142,6 +8132,7 @@ function openUpdates() {
   hideOverlay(ui.modeSoonOverlay);
   hideOverlay(ui.lobbyOverlay);
   hideOverlay(ui.customizeOverlay);
+  hideOverlay(ui.profileOverlay);
   hideOverlay(ui.settingsOverlay);
   hideOverlay(ui.adminOverlay);
   hideOverlay(ui.masterClearOverlay);
@@ -7161,6 +8152,8 @@ function endGame(winner, opts = {}) {
   const justEnded = !s.gameOver;
   s.gameOver = true;
   s.running = false;
+  const xpBefore = justEnded ? Math.max(0, Math.floor(save.xp || 0)) : 0;
+  const xpLevelBefore = getXpLevel();
   if (isSurvivalMode()) {
     s.survival.active = false;
     setSurvivalTimerVisible(false);
@@ -7175,6 +8168,7 @@ function endGame(winner, opts = {}) {
   resetAbility();
   if (ui.abilityBar) ui.abilityBar.classList.add("hidden");
   setGameOverReward(0);
+  setGameOverXp(0);
 
   let youWon = false;
   let clearBonus = 0;
@@ -7202,6 +8196,7 @@ function endGame(winner, opts = {}) {
         winPts = chaosWinPoints(s.botLevel);
         if (isAdmin() && save.abilities.bonusPts) winPts = Math.max(winPts, 10);
         save.points += winPts;
+        awardXp(XP_PER_CHAOS_WIN + Math.floor(s.botLevel / 2));
         clearBonus = awardChaosClear(s.botLevel);
         persistSave();
         updatePointsUI();
@@ -7217,6 +8212,7 @@ function endGame(winner, opts = {}) {
         winPts = POINTS_PER_SURVIVAL_WIN;
         if (isAdmin() && save.abilities.bonusPts) winPts = Math.max(winPts, 10);
         save.points += winPts;
+        awardXp(XP_PER_SURVIVAL_WIN);
         clearBonus = awardSurvivalClear(s.botLevel);
         persistSave();
         updatePointsUI();
@@ -7231,6 +8227,7 @@ function endGame(winner, opts = {}) {
         winPts = POINTS_PER_BOSS_WIN;
         if (isAdmin() && save.abilities.bonusPts) winPts = Math.max(winPts, 10);
         save.points += winPts;
+        awardXp(XP_PER_BOSS_WIN + s.botLevel * 2);
         clearBonus = awardBossClear(s.botLevel);
         persistSave();
         updatePointsUI();
@@ -7267,6 +8264,10 @@ function endGame(winner, opts = {}) {
       ui.gameOverTitle.textContent = youWon ? "YOU WIN" : "YOU LOSE";
     }
   }
+
+  const xpGained = justEnded ? Math.max(0, Math.floor(save.xp || 0) - xpBefore) : 0;
+  setGameOverXp(xpGained);
+  const xpLevelAfter = getXpLevel();
 
   ui.gameOverScore.textContent = `${s.p1.score} : ${s.p2.score}`;
   if (ui.btnNextLevel) {
@@ -7333,6 +8334,7 @@ function endGame(winner, opts = {}) {
       title: "CHAOS RIFT UNLOCKED",
       lead: "You cleared Chaos Mode — Level 25.",
       msg: "Chaos Rift legendary cosmetic is now yours in Customize.",
+      xp: xpGained,
     });
   } else if (survivalEnduranceUnlock) {
     hideOverlay(ui.gameOver);
@@ -7340,6 +8342,7 @@ function endGame(winner, opts = {}) {
       title: "SURVIVAL ENDURANCE UNLOCKED",
       lead: "You cleared Survival Mode — Round 25.",
       msg: "Endurance Survival cosmetic is now yours in Customize.",
+      xp: xpGained,
     });
   } else if (bossOverlordUnlock) {
     hideOverlay(ui.gameOver);
@@ -7347,13 +8350,18 @@ function endGame(winner, opts = {}) {
       title: "OVERLORD UNLOCKED",
       lead: "You cleared Boss Battles — Overlord defeated.",
       msg: "Overlord BOSS cosmetic is now yours in Customize. The climb is complete!",
+      xp: xpGained,
     });
   } else if (masterClear) {
     hideOverlay(ui.gameOver);
-    openMasterClearCelebration(justEnded ? winPts + clearBonus : 0);
+    openMasterClearCelebration(justEnded ? winPts + clearBonus : 0, { xp: xpGained });
   } else {
     closeMasterClearCelebration();
     showOverlay(ui.gameOver);
+  }
+
+  if (justEnded && xpLevelAfter > xpLevelBefore) {
+    scheduleLevelUpCelebration(xpLevelBefore, xpLevelAfter);
   }
 }
 
@@ -7365,6 +8373,7 @@ function resetLocalMatch() {
   ui.p2.textContent = "0";
   hideOverlay(ui.gameOver);
   closeMasterClearCelebration();
+  closeLevelUpOverlay();
   resetAbility();
   if (isChaosMode()) resetChaosFx();
   if (isBossMode()) {
@@ -7881,6 +8890,7 @@ function closeWs() {
   net.opponentCosmetics = null;
   net.opponentName = "";
   net.opponentLevel = 0;
+  net.opponentProfile = null;
 }
 
 function sendCosmetics() {
@@ -7890,6 +8900,15 @@ function sendCosmetics() {
     table: save.equipped.table,
     name: getPlayerName(),
     level: getPlayerLevel(),
+    playerId: getPlayerId(),
+    xp: Math.max(0, Math.floor(save.xp || 0)),
+    xpLevel: getXpLevel(),
+    avatar: String(save.avatar || "default").slice(0, 64),
+    customAvatarUrl: String(save.customAvatarUrl || "").slice(0, 240),
+    maxBotCleared: Math.max(0, Math.floor(save.maxBotCleared || 0)),
+    maxChaosCleared: Math.max(0, Math.floor(save.maxChaosCleared || 0)),
+    maxSurvivalCleared: Math.max(0, Math.floor(save.maxSurvivalCleared || 0)),
+    maxBossCleared: Math.max(0, Math.floor(save.maxBossCleared || 0)),
   });
 }
 
@@ -7900,7 +8919,7 @@ function sendWs(payload) {
 function connectWs(onOpen) {
   const url = wsURL();
   if (!url) {
-    ui.lobbyStatus.textContent = "Online mode needs the game server. Run Start Server.bat first.";
+    setOnlineStatus("Online mode needs the game server. Run Start Server.bat first.");
     return;
   }
   closeWs();
@@ -7945,7 +8964,7 @@ function handleWsMessage(msg) {
 
   if (msg.type === "searchCancelled") {
     stopSearchUI();
-    if (ui.lobbyStatus) ui.lobbyStatus.textContent = "Create or join a room.";
+    setOnlineStatus("Search cancelled. Try again when ready.", "search");
     return;
   }
 
@@ -7953,7 +8972,7 @@ function handleWsMessage(msg) {
     net.code = msg.code;
     net.player = msg.player;
     s.mode = "online";
-    ui.lobbyStatus.textContent = `Room code: ${msg.code} — waiting for opponent...`;
+    setOnlineStatus(`Room code: ${msg.code} — waiting for opponent...`, "lobby");
     setOnlineLabels();
     sendCosmetics();
     return;
@@ -7963,7 +8982,7 @@ function handleWsMessage(msg) {
     net.code = msg.code;
     net.player = msg.player;
     s.mode = "online";
-    ui.lobbyStatus.textContent = `Joined room ${msg.code}. Waiting for match...`;
+    setOnlineStatus(`Joined room ${msg.code}. Waiting for match...`, "lobby");
     setOnlineLabels();
     sendCosmetics();
     return;
@@ -7973,21 +8992,42 @@ function handleWsMessage(msg) {
     net.opponentCosmetics = { paddle: msg.paddle || "white", table: msg.table || "classic" };
     if (msg.name) net.opponentName = sanitizeName(msg.name) || "Opponent";
     if (typeof msg.level === "number") net.opponentLevel = Math.max(0, Math.min(100, Math.floor(msg.level)));
+    net.opponentProfile = {
+      xp: typeof msg.xp === "number" ? Math.max(0, Math.floor(msg.xp)) : 0,
+      avatar: typeof msg.avatar === "string" && msg.avatar ? String(msg.avatar).slice(0, 64) : "default",
+      customAvatarUrl:
+        typeof msg.customAvatarUrl === "string" ? String(msg.customAvatarUrl).slice(0, 240) : "",
+      maxBotCleared:
+        typeof msg.maxBotCleared === "number"
+          ? Math.max(0, Math.min(100, Math.floor(msg.maxBotCleared)))
+          : net.opponentLevel || 0,
+      maxChaosCleared:
+        typeof msg.maxChaosCleared === "number" ? Math.max(0, Math.floor(msg.maxChaosCleared)) : 0,
+      maxSurvivalCleared:
+        typeof msg.maxSurvivalCleared === "number" ? Math.max(0, Math.floor(msg.maxSurvivalCleared)) : 0,
+      maxBossCleared:
+        typeof msg.maxBossCleared === "number" ? Math.max(0, Math.floor(msg.maxBossCleared)) : 0,
+    };
     setOnlineLabels();
     return;
   }
 
   if (msg.type === "waiting") {
-    ui.lobbyStatus.textContent =
+    setOnlineStatus(
       msg.players < 2
         ? `Room ${msg.code}: waiting for opponent (${msg.players}/2)`
-        : `Room ${msg.code}: both players connected`;
+        : `Room ${msg.code}: both players connected`,
+      "lobby"
+    );
     return;
   }
 
   if (msg.type === "matchReady") {
     stopSearchUI();
     hideOverlay(ui.lobbyOverlay);
+    hideOverlay(ui.onlineSearchOverlay);
+    hideOverlay(ui.onlineHubOverlay);
+    hideOverlay(ui.scoreboardOverlay);
     s.gameOver = false;
     hideOverlay(ui.gameOver);
     setOnlineLabels();
@@ -8054,7 +9094,7 @@ function handleWsMessage(msg) {
   if (msg.type === "opponentLeft") {
     stopGameMusic();
     stopSearchUI();
-    ui.lobbyStatus.textContent = "Opponent left the game.";
+    setOnlineStatus("Opponent left the game.", "lobby");
     ui.status.textContent = "Opponent left";
     s.running = false;
     showOverlay(ui.lobbyOverlay);
@@ -8062,7 +9102,7 @@ function handleWsMessage(msg) {
   }
 
   if (msg.type === "error") {
-    ui.lobbyStatus.textContent = msg.message;
+    setOnlineStatus(msg.message);
   }
 }
 
@@ -8100,6 +9140,7 @@ function startLocalMode(level = 1) {
   hideOverlay(ui.settingsOverlay);
   hideOverlay(ui.adminOverlay);
   hideOverlay(ui.gameOver);
+  hideOverlay(ui.profileViewOverlay);
   setScoreboardLabels(
     formatNameWithLevel(getPlayerName() || "You", getPlayerLevel()),
     `BOT L${s.botLevel}`,
@@ -8132,6 +9173,7 @@ function startChaosMode(level = 1) {
   hideOverlay(ui.settingsOverlay);
   hideOverlay(ui.adminOverlay);
   hideOverlay(ui.gameOver);
+  hideOverlay(ui.profileViewOverlay);
   setScoreboardLabels(
     formatNameWithLevel(getPlayerName() || "You", getPlayerLevel()),
     `CHAOS L${s.botLevel}`,
@@ -8162,6 +9204,7 @@ function startSurvivalMode(round = 1) {
   hideOverlay(ui.settingsOverlay);
   hideOverlay(ui.adminOverlay);
   hideOverlay(ui.gameOver);
+  hideOverlay(ui.profileViewOverlay);
   setScoreboardLabels(
     formatNameWithLevel(getPlayerName() || "You", getPlayerLevel()),
     `SURVIVAL R${s.botLevel}`,
@@ -8198,6 +9241,7 @@ function startBossMode(level = 1) {
   hideOverlay(ui.settingsOverlay);
   hideOverlay(ui.adminOverlay);
   hideOverlay(ui.gameOver);
+  hideOverlay(ui.profileViewOverlay);
   const def = bossDef();
   setScoreboardLabels(
     formatNameWithLevel(getPlayerName() || "You", getPlayerLevel()),
@@ -8208,7 +9252,7 @@ function startBossMode(level = 1) {
   resetLocalMatch();
 }
 
-function openLobby() {
+function openOnlineHub() {
   stopMenuBg();
   hideOverlay(ui.menuOverlay);
   hideOverlay(ui.botLevelOverlay);
@@ -8223,11 +9267,142 @@ function openLobby() {
   hideOverlay(ui.settingsOverlay);
   hideOverlay(ui.adminOverlay);
   hideOverlay(ui.gameOver);
+  hideOverlay(ui.lobbyOverlay);
+  hideOverlay(ui.onlineSearchOverlay);
+  hideOverlay(ui.scoreboardOverlay);
+  showOverlay(ui.onlineHubOverlay);
+  setStagePlaying(false);
+  stopSearchUI();
+  ui.hint.textContent = "Online — scoreboard, rooms, and matchmaking.";
+}
+
+function openCreateRoomLobby() {
+  hideOverlay(ui.onlineHubOverlay);
+  hideOverlay(ui.onlineSearchOverlay);
+  hideOverlay(ui.scoreboardOverlay);
   showOverlay(ui.lobbyOverlay);
   setStagePlaying(false);
   stopSearchUI();
-  ui.lobbyStatus.textContent = "Create a room, join with a code, or search for a match.";
-  ui.hint.textContent = "Online 1v1 — share your room code with a friend.";
+  setOnlineStatus("Create a room or join with a 4-letter code.", "lobby");
+  ui.hint.textContent = "Create a room — share your code with a friend.";
+}
+
+function openOnlineSearchLobby() {
+  hideOverlay(ui.onlineHubOverlay);
+  hideOverlay(ui.lobbyOverlay);
+  hideOverlay(ui.scoreboardOverlay);
+  showOverlay(ui.onlineSearchOverlay);
+  setStagePlaying(false);
+  stopSearchUI();
+  setOnlineStatus("Ready to search for an opponent.", "search");
+  ui.hint.textContent = "Online play — search for a random opponent.";
+}
+
+function scoreboardAvatarStyle(entry) {
+  if (entry.customAvatarUrl) {
+    return { backgroundImage: `url("${entry.customAvatarUrl}")`, text: "" };
+  }
+  const def = AVATAR_DEFS.find((a) => a.id === entry.avatar) || AVATAR_DEFS[0];
+  return { background: avatarCssBackground(def), text: def.emoji || "P" };
+}
+
+function renderOnlineScoreboard(entries) {
+  const list = ui.onlineScoreboardList;
+  if (!list) return;
+  list.innerHTML = "";
+  const rows = Array.isArray(entries) ? entries : [];
+  if (!rows.length) {
+    if (ui.onlineScoreboardMsg) {
+      ui.onlineScoreboardMsg.textContent = "No online players logged yet. Play a match to appear here.";
+    }
+    return;
+  }
+  if (ui.onlineScoreboardMsg) {
+    ui.onlineScoreboardMsg.textContent = `${rows.length} player${rows.length === 1 ? "" : "s"} on this server.`;
+  }
+  rows.forEach((entry) => {
+    const placeNum = Math.max(1, Math.floor(entry.place || 0));
+    const row = document.createElement("div");
+    row.className = `online-score-row${placeNum <= 3 ? ` place-${placeNum}` : ""}`;
+    row.setAttribute("role", "listitem");
+
+    const place = document.createElement("div");
+    place.className = "online-score-place";
+    place.textContent = String(placeNum);
+
+    const player = document.createElement("div");
+    player.className = "online-score-player";
+    const avatar = document.createElement("div");
+    avatar.className = "online-score-avatar";
+    const style = scoreboardAvatarStyle(entry);
+    if (style.backgroundImage) avatar.style.backgroundImage = style.backgroundImage;
+    else if (style.background) avatar.style.background = style.background;
+    avatar.textContent = style.text || "";
+    const meta = document.createElement("div");
+    meta.className = "online-score-meta";
+    const name = document.createElement("div");
+    name.className = "online-score-name";
+    name.textContent = entry.name || "Player";
+    applyLevelClass(name, entry.rank || 0);
+    const stats = document.createElement("div");
+    stats.className = "online-score-stats";
+    stats.textContent = `L${entry.rank || 0} · XP ${entry.xpLevel || 1} · ${entry.matches || 0} played`;
+    meta.append(name, stats);
+    player.append(avatar, meta);
+
+    const record = document.createElement("div");
+    record.className = "online-score-record";
+    const wins = document.createElement("div");
+    wins.className = "online-score-wins";
+    wins.textContent = `${entry.wins || 0}W`;
+    const wl = document.createElement("div");
+    wl.className = "online-score-wl";
+    wl.textContent = `${entry.wins || 0}-${entry.losses || 0}`;
+    record.title = `${entry.wins || 0} wins · ${entry.losses || 0} losses · ${entry.goalsFor || 0} goals`;
+    record.append(wins, wl);
+
+    row.append(place, player, record);
+    list.appendChild(row);
+  });
+}
+
+async function refreshOnlineScoreboard() {
+  if (!ui.onlineScoreboardList) return;
+  if (ui.onlineScoreboardMsg) ui.onlineScoreboardMsg.textContent = "Loading…";
+  if (!location.host) {
+    if (ui.onlineScoreboardMsg) {
+      ui.onlineScoreboardMsg.textContent = "Start the game server to load the scoreboard.";
+    }
+    return;
+  }
+  try {
+    const res = await fetch("/api/leaderboard", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ limit: 100 }),
+    });
+    const data = await res.json();
+    if (!data?.ok) throw new Error("bad response");
+    renderOnlineScoreboard(data.entries || []);
+  } catch {
+    if (ui.onlineScoreboardMsg) {
+      ui.onlineScoreboardMsg.textContent = "Could not load scoreboard. Is the server running?";
+    }
+  }
+}
+
+function openOnlineScoreboard() {
+  hideOverlay(ui.onlineHubOverlay);
+  hideOverlay(ui.lobbyOverlay);
+  hideOverlay(ui.onlineSearchOverlay);
+  showOverlay(ui.scoreboardOverlay);
+  setStagePlaying(false);
+  ui.hint.textContent = "Server scoreboard — online wins, rank, XP, profiles.";
+  refreshOnlineScoreboard();
+}
+
+function openLobby() {
+  openOnlineHub();
 }
 
 function backToMenu() {
@@ -8243,6 +9418,9 @@ function backToMenu() {
   setBossPowerBarVisible(false);
   hideOverlay(ui.gameOver);
   hideOverlay(ui.lobbyOverlay);
+  hideOverlay(ui.onlineHubOverlay);
+  hideOverlay(ui.onlineSearchOverlay);
+  hideOverlay(ui.scoreboardOverlay);
   hideOverlay(ui.botLevelOverlay);
   hideOverlay(ui.chaosLevelOverlay);
   hideOverlay(ui.survivalLevelOverlay);
@@ -8257,6 +9435,8 @@ function backToMenu() {
   hideOverlay(ui.adminOverlay);
   hideOverlay(ui.passkeyOverlay);
   hideOverlay(ui.masterClearOverlay);
+  hideOverlay(ui.profileOverlay);
+  closeLevelUpOverlay();
   showOverlay(ui.menuOverlay);
   setStagePlaying(false);
   setScoreboardLabels("LEFT", "RIGHT");
@@ -8289,8 +9469,17 @@ function bindAdminControls() {
     const n = parseInt(ui.adminPointsInput?.value, 10);
     adminSetPoints(Number.isFinite(n) ? n : 0);
   });
+  bind(ui.btnAdminAddXp, () => {
+    const n = parseInt(ui.adminXpInput?.value, 10);
+    adminAddXp(Number.isFinite(n) ? n : 100);
+  });
+  bind(ui.btnAdminSetXp, () => {
+    const n = parseInt(ui.adminXpInput?.value, 10);
+    adminSetXp(Number.isFinite(n) ? n : 0);
+  });
   bind(ui.btnAdminUnlockAll, adminUnlockAll);
   bind(ui.btnAdminMaxPts, () => adminAddPoints(999));
+  bind(ui.btnAdminMaxXp, () => adminAddXp(999));
   bind(ui.btnAdminUnlockLevels, adminUnlockAllLevels);
   bind(ui.btnAdminUnlockChaos, adminUnlockAllChaosLevels);
   bind(ui.btnAdminUnlockSurvival, adminUnlockAllSurvivalRounds);
@@ -8308,6 +9497,15 @@ function bindAdminControls() {
       }
     });
   }
+  if (ui.adminXpInput) {
+    ui.adminXpInput.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") {
+        playMenuClick();
+        const n = parseInt(ui.adminXpInput.value, 10);
+        adminAddXp(Number.isFinite(n) ? n : 100);
+      }
+    });
+  }
   const bindToggle = (el, key) => {
     if (!el) return;
     el.addEventListener("change", (e) => setAdminAbility(key, e.target.checked));
@@ -8319,39 +9517,14 @@ function bindAdminControls() {
   bindToggle(ui.abBonusPts, "bonusPts");
 }
 
-function unlockAdminSession(hours = 24) {
-  sessionStorage.setItem(ADMIN_SESSION_KEY, String(Date.now() + hours * 3600000));
-  loadAbilities();
-  initAdminUi();
-  bindAdminControls();
-}
-
 function submitPasskey() {
-  const code = ui.passkeyInput?.value || "";
-  if (!code) {
-    if (ui.passkeyMsg) ui.passkeyMsg.textContent = "Enter passkey.";
-    return;
+  if (ui.passkeyMsg) {
+    ui.passkeyMsg.textContent = "Admin is account-only. Sign in as MikLoit in Profile.";
   }
-  if (code !== ADMIN_PASSKEY) {
-    if (ui.passkeyMsg) ui.passkeyMsg.textContent = "Wrong passkey.";
-    return;
-  }
-  unlockAdminSession();
-  hideOverlay(ui.passkeyOverlay);
-  if (ui.passkeyMsg) ui.passkeyMsg.textContent = "";
-  if (ui.passkeyInput) ui.passkeyInput.value = "";
-  openAdmin();
 }
 
 function openPasskeyOverlay() {
-  hideOverlay(ui.menuOverlay);
-  hideOverlay(ui.botLevelOverlay);
-  showOverlay(ui.passkeyOverlay);
-  if (ui.passkeyMsg) ui.passkeyMsg.textContent = "";
-  if (ui.passkeyInput) {
-    ui.passkeyInput.value = "";
-    ui.passkeyInput.focus();
-  }
+  hideOverlay(ui.passkeyOverlay);
 }
 
 function closePasskeyOverlay() {
@@ -8369,8 +9542,74 @@ function bindUi() {
   };
 
   bind(ui.btnLocal, () => requireName(openBotModes));
-  bind(ui.btnOnline, () => requireName(openLobby));
-  bind(ui.btnCustomize, () => requireName(openCustomize));
+  bind(ui.btnOnline, () => requireName(openOnlineHub));
+  bind(ui.btnOnlineHubBack, () => {
+    hideOverlay(ui.onlineHubOverlay);
+    showOverlay(ui.menuOverlay);
+    startMenuBg();
+  });
+  bind(ui.btnOnlineScoreboard, openOnlineScoreboard);
+  bind(ui.btnOnlineCreateRoom, openCreateRoomLobby);
+  bind(ui.btnOnlineSearch, openOnlineSearchLobby);
+  bind(ui.btnScoreboardBack, () => {
+    hideOverlay(ui.scoreboardOverlay);
+    showOverlay(ui.onlineHubOverlay);
+  });
+  bind(ui.btnScoreboardRefresh, () => {
+    playMenuClick();
+    refreshOnlineScoreboard();
+  });
+  bind(ui.btnOnlineSearchBack, () => {
+    cancelMatchSearch();
+    hideOverlay(ui.onlineSearchOverlay);
+    showOverlay(ui.onlineHubOverlay);
+  });
+  bind(ui.btnBackMenu, () => {
+    cancelMatchSearch();
+    hideOverlay(ui.lobbyOverlay);
+    showOverlay(ui.onlineHubOverlay);
+  });
+  bind(ui.btnProfile, () => requireName(openProfile));
+  bind(ui.btnProfileBack, closeProfile);
+  bind(ui.btnProfileViewBack, closeProfileView);
+  bind(ui.btnLevelUpContinue, closeLevelUpOverlay);
+  bind(ui.btnProfileCustomize, () => requireName(openCustomize));
+  if (ui.p1Label) {
+    ui.p1Label.addEventListener("click", () => {
+      playMenuClick();
+      onScoreboardProfileClick("p1");
+    });
+  }
+  if (ui.p2Label) {
+    ui.p2Label.addEventListener("click", () => {
+      playMenuClick();
+      onScoreboardProfileClick("p2");
+    });
+  }
+  bind(ui.btnProfileSaveName, () => {
+    const ok = setPlayerName(ui.profileNameInput?.value || "");
+    setAuthMsg(ok ? "Name saved." : "Enter a valid name.");
+    refreshProfileUI();
+  });
+  bind(ui.btnAuthRegister, () => {
+    playMenuClick();
+    authRegister();
+  });
+  bind(ui.btnAuthLogin, () => {
+    playMenuClick();
+    authLogin();
+  });
+  bind(ui.btnAuthLogout, () => {
+    playMenuClick();
+    authLogout();
+  });
+  if (ui.profileAvatarFile) {
+    ui.profileAvatarFile.addEventListener("change", () => {
+      const file = ui.profileAvatarFile.files?.[0];
+      uploadProfileAvatar(file);
+      ui.profileAvatarFile.value = "";
+    });
+  }
   bind(ui.btnSettings, openSettings);
   bind(ui.btnSettingsBack, closeSettings);
   bind(ui.btnUpdates, openUpdates);
@@ -8506,7 +9745,6 @@ function bindUi() {
   document.addEventListener("fullscreenchange", refreshSettingsUI);
   document.addEventListener("webkitfullscreenchange", refreshSettingsUI);
   bind(ui.btnNameSubmit, submitName);
-  bind(ui.btnChangeName, () => openNameOverlay(true));
   bind(ui.btnBotLevelBack, closeBotLevelSelect);
   document.querySelectorAll(".bot-preset").forEach((btn) => {
     btn.addEventListener("click", () => {
@@ -8532,7 +9770,6 @@ function bindUi() {
   bind(ui.btnCustomizeBack, closeCustomize);
   bind(ui.btnAdmin, openAdminOrPasskey);
   bind(ui.btnAdminBack, closeAdmin);
-  bind(ui.btnBackMenu, backToMenu);
   bind(ui.backToMenu, backToMenu);
   bind(ui.btnCreateRoom, () => connectWs(() => sendWs({ type: "create" })));
   bind(ui.btnSearch, startMatchSearch);
@@ -8658,7 +9895,6 @@ function bindUi() {
         titleClicks = 0;
         playMenuClick();
         if (isAdmin()) openAdmin();
-        else openPasskeyOverlay();
       }
     });
   }
