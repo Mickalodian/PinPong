@@ -25,7 +25,7 @@
         display: none !important;
       }
     </style>
-    <link rel="stylesheet" href="style.css?v=20260710az" />
+    <link rel="stylesheet" href="style.css?v=20260710bc" />
   </head>
   <body>
     <canvas id="menuBg" class="menu-bg" aria-hidden="true"></canvas>
@@ -124,10 +124,15 @@
                 <span class="menu-tile-label">Updates</span>
                 <span class="menu-tile-hint">Changelog and roadmap</span>
               </button>
+              <button type="button" class="menu-tile" id="btnContact">
+                <span class="menu-tile-kicker">Support</span>
+                <span class="menu-tile-label">Contact Us</span>
+                <span class="menu-tile-hint">Bugs · reports · feedback</span>
+              </button>
               <button type="button" class="menu-tile hidden" id="btnAdmin" aria-hidden="true">
                 <span class="menu-tile-kicker">Owner</span>
                 <span class="menu-tile-label">Admin</span>
-                <span class="menu-tile-hint">Owner account only</span>
+                <span class="menu-tile-hint">Tools · players · reports</span>
               </button>
             </div>
           </div>
@@ -603,6 +608,35 @@
               <div class="overlay-title">ADMIN</div>
               <p class="admin-welcome lobby-text" id="adminWelcome">Owner panel</p>
             </div>
+            <div class="menu-grid admin-hub-grid" role="navigation" aria-label="Admin menu">
+              <button type="button" class="menu-tile" id="btnAdminTools">
+                <span class="menu-tile-kicker">Local</span>
+                <span class="menu-tile-label">Tools</span>
+                <span class="menu-tile-hint">Points · XP · unlocks · abilities</span>
+              </button>
+              <button type="button" class="menu-tile" id="btnAdminPlayers">
+                <span class="menu-tile-kicker">Accounts</span>
+                <span class="menu-tile-label">Players</span>
+                <span class="menu-tile-hint">Profiles · ban · kick · adjust</span>
+              </button>
+              <button type="button" class="menu-tile" id="btnAdminReports">
+                <span class="menu-tile-kicker">Inbox</span>
+                <span class="menu-tile-label">Reports</span>
+                <span class="menu-tile-hint">Tickets from Contact Us</span>
+              </button>
+            </div>
+            <div class="menu-panel-footer">
+              <button type="button" class="link-btn" id="btnAdminBack">Back</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="overlay hidden" id="adminToolsOverlay" aria-hidden="true">
+          <div class="overlay-card menu-card admin-card menu-panel">
+            <div class="admin-header menu-panel-header">
+              <div class="overlay-title">TOOLS</div>
+              <p class="lobby-text">Local owner tools for this device.</p>
+            </div>
             <div class="admin-body menu-panel-body">
               <p class="shop-points">Points: <span id="adminPoints">0</span></p>
               <div class="admin-row">
@@ -640,10 +674,150 @@
                 <label class="admin-toggle"><input type="checkbox" id="abPauseBot" /> Pause bot</label>
                 <label class="admin-toggle"><input type="checkbox" id="abBonusPts" /> +10 pts per win</label>
               </div>
-              <p class="shop-msg" id="adminMsg">Abilities are local. Points sync globally.</p>
+              <p class="admin-section-label">Server scoreboard</p>
+              <p class="lobby-text">Online wins and streaks stay forever until you restart the board.</p>
+              <div class="admin-actions">
+                <button type="button" class="play-again secondary" id="btnAdminResetScoreboard">Restart scoreboard</button>
+              </div>
+              <p class="shop-msg" id="adminMsg">Abilities are local. Scoreboard is persistent online.</p>
             </div>
             <div class="menu-panel-footer">
-              <button type="button" class="link-btn" id="btnAdminBack">Back</button>
+              <button type="button" class="link-btn" id="btnAdminToolsBack">Back</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="overlay hidden" id="adminPlayersOverlay" aria-hidden="true">
+          <div class="overlay-card menu-card admin-card menu-panel">
+            <div class="admin-header menu-panel-header">
+              <div class="overlay-title">PLAYERS</div>
+              <p class="lobby-text">Registered accounts on this server. Tap a name to manage.</p>
+            </div>
+            <div class="admin-body menu-panel-body">
+              <div class="admin-list" id="adminPlayersList" role="list"></div>
+              <p class="shop-msg" id="adminPlayersMsg">Loading…</p>
+            </div>
+            <div class="menu-panel-footer online-panel-footer-split">
+              <button type="button" class="play-again secondary online-footer-btn" id="btnAdminPlayersRefresh">Refresh</button>
+              <button type="button" class="link-btn" id="btnAdminPlayersBack">Back</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="overlay hidden" id="adminPlayerDetailOverlay" aria-hidden="true">
+          <div class="overlay-card menu-card admin-card menu-panel">
+            <div class="admin-header menu-panel-header">
+              <div class="overlay-title" id="adminPlayerTitle">PLAYER</div>
+              <p class="lobby-text" id="adminPlayerSub">Account details</p>
+            </div>
+            <div class="admin-body menu-panel-body">
+              <div class="profile-view-hero">
+                <div class="profile-avatar" id="adminPlayerAvatar" aria-hidden="true">P</div>
+                <div class="profile-view-meta">
+                  <div class="profile-view-name" id="adminPlayerName">Player</div>
+                  <div class="profile-view-kind" id="adminPlayerKind">Account</div>
+                  <div class="profile-view-rank" id="adminPlayerStats">0 pts · 0 XP</div>
+                </div>
+              </div>
+              <p class="admin-section-label">Adjust</p>
+              <div class="admin-row">
+                <input id="adminPlayerAmount" class="room-input admin-input" type="number" min="1" value="10" placeholder="Amount" />
+              </div>
+              <div class="admin-actions">
+                <button type="button" class="play-again secondary" id="btnAdminGivePts">Give points</button>
+                <button type="button" class="play-again secondary" id="btnAdminRemovePts">Remove points</button>
+                <button type="button" class="play-again secondary" id="btnAdminGiveXp">Give XP</button>
+                <button type="button" class="play-again secondary" id="btnAdminRemoveXp">Remove XP</button>
+              </div>
+              <p class="admin-section-label">Moderation</p>
+              <div class="admin-actions">
+                <button type="button" class="play-again secondary" id="btnAdminKickPlayer">Kick online</button>
+                <button type="button" class="play-again secondary" id="btnAdminBanPlayer">Ban</button>
+                <button type="button" class="play-again secondary hidden" id="btnAdminUnbanPlayer">Unban</button>
+              </div>
+              <p class="admin-section-label owner-only-section" id="adminRoleSection">Admin role</p>
+              <div class="admin-actions owner-only-section" id="adminRoleActions">
+                <button type="button" class="play-again secondary" id="btnAdminGrantAdmin">Give admin</button>
+                <button type="button" class="play-again secondary hidden" id="btnAdminRevokeAdmin">Remove admin</button>
+              </div>
+              <p class="shop-msg" id="adminPlayerMsg"></p>
+            </div>
+            <div class="menu-panel-footer">
+              <button type="button" class="link-btn" id="btnAdminPlayerDetailBack">Back</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="overlay hidden" id="adminReportsOverlay" aria-hidden="true">
+          <div class="overlay-card menu-card admin-card menu-panel">
+            <div class="admin-header menu-panel-header">
+              <div class="overlay-title">REPORTS</div>
+              <p class="lobby-text">Tickets submitted via Contact Us.</p>
+            </div>
+            <div class="admin-body menu-panel-body">
+              <div class="admin-list" id="adminReportsList" role="list"></div>
+              <p class="shop-msg" id="adminReportsMsg">Loading…</p>
+            </div>
+            <div class="menu-panel-footer online-panel-footer-split">
+              <button type="button" class="play-again secondary online-footer-btn" id="btnAdminReportsRefresh">Refresh</button>
+              <button type="button" class="link-btn" id="btnAdminReportsBack">Back</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="overlay hidden" id="adminReportDetailOverlay" aria-hidden="true">
+          <div class="overlay-card menu-card admin-card menu-panel">
+            <div class="admin-header menu-panel-header">
+              <div class="overlay-title" id="adminReportTitle">TICKET</div>
+              <p class="lobby-text" id="adminReportMeta"></p>
+            </div>
+            <div class="admin-body menu-panel-body">
+              <p class="lobby-text" id="adminReportBody"></p>
+              <p class="admin-section-label">Status</p>
+              <div class="admin-actions">
+                <button type="button" class="play-again secondary" id="btnReportOpen">Mark open</button>
+                <button type="button" class="play-again secondary" id="btnReportResolved">Resolve</button>
+                <button type="button" class="play-again secondary" id="btnReportClosed">Close</button>
+              </div>
+              <p class="shop-msg" id="adminReportMsg"></p>
+            </div>
+            <div class="menu-panel-footer">
+              <button type="button" class="link-btn" id="btnAdminReportDetailBack">Back</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="overlay hidden" id="contactOverlay" aria-hidden="true">
+          <div class="overlay-card menu-card menu-panel contact-card">
+            <div class="menu-panel-header">
+              <div class="overlay-title">CONTACT US</div>
+              <p class="lobby-text">Signed-in players can send bugs, reports, and feedback to the owner.</p>
+            </div>
+            <div class="menu-panel-body contact-body">
+              <div id="contactGuest" class="contact-guest">
+                <p class="lobby-text">Sign in from Profile first, then return here to submit a ticket.</p>
+                <button type="button" class="play-again" id="btnContactGoProfile">Open Profile</button>
+              </div>
+              <div id="contactForm" class="contact-form hidden">
+                <label class="admin-section-label" for="contactCategory">Category</label>
+                <select id="contactCategory" class="room-input contact-select">
+                  <option value="bug">Bug</option>
+                  <option value="report">Player report</option>
+                  <option value="feedback">Feedback</option>
+                  <option value="other">Other</option>
+                </select>
+                <label class="admin-section-label" for="contactSubject">Subject</label>
+                <input id="contactSubject" class="room-input" maxlength="80" placeholder="Short summary" autocomplete="off" />
+                <label class="admin-section-label" for="contactReported">Player involved (optional)</label>
+                <input id="contactReported" class="room-input" maxlength="24" placeholder="Username or display name" autocomplete="off" />
+                <label class="admin-section-label" for="contactMessage">Details</label>
+                <textarea id="contactMessage" class="room-input contact-textarea" maxlength="2000" rows="6" placeholder="Describe the bug, report, or feedback…"></textarea>
+                <button type="button" class="play-again" id="btnContactSubmit">Send ticket</button>
+                <p class="shop-msg" id="contactMsg"></p>
+              </div>
+            </div>
+            <div class="menu-panel-footer">
+              <button type="button" class="link-btn" id="btnContactBack">Back</button>
             </div>
           </div>
         </div>
@@ -701,7 +875,7 @@
           <div class="overlay-card menu-card online-panel menu-panel scoreboard-card">
             <div class="online-panel-header menu-panel-header">
               <div class="overlay-title">SCOREBOARD</div>
-              <p class="lobby-text">Server-wide online players ranked by wins. Tap a player to view their profile.</p>
+              <p class="lobby-text">Persistent server standings — wins and streaks never expire. Tap a player to view their profile.</p>
             </div>
             <div class="online-scoreboard-shell">
               <div class="online-scoreboard-cols" aria-hidden="true">
@@ -830,6 +1004,6 @@
       window.PONG_ADMIN = null;
     </script>
     <script src="admin.local.js"></script>
-    <script src="game.js?v=20260710az" defer></script>
+    <script src="game.js?v=20260710bc" defer></script>
   </body>
 </html>

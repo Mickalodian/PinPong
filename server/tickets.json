@@ -1,0 +1,14 @@
+[
+  {
+    "id": "t_mrfe8ea4_o7prk4",
+    "createdAt": 1783715632204,
+    "updatedAt": 1783715632204,
+    "username": "mikloit",
+    "playerId": "dccb8911-4688-419e-869e-cc2c2c00217d",
+    "category": "bug",
+    "subject": "Test ticket subject",
+    "message": "This is a long enough test message for the ticket system.",
+    "reportedPlayer": "",
+    "status": "open"
+  }
+]

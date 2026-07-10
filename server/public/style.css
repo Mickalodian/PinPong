@@ -4725,3 +4725,83 @@ body.phone-mode .main-menu-card {
 body.phone-mode .main-menu-card .play-again {
   margin-top: 6px;
 }
+
+.admin-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 100%;
+}
+
+.admin-list-row {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  padding: 12px 14px;
+  margin: 0;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.04);
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  appearance: none;
+}
+
+.admin-list-row:hover,
+.admin-list-row:focus-visible {
+  border-color: rgba(134, 239, 172, 0.55);
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.admin-list-row.status-resolved,
+.admin-list-row.status-closed {
+  opacity: 0.72;
+}
+
+.admin-list-title {
+  font-weight: 800;
+  letter-spacing: 0.04em;
+}
+
+.admin-list-meta {
+  font-size: 12px;
+  opacity: 0.75;
+  line-height: 1.35;
+}
+
+.admin-hub-grid {
+  width: 100%;
+}
+
+.contact-body,
+.contact-form,
+.contact-guest {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: 100%;
+}
+
+.contact-select,
+.contact-textarea {
+  width: 100%;
+  box-sizing: border-box;
+  resize: vertical;
+  min-height: 44px;
+  font-family: inherit;
+}
+
+.contact-textarea {
+  min-height: 140px;
+  line-height: 1.4;
+}
+
+body[data-theme="light"] .admin-list-row {
+  border-color: rgba(0, 0, 0, 0.2);
+  background: #f4f4f5;
+  color: #18181b;
+}

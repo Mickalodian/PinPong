@@ -33,11 +33,139 @@ const MIME = {
 
 const rooms = new Map();
 const matchQueue = [];
+const connectedClients = new Set();
 
 const PROFILES_PATH = path.join(__dirname, "profiles.json");
 const LEADERBOARD_PATH = path.join(__dirname, "leaderboard.json");
+const TICKETS_PATH = path.join(__dirname, "tickets.json");
 const ADMIN_CODE = process.env.ADMIN_CODE || "4536";
 const adminSessions = new Map();
+
+function requireOwner(token) {
+  const session = authDb.getSession(token);
+  if (!session) return null;
+  const acc = authDb.getAccount(session.username);
+  if (!(session.isOwner || authDb.accountIsOwner(acc, session.username))) return null;
+  return session;
+}
+
+function requireAdmin(token) {
+  const session = authDb.getSession(token);
+  if (!session) return null;
+  const acc = authDb.getAccount(session.username);
+  if (session.isOwner || authDb.accountIsOwner(acc, session.username)) return session;
+  if (session.isAdmin || authDb.accountIsAdmin(acc, session.username)) return session;
+  return null;
+}
+
+function loadTickets() {
+  try {
+    if (fs.existsSync(TICKETS_PATH)) {
+      const data = JSON.parse(fs.readFileSync(TICKETS_PATH, "utf8"));
+      return Array.isArray(data) ? data : [];
+    }
+  } catch {
+    /* ignore */
+  }
+  return [];
+}
+
+function saveTickets(list) {
+  fs.writeFileSync(TICKETS_PATH, JSON.stringify(Array.isArray(list) ? list : [], null, 2));
+}
+
+function createTicket({ username, playerId, category, subject, message, reportedPlayer }) {
+  const cats = new Set(["bug", "report", "other", "feedback"]);
+  const cat = cats.has(String(category || "").toLowerCase()) ? String(category).toLowerCase() : "other";
+  const sub = String(subject || "").trim().slice(0, 80);
+  const msg = String(message || "").trim().slice(0, 2000);
+  if (sub.length < 3) return { ok: false, error: "Subject must be at least 3 characters" };
+  if (msg.length < 10) return { ok: false, error: "Message must be at least 10 characters" };
+  const tickets = loadTickets();
+  const ticket = {
+    id: `t_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`,
+    createdAt: Date.now(),
+    updatedAt: Date.now(),
+    username: String(username || "player").slice(0, 24),
+    playerId: String(playerId || "").slice(0, 80),
+    category: cat,
+    subject: sub,
+    message: msg,
+    reportedPlayer: String(reportedPlayer || "").trim().slice(0, 24),
+    status: "open",
+  };
+  tickets.unshift(ticket);
+  // Keep a reasonable history
+  if (tickets.length > 500) tickets.length = 500;
+  saveTickets(tickets);
+  return { ok: true, ticket };
+}
+
+function kickPlayerConnections(playerId, reason = "Kicked by admin") {
+  const pid = String(playerId || "").trim();
+  if (!pid) return 0;
+  let n = 0;
+  for (const ws of [...connectedClients]) {
+    if (!ws || ws.readyState !== 1) continue;
+    if (String(ws.playerId || "") !== pid) continue;
+    try {
+      ws.send(JSON.stringify({ type: "kicked", reason }));
+    } catch {
+      /* ignore */
+    }
+    try {
+      ws.close();
+    } catch {
+      /* ignore */
+    }
+    n += 1;
+  }
+  authDb.destroySessionsForPlayerId(pid);
+  return n;
+}
+
+function adminAdjustProfile(playerId, action, amount = 0) {
+  const pid = String(playerId || "").trim();
+  if (!pid || pid.length < 8) return { ok: false, error: "Invalid player" };
+  const db = loadProfiles();
+  const prev = db[pid] || defaultProfile();
+  const next = { ...prev, owned: { ...(prev.owned || {}) }, equipped: { ...(prev.equipped || {}) } };
+  const n = Math.max(0, Math.floor(Number(amount) || 0));
+  if (action === "givePoints") next.points = Math.max(0, Math.floor(prev.points || 0) + Math.max(1, n || 1));
+  else if (action === "removePoints") next.points = Math.max(0, Math.floor(prev.points || 0) - Math.max(1, n || 1));
+  else if (action === "giveXp") next.xp = Math.max(0, Math.floor(prev.xp || 0) + Math.max(1, n || 1));
+  else if (action === "removeXp") next.xp = Math.max(0, Math.floor(prev.xp || 0) - Math.max(1, n || 1));
+  else return { ok: false, error: "Unknown action" };
+  next.updatedAt = Date.now();
+  db[pid] = next;
+  saveProfiles(db);
+  return { ok: true, profile: next };
+}
+
+function buildAdminPlayerRow(acc) {
+  const profile = loadProfiles()[acc.playerId] || defaultProfile();
+  const online = [...connectedClients].some(
+    (ws) => ws && ws.readyState === 1 && String(ws.playerId || "") === String(acc.playerId)
+  );
+  const isOwner = !!acc.isOwner;
+  const isAdmin = !!(acc.isAdmin || isOwner);
+  return {
+    username: acc.username,
+    usernameKey: acc.usernameKey,
+    playerId: acc.playerId,
+    isOwner,
+    isAdmin,
+    banned: !!acc.banned,
+    createdAt: acc.createdAt || 0,
+    online,
+    name: profile.name || acc.username,
+    points: profile.points || 0,
+    xp: profile.xp || 0,
+    avatar: profile.avatar || "default",
+    customAvatarUrl: profile.customAvatarUrl || "",
+    maxBotCleared: profile.maxBotCleared || 0,
+  };
+}
 
 function loadProfiles() {
   try {
@@ -58,7 +186,16 @@ function loadLeaderboard() {
   try {
     if (fs.existsSync(LEADERBOARD_PATH)) {
       const data = JSON.parse(fs.readFileSync(LEADERBOARD_PATH, "utf8"));
-      return data && typeof data === "object" ? data : {};
+      if (!data || typeof data !== "object" || Array.isArray(data)) return {};
+      // Never drop entries on load — only keep object player records
+      const out = {};
+      for (const [key, val] of Object.entries(data)) {
+        if (!val || typeof val !== "object") continue;
+        const id = sanitizeLeaderboardId(val.playerId || key);
+        if (!id) continue;
+        out[id] = { ...val, playerId: id };
+      }
+      return out;
     }
   } catch {
     /* ignore */
@@ -67,7 +204,40 @@ function loadLeaderboard() {
 }
 
 function saveLeaderboard(db) {
-  fs.writeFileSync(LEADERBOARD_PATH, JSON.stringify(db, null, 2));
+  const payload = db && typeof db === "object" ? db : {};
+  const tmp = `${LEADERBOARD_PATH}.tmp`;
+  fs.writeFileSync(tmp, JSON.stringify(payload, null, 2));
+  try {
+    fs.renameSync(tmp, LEADERBOARD_PATH);
+  } catch {
+    // Windows may block rename-over-existing
+    fs.copyFileSync(tmp, LEADERBOARD_PATH);
+    try {
+      fs.unlinkSync(tmp);
+    } catch {
+      /* ignore */
+    }
+  }
+}
+
+function backupLeaderboard() {
+  try {
+    if (!fs.existsSync(LEADERBOARD_PATH)) return null;
+    const stamp = new Date().toISOString().replace(/[:.]/g, "-");
+    const dest = path.join(__dirname, `leaderboard.backup.${stamp}.json`);
+    fs.copyFileSync(LEADERBOARD_PATH, dest);
+    return dest;
+  } catch {
+    return null;
+  }
+}
+
+/** Wipe all scoreboard records. Only call from owner-authenticated admin API. */
+function resetLeaderboard() {
+  const backup = backupLeaderboard();
+  const count = Object.keys(loadLeaderboard()).length;
+  saveLeaderboard({});
+  return { ok: true, cleared: count, backup };
 }
 
 function xpLevelFromTotal(xpTotal) {
@@ -108,10 +278,26 @@ function upsertLeaderboardPlayer(patch = {}, { createIfMissing = true } = {}) {
     goalsFor: 0,
     goalsAgainst: 0,
     matches: 0,
+    winStreak: 0,
+    bestWinStreak: 0,
+    createdAt: Date.now(),
     lastPlayed: 0,
     updatedAt: 0,
   };
-  const next = { ...prev, playerId };
+  // Preserve career stats forever — cosmetics / profile patches never wipe them
+  const next = {
+    ...prev,
+    playerId,
+    wins: Math.max(0, Math.floor(prev.wins || 0)),
+    losses: Math.max(0, Math.floor(prev.losses || 0)),
+    draws: Math.max(0, Math.floor(prev.draws || 0)),
+    goalsFor: Math.max(0, Math.floor(prev.goalsFor || 0)),
+    goalsAgainst: Math.max(0, Math.floor(prev.goalsAgainst || 0)),
+    matches: Math.max(0, Math.floor(prev.matches || 0)),
+    winStreak: Math.max(0, Math.floor(prev.winStreak || 0)),
+    bestWinStreak: Math.max(0, Math.floor(prev.bestWinStreak || 0)),
+    createdAt: prev.createdAt || Date.now(),
+  };
   if (typeof patch.name === "string" && patch.name.trim()) {
     next.name = String(patch.name).trim().slice(0, 24);
   }
@@ -145,17 +331,25 @@ function upsertLeaderboardPlayer(patch = {}, { createIfMissing = true } = {}) {
   if (typeof patch.maxBossCleared === "number" && Number.isFinite(patch.maxBossCleared)) {
     next.maxBossCleared = Math.max(0, Math.min(20, Math.floor(patch.maxBossCleared)));
   }
-  if (typeof patch.winsDelta === "number") next.wins = Math.max(0, (next.wins || 0) + Math.floor(patch.winsDelta));
-  if (typeof patch.lossesDelta === "number") next.losses = Math.max(0, (next.losses || 0) + Math.floor(patch.lossesDelta));
-  if (typeof patch.drawsDelta === "number") next.draws = Math.max(0, (next.draws || 0) + Math.floor(patch.drawsDelta));
+  // Stats only grow via deltas — never absolute overwrite from clients
+  if (typeof patch.winsDelta === "number") next.wins = Math.max(0, next.wins + Math.floor(patch.winsDelta));
+  if (typeof patch.lossesDelta === "number") next.losses = Math.max(0, next.losses + Math.floor(patch.lossesDelta));
+  if (typeof patch.drawsDelta === "number") next.draws = Math.max(0, next.draws + Math.floor(patch.drawsDelta));
   if (typeof patch.goalsForDelta === "number") {
-    next.goalsFor = Math.max(0, (next.goalsFor || 0) + Math.floor(patch.goalsForDelta));
+    next.goalsFor = Math.max(0, next.goalsFor + Math.floor(patch.goalsForDelta));
   }
   if (typeof patch.goalsAgainstDelta === "number") {
-    next.goalsAgainst = Math.max(0, (next.goalsAgainst || 0) + Math.floor(patch.goalsAgainstDelta));
+    next.goalsAgainst = Math.max(0, next.goalsAgainst + Math.floor(patch.goalsAgainstDelta));
   }
   if (typeof patch.matchesDelta === "number") {
-    next.matches = Math.max(0, (next.matches || 0) + Math.floor(patch.matchesDelta));
+    next.matches = Math.max(0, next.matches + Math.floor(patch.matchesDelta));
+  }
+  if (patch.matchResult === "win") {
+    next.winStreak = Math.max(0, Math.floor(prev.winStreak || 0)) + 1;
+    next.bestWinStreak = Math.max(Math.floor(prev.bestWinStreak || 0), next.winStreak);
+  } else if (patch.matchResult === "loss" || patch.matchResult === "draw") {
+    next.winStreak = 0;
+    next.bestWinStreak = Math.max(0, Math.floor(prev.bestWinStreak || 0));
   }
   next.score = Math.max(0, Math.floor(next.wins || 0));
   next.lastPlayed = Date.now();
@@ -165,20 +359,24 @@ function upsertLeaderboardPlayer(patch = {}, { createIfMissing = true } = {}) {
   return next;
 }
 
-function leaderboardPublicList(limit = 100) {
+function leaderboardPublicList(limit = 200) {
   const db = loadLeaderboard();
+  const max = Math.max(1, Math.min(1000, Math.floor(limit) || 200));
   return Object.values(db)
     .filter((e) => e && e.playerId)
     .sort((a, b) => {
       const aw = Number(a.wins) || 0;
       const bw = Number(b.wins) || 0;
       if (bw !== aw) return bw - aw;
+      const as = Number(a.bestWinStreak) || 0;
+      const bs = Number(b.bestWinStreak) || 0;
+      if (bs !== as) return bs - as;
       const ax = Number(a.xp) || 0;
       const bx = Number(b.xp) || 0;
       if (bx !== ax) return bx - ax;
       return String(a.name || "").localeCompare(String(b.name || ""));
     })
-    .slice(0, Math.max(1, Math.min(200, limit)))
+    .slice(0, max)
     .map((e, i) => ({
       place: i + 1,
       playerId: e.playerId,
@@ -199,7 +397,10 @@ function leaderboardPublicList(limit = 100) {
       goalsFor: e.goalsFor || 0,
       goalsAgainst: e.goalsAgainst || 0,
       matches: e.matches || 0,
+      winStreak: e.winStreak || 0,
+      bestWinStreak: e.bestWinStreak || 0,
       lastPlayed: e.lastPlayed || 0,
+      createdAt: e.createdAt || 0,
     }));
 }
 
@@ -246,6 +447,7 @@ function recordOnlineMatch(room) {
       winsDelta: result === "win" ? 1 : 0,
       lossesDelta: result === "loss" ? 1 : 0,
       drawsDelta: result === "draw" ? 1 : 0,
+      matchResult: result,
     });
   };
   if (!winner) {
@@ -516,6 +718,7 @@ async function handleApi(req, res, urlPath) {
     }
     const acc = authDb.getAccount(session.username);
     const isOwner = !!(session.isOwner || authDb.accountIsOwner(acc, session.username));
+    const isAdmin = !!(isOwner || session.isAdmin || authDb.accountIsAdmin(acc, session.username));
     const displayName = (acc && acc.displayName) || session.username;
     const db = loadProfiles();
     res.writeHead(200, { "Content-Type": "application/json" });
@@ -525,6 +728,7 @@ async function handleApi(req, res, urlPath) {
         username: displayName,
         playerId: session.playerId,
         isOwner,
+        isAdmin,
         profile: db[session.playerId] || defaultProfile(),
       })
     );
@@ -587,9 +791,250 @@ async function handleApi(req, res, urlPath) {
   }
 
   if (urlPath === "api/leaderboard") {
-    const limit = typeof body.limit === "number" ? body.limit : 100;
+    const limit = typeof body.limit === "number" ? body.limit : 500;
+    const entries = leaderboardPublicList(limit);
     res.writeHead(200, { "Content-Type": "application/json" });
-    res.end(JSON.stringify({ ok: true, entries: leaderboardPublicList(limit) }));
+    res.end(
+      JSON.stringify({
+        ok: true,
+        persistent: true,
+        total: Object.keys(loadLeaderboard()).length,
+        entries,
+      })
+    );
+    return true;
+  }
+
+  if (urlPath === "api/leaderboard/reset") {
+    const session = authDb.getSession(body.token);
+    const acc = session ? authDb.getAccount(session.username) : null;
+    const isOwner = !!(session && (session.isOwner || authDb.accountIsOwner(acc, session.username)));
+    if (!isOwner) {
+      res.writeHead(403, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ ok: false, error: "Owner account required" }));
+      return true;
+    }
+    if (body.confirm !== "RESET") {
+      res.writeHead(400, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ ok: false, error: 'Send confirm: "RESET" to wipe the scoreboard' }));
+      return true;
+    }
+    const result = resetLeaderboard();
+    res.writeHead(200, { "Content-Type": "application/json" });
+    res.end(
+      JSON.stringify({
+        ok: true,
+        cleared: result.cleared,
+        backup: result.backup ? path.basename(result.backup) : null,
+      })
+    );
+    return true;
+  }
+
+  if (urlPath === "api/admin/players") {
+    const session = requireAdmin(body.token);
+    if (!session) {
+      res.writeHead(403, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ ok: false, error: "Admin account required" }));
+      return true;
+    }
+    const players = authDb.listAccountsPublic().map(buildAdminPlayerRow);
+    res.writeHead(200, { "Content-Type": "application/json" });
+    res.end(JSON.stringify({ ok: true, players }));
+    return true;
+  }
+
+  if (urlPath === "api/admin/player") {
+    const session = requireAdmin(body.token);
+    if (!session) {
+      res.writeHead(403, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ ok: false, error: "Admin account required" }));
+      return true;
+    }
+    const acc =
+      authDb.findAccountByPlayerId(body.playerId) ||
+      authDb.getAccount(body.username);
+    if (!acc) {
+      res.writeHead(404, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ ok: false, error: "Player not found" }));
+      return true;
+    }
+    const row = buildAdminPlayerRow({
+      username: acc.displayName || acc.username,
+      usernameKey: acc.username,
+      playerId: acc.playerId,
+      isOwner: !!acc.isOwner,
+      isAdmin: !!acc.isAdmin,
+      banned: !!acc.banned,
+      createdAt: acc.createdAt || 0,
+    });
+    const profile = loadProfiles()[acc.playerId] || defaultProfile();
+    res.writeHead(200, { "Content-Type": "application/json" });
+    res.end(JSON.stringify({ ok: true, player: row, profile }));
+    return true;
+  }
+
+  if (urlPath === "api/admin/player/action") {
+    const session = requireAdmin(body.token);
+    if (!session) {
+      res.writeHead(403, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ ok: false, error: "Admin account required" }));
+      return true;
+    }
+    const action = String(body.action || "");
+    const acc =
+      authDb.findAccountByPlayerId(body.playerId) ||
+      authDb.getAccount(body.username);
+    if (!acc) {
+      res.writeHead(404, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ ok: false, error: "Player not found" }));
+      return true;
+    }
+    const actorIsOwner = !!(session.isOwner || authDb.accountIsOwner(authDb.getAccount(session.username), session.username));
+    const targetIsOwner = authDb.accountIsOwner(acc, acc.username);
+
+    if (action === "grantAdmin" || action === "revokeAdmin") {
+      if (!actorIsOwner) {
+        res.writeHead(403, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ ok: false, error: "Only the owner can grant or remove admin" }));
+        return true;
+      }
+      const result = authDb.setAccountAdmin(acc.username, action === "grantAdmin");
+      if (!result.ok) {
+        res.writeHead(400, { "Content-Type": "application/json" });
+        res.end(JSON.stringify(result));
+        return true;
+      }
+      const player = buildAdminPlayerRow({
+        username: acc.displayName || acc.username,
+        usernameKey: acc.username,
+        playerId: acc.playerId,
+        isOwner: false,
+        isAdmin: action === "grantAdmin",
+        banned: !!acc.banned,
+        createdAt: acc.createdAt || 0,
+      });
+      res.writeHead(200, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ ok: true, player, action }));
+      return true;
+    }
+
+    if (targetIsOwner && !actorIsOwner) {
+      res.writeHead(403, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ ok: false, error: "Cannot moderate the owner account" }));
+      return true;
+    }
+
+    if (action === "ban" || action === "unban") {
+      const result = authDb.setAccountBanned(acc.username, action === "ban");
+      if (!result.ok) {
+        res.writeHead(400, { "Content-Type": "application/json" });
+        res.end(JSON.stringify(result));
+        return true;
+      }
+      if (action === "ban") kickPlayerConnections(acc.playerId, "Banned by admin");
+      const player = buildAdminPlayerRow({
+        username: acc.displayName || acc.username,
+        usernameKey: acc.username,
+        playerId: acc.playerId,
+        isOwner: !!acc.isOwner,
+        isAdmin: !!acc.isAdmin,
+        banned: action === "ban",
+        createdAt: acc.createdAt || 0,
+      });
+      res.writeHead(200, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ ok: true, player, action }));
+      return true;
+    }
+    if (action === "kick") {
+      const kicked = kickPlayerConnections(acc.playerId, String(body.reason || "Kicked by admin").slice(0, 120));
+      res.writeHead(200, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ ok: true, kicked, playerId: acc.playerId, action }));
+      return true;
+    }
+    if (["givePoints", "removePoints", "giveXp", "removeXp"].includes(action)) {
+      const result = adminAdjustProfile(acc.playerId, action, body.amount);
+      if (!result.ok) {
+        res.writeHead(400, { "Content-Type": "application/json" });
+        res.end(JSON.stringify(result));
+        return true;
+      }
+      const player = buildAdminPlayerRow({
+        username: acc.displayName || acc.username,
+        usernameKey: acc.username,
+        playerId: acc.playerId,
+        isOwner: !!acc.isOwner,
+        isAdmin: !!acc.isAdmin,
+        banned: !!acc.banned,
+        createdAt: acc.createdAt || 0,
+      });
+      res.writeHead(200, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ ok: true, player, profile: result.profile, action }));
+      return true;
+    }
+    res.writeHead(400, { "Content-Type": "application/json" });
+    res.end(JSON.stringify({ ok: false, error: "Unknown action" }));
+    return true;
+  }
+
+  if (urlPath === "api/tickets") {
+    const session = authDb.getSession(body.token);
+    if (!session) {
+      res.writeHead(401, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ ok: false, error: "Sign in to submit a ticket" }));
+      return true;
+    }
+    const result = createTicket({
+      username: session.username,
+      playerId: session.playerId,
+      category: body.category,
+      subject: body.subject,
+      message: body.message,
+      reportedPlayer: body.reportedPlayer,
+    });
+    res.writeHead(result.ok ? 200 : 400, { "Content-Type": "application/json" });
+    res.end(JSON.stringify(result));
+    return true;
+  }
+
+  if (urlPath === "api/admin/tickets") {
+    const session = requireAdmin(body.token);
+    if (!session) {
+      res.writeHead(403, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ ok: false, error: "Admin account required" }));
+      return true;
+    }
+    const tickets = loadTickets();
+    res.writeHead(200, { "Content-Type": "application/json" });
+    res.end(JSON.stringify({ ok: true, tickets }));
+    return true;
+  }
+
+  if (urlPath === "api/admin/ticket") {
+    const session = requireAdmin(body.token);
+    if (!session) {
+      res.writeHead(403, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ ok: false, error: "Admin account required" }));
+      return true;
+    }
+    const id = String(body.ticketId || body.id || "");
+    const status = String(body.status || "").toLowerCase();
+    if (!["open", "resolved", "closed"].includes(status)) {
+      res.writeHead(400, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ ok: false, error: "Status must be open, resolved, or closed" }));
+      return true;
+    }
+    const tickets = loadTickets();
+    const idx = tickets.findIndex((t) => t && t.id === id);
+    if (idx < 0) {
+      res.writeHead(404, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ ok: false, error: "Ticket not found" }));
+      return true;
+    }
+    tickets[idx] = { ...tickets[idx], status, updatedAt: Date.now() };
+    saveTickets(tickets);
+    res.writeHead(200, { "Content-Type": "application/json" });
+    res.end(JSON.stringify({ ok: true, ticket: tickets[idx] }));
     return true;
   }
 
@@ -978,6 +1423,7 @@ function findOpenSlot(room) {
 }
 
 function handleDisconnect(ws) {
+  connectedClients.delete(ws);
   removeFromQueue(ws);
   const code = ws.roomCode;
   if (!code || !rooms.has(code)) return;
@@ -1086,6 +1532,7 @@ const server = http.createServer(serveStatic);
 const wss = new WebSocketServer({ server, perMessageDeflate: false });
 
 wss.on("connection", (ws) => {
+  connectedClients.add(ws);
   ws.on("message", (raw) => {
     let msg;
     try {

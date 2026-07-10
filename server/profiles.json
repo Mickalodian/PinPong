@@ -18,5 +18,35 @@
       "table": "rosegold"
     },
     "updatedAt": 1783637139796
+  },
+  "testban-player-id-001": {
+    "name": "",
+    "points": 25,
+    "xp": 0,
+    "maxBotCleared": 0,
+    "maxChaosCleared": 0,
+    "maxSurvivalCleared": 0,
+    "maxBossCleared": 0,
+    "owned": {
+      "paddle": [
+        "white"
+      ],
+      "table": [
+        "classic"
+      ]
+    },
+    "equipped": {
+      "paddle": "white",
+      "table": "classic"
+    },
+    "redeemedCodes": [],
+    "bossPowers": [],
+    "avatar": "default",
+    "ownedAvatars": [
+      "default"
+    ],
+    "customAvatarUrl": "",
+    "title": "",
+    "updatedAt": 1783715652876
   }
 }

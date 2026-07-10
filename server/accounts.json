@@ -2,12 +2,13 @@
   "mikloit": {
     "username": "mikloit",
     "displayName": "MikLoit",
-    "passwordHash": "c0ae845d79b7fb63531b14ad567effd4e6472153da31d7d346f6ead14f1404943d849609745d789da2e746389ec7cae9c9e5d20213c165c053a5bfc7afa6ba00",
-    "salt": "0b9a600c57f47d04d4ae30d6a2ff6162",
+    "passwordHash": "f963c451321e9b81baac48f1afb9fa98293f5caf01a2748e40a9d93503376dfc8b5f44226c1dfc421ebefac7f4b374eb90bc87346566eb7bff3e4e97028ef861",
+    "salt": "ad237aedf7e1c7f33cabfaee7cbb4c7a",
     "playerId": "dccb8911-4688-419e-869e-cc2c2c00217d",
     "isOwner": true,
+    "isAdmin": true,
     "createdAt": 1783713492688,
-    "updatedAt": 1783714414166
+    "updatedAt": 1783716598759
   },
   "nobody": {
     "username": "nobody",
@@ -16,5 +17,25 @@
     "playerId": "abcdef12-3456-7890-abcd-ef1234567890",
     "isOwner": false,
     "createdAt": 1783713514784
+  },
+  "testban": {
+    "username": "testban",
+    "passwordHash": "bfa1a5cd781498df4c0a29b0b0f3e512311e38e0f30545bdf0862d711f200acb0aa1e88ae3cfb819db463a18df8434f37df6eea7102536ef3040d9d825f3baa1",
+    "salt": "7079479a2cedc125f0e6272376eee669",
+    "playerId": "testban-player-id-001",
+    "isOwner": false,
+    "createdAt": 1783715652707,
+    "banned": true,
+    "updatedAt": 1783715652886
+  },
+  "helper1": {
+    "username": "helper1",
+    "passwordHash": "008615080536fa19812682da6b20094c99c221f4c3a1b3894dbbb286a139713c364fa129bbf70d46bb9b60c07fa32b7d9389699734eb89630c1142bf38022935",
+    "salt": "43b319642b40b39de3f71170c873a68e",
+    "playerId": "helper1-player-id-0001",
+    "isOwner": false,
+    "isAdmin": false,
+    "createdAt": 1783716598391,
+    "updatedAt": 1783716598808
   }
 }

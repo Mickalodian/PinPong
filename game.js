@@ -345,9 +345,13 @@ const save = {
   abilities: { megaPaddle: false, freeShop: false, slowBot: false, pauseBot: false, bonusPts: false },
 };
 
-let authState = { token: "", username: "", isOwner: false };
+let authState = { token: "", username: "", isOwner: false, isAdmin: false };
 
 function isAdmin() {
+  return !!(authState.token && (authState.isAdmin || authState.isOwner));
+}
+
+function isOwner() {
   return !!(authState.token && authState.isOwner);
 }
 
@@ -3373,10 +3377,12 @@ function loadAuthState() {
     authState.username = localStorage.getItem(AUTH_USER_KEY) || "";
     // Never trust a cached owner flag — server /api/auth/me must confirm.
     authState.isOwner = false;
+    authState.isAdmin = false;
   } catch {
     authState.token = "";
     authState.username = "";
     authState.isOwner = false;
+    authState.isAdmin = false;
   }
 }
 
@@ -3513,6 +3519,7 @@ function openProfile() {
   hideOverlay(ui.updatesOverlay);
   hideOverlay(ui.botModesOverlay);
   hideOverlay(ui.adminOverlay);
+  hideOverlay(ui.contactOverlay);
   hideOverlay(ui.profileViewOverlay);
   showOverlay(ui.profileOverlay);
   setStagePlaying(false);
@@ -3573,6 +3580,10 @@ function buildLeaderboardProfileView(entry) {
     `${wins} online win${wins === 1 ? "" : "s"} · ${losses} loss${losses === 1 ? "" : "es"}`,
     `${matches} online match${matches === 1 ? "" : "es"} played`
   );
+  const streak = Math.max(0, Math.floor(entry.winStreak || 0));
+  const bestStreak = Math.max(0, Math.floor(entry.bestWinStreak || 0));
+  if (streak > 0) accomplishments.push(`Current win streak: ${streak}`);
+  if (bestStreak > 0) accomplishments.push(`Best win streak: ${bestStreak}`);
   if (goals > 0) accomplishments.push(`${goals} goals scored online`);
   return {
     name: entry.name || "Player",
@@ -3840,6 +3851,7 @@ async function authRegister() {
     authState.token = data.token;
     authState.username = data.username;
     authState.isOwner = !!data.isOwner;
+    authState.isAdmin = !!(data.isAdmin || data.isOwner);
     persistAuthState();
     persistSave({ force: true });
     setAuthMsg("Account created — you're signed in.");
@@ -3872,6 +3884,7 @@ async function authLogin() {
     authState.token = data.token;
     authState.username = data.username;
     authState.isOwner = !!data.isOwner;
+    authState.isAdmin = !!(data.isAdmin || data.isOwner);
     persistAuthState();
     if (data.playerId) {
       try {
@@ -3884,7 +3897,9 @@ async function authLogin() {
     persistSave({ force: true });
     updatePointsUI();
     updateNameUI();
-    setAuthMsg(data.isOwner ? "Welcome back, Owner." : "Welcome back!");
+    setAuthMsg(
+      data.isOwner ? "Welcome back, Owner." : data.isAdmin ? "Welcome back, Admin." : "Welcome back!"
+    );
     refreshProfileUI();
     updateAdminVisibility();
   } catch {
@@ -3907,6 +3922,7 @@ async function authLogout() {
   authState.token = "";
   authState.username = "";
   authState.isOwner = false;
+  authState.isAdmin = false;
   persistAuthState();
   setAuthMsg("Logged out. Guest progress stays on this device.");
   refreshProfileUI();
@@ -3928,12 +3944,14 @@ async function restoreAuthSession() {
       authState.token = "";
       authState.username = "";
       authState.isOwner = false;
+      authState.isAdmin = false;
       persistAuthState();
       updateAdminVisibility();
       return;
     }
     authState.username = data.username || authState.username;
     authState.isOwner = !!data.isOwner;
+    authState.isAdmin = !!(data.isAdmin || data.isOwner);
     persistAuthState();
     updateAdminVisibility();
     if (data.playerId) {
@@ -3947,6 +3965,7 @@ async function restoreAuthSession() {
   } catch {
     /* offline — keep signed-in UI but no admin until server confirms */
     authState.isOwner = false;
+    authState.isAdmin = false;
     updateAdminVisibility();
   }
 }
@@ -4089,6 +4108,11 @@ function openAdmin() {
     return;
   }
   hideOverlay(ui.menuOverlay);
+  hideOverlay(ui.adminToolsOverlay);
+  hideOverlay(ui.adminPlayersOverlay);
+  hideOverlay(ui.adminPlayerDetailOverlay);
+  hideOverlay(ui.adminReportsOverlay);
+  hideOverlay(ui.adminReportDetailOverlay);
   hideOverlay(ui.botLevelOverlay);
   hideOverlay(ui.chaosLevelOverlay);
   hideOverlay(ui.survivalLevelOverlay);
@@ -4099,54 +4123,36 @@ function openAdmin() {
   hideOverlay(ui.lobbyOverlay);
   showOverlay(ui.adminOverlay);
   setStagePlaying(false);
+  if (ui.adminWelcome) {
+    ui.adminWelcome.textContent = isOwner() ? "Welcome, Owner" : "Welcome, Admin";
+  }
+}
+
+function openAdminTools() {
+  if (!isAdmin()) return;
+  hideOverlay(ui.adminOverlay);
+  showOverlay(ui.adminToolsOverlay);
+  setStagePlaying(false);
   refreshAdminPanel();
-  // #region agent log
-  requestAnimationFrame(() => {
-    const overlay = ui.adminOverlay;
-    const card = overlay?.querySelector(".admin-card");
-    const body = overlay?.querySelector(".admin-body");
-    if (!card || !body) return;
-    const cr = card.getBoundingClientRect();
-    const br = body.getBoundingClientRect();
-    const cs = getComputedStyle(card);
-    const bs = getComputedStyle(body);
-    const os = overlay ? getComputedStyle(overlay) : null;
-    const addBtn = body.querySelector("#btnAdminAddPts");
-    const setLevelBtn = body.querySelector("#btnAdminSetLevel");
-    const ar = addBtn?.getBoundingClientRect();
-    const lr = setLevelBtn?.getBoundingClientRect();
-    agentLog("S2", "game.js:openAdmin", "admin scroll shell", {
-      phoneMode: document.body.classList.contains("phone-mode"),
-      vw: window.innerWidth,
-      vh: window.innerHeight,
-      portrait: window.innerHeight >= window.innerWidth,
-      overlayOverflowY: os?.overflowY || null,
-      cardOverflowY: cs.overflowY,
-      cardMaxH: cs.maxHeight,
-      cardH: Math.round(cr.height),
-      cardClientH: card.clientHeight,
-      cardScrollH: card.scrollHeight,
-      bodyClientH: body.clientHeight,
-      bodyScrollH: body.scrollHeight,
-      bodyOverflowY: bs.overflowY,
-      bodyTouchAction: bs.touchAction,
-      bodyPadRight: bs.paddingRight,
-      bodyScrollNeeded: body.scrollHeight > body.clientHeight + 1,
-      canReachEnd: body.scrollHeight - body.clientHeight > 8,
-      hasAdminBody: true,
-      addBtnRight: ar ? Math.round(ar.right) : null,
-      addBtnClipped: !!(ar && (ar.right > br.right + 1 || ar.right > cr.right + 1)),
-      setLevelRight: lr ? Math.round(lr.right) : null,
-      setLevelClipped: !!(lr && (lr.right > br.right + 1 || lr.right > cr.right + 1)),
-      bodyWidth: Math.round(br.width),
-      cardWidth: Math.round(cr.width),
-    }, "post-fix");
-  });
-  // #endregion
+  // Only owner can wipe the persistent scoreboard
+  if (ui.btnAdminResetScoreboard) {
+    ui.btnAdminResetScoreboard.classList.toggle("hidden", !isOwner());
+  }
+}
+
+function closeAdminTools() {
+  hideOverlay(ui.adminToolsOverlay);
+  showOverlay(ui.adminOverlay);
+  setStagePlaying(false);
 }
 
 function closeAdmin() {
   hideOverlay(ui.adminOverlay);
+  hideOverlay(ui.adminToolsOverlay);
+  hideOverlay(ui.adminPlayersOverlay);
+  hideOverlay(ui.adminPlayerDetailOverlay);
+  hideOverlay(ui.adminReportsOverlay);
+  hideOverlay(ui.adminReportDetailOverlay);
   showOverlay(ui.menuOverlay);
   setStagePlaying(false);
 }
@@ -4298,6 +4304,357 @@ function setAdminAbility(key, on) {
   save.abilities[key] = on;
   persistSave();
   if (ui.adminMsg) ui.adminMsg.textContent = on ? "Ability enabled." : "Ability disabled.";
+}
+
+async function adminResetScoreboard() {
+  if (!isAdmin()) return;
+  if (!location.host) {
+    if (ui.adminMsg) ui.adminMsg.textContent = "Start the game server to manage the scoreboard.";
+    return;
+  }
+  if (!authState.token) {
+    if (ui.adminMsg) ui.adminMsg.textContent = "Sign in as MikLoit first.";
+    return;
+  }
+  const ok = window.confirm(
+    "Restart the online scoreboard?\n\nThis clears ALL players' wins, losses, and streaks on this server.\nA backup file is saved on the server first."
+  );
+  if (!ok) {
+    if (ui.adminMsg) ui.adminMsg.textContent = "Scoreboard restart cancelled.";
+    return;
+  }
+  if (ui.adminMsg) ui.adminMsg.textContent = "Restarting scoreboard…";
+  try {
+    const res = await fetch("/api/leaderboard/reset", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ token: authState.token, confirm: "RESET" }),
+    });
+    const data = await res.json();
+    if (!data?.ok) {
+      if (ui.adminMsg) ui.adminMsg.textContent = data?.error || "Could not restart scoreboard.";
+      return;
+    }
+    if (ui.adminMsg) {
+      ui.adminMsg.textContent = `Scoreboard restarted — cleared ${data.cleared || 0} player${
+        data.cleared === 1 ? "" : "s"
+      }.${data.backup ? ` Backup: ${data.backup}` : ""}`;
+    }
+    if (ui.onlineScoreboardList) refreshOnlineScoreboard();
+  } catch {
+    if (ui.adminMsg) ui.adminMsg.textContent = "Network error — scoreboard not changed.";
+  }
+}
+
+let adminSelectedPlayer = null;
+let adminSelectedTicket = null;
+
+async function adminApi(path, body = {}) {
+  const res = await fetch(path, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ token: authState.token, ...body }),
+  });
+  return res.json();
+}
+
+function paintAdminPlayerAvatar(player) {
+  const el = ui.adminPlayerAvatar;
+  if (!el) return;
+  el.textContent = "";
+  el.style.backgroundImage = "";
+  if (player?.customAvatarUrl) {
+    el.style.backgroundImage = `url("${player.customAvatarUrl}")`;
+    return;
+  }
+  const def = AVATAR_DEFS.find((a) => a.id === (player?.avatar || "default")) || AVATAR_DEFS[0];
+  el.style.background = avatarCssBackground(def);
+  el.textContent = def.emoji || "P";
+}
+
+function renderAdminPlayersList(players) {
+  const list = ui.adminPlayersList;
+  if (!list) return;
+  list.innerHTML = "";
+  const rows = Array.isArray(players) ? players : [];
+  if (!rows.length) {
+    if (ui.adminPlayersMsg) ui.adminPlayersMsg.textContent = "No registered accounts yet.";
+    return;
+  }
+  if (ui.adminPlayersMsg) {
+    ui.adminPlayersMsg.textContent = `${rows.length} account${rows.length === 1 ? "" : "s"} · tap to manage.`;
+  }
+  rows.forEach((p) => {
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "admin-list-row";
+    btn.setAttribute("role", "listitem");
+    const title = document.createElement("div");
+    title.className = "admin-list-title";
+    title.textContent = p.username || p.name || "Player";
+    const meta = document.createElement("div");
+    meta.className = "admin-list-meta";
+    const bits = [
+      p.online ? "Online" : "Offline",
+      p.banned ? "Banned" : null,
+      p.isOwner ? "Owner" : p.isAdmin ? "Admin" : null,
+      `${p.points || 0} pts`,
+      `XP ${p.xp || 0}`,
+    ].filter(Boolean);
+    meta.textContent = bits.join(" · ");
+    btn.append(title, meta);
+    btn.addEventListener("click", () => {
+      playMenuClick();
+      openAdminPlayerDetail(p);
+    });
+    list.appendChild(btn);
+  });
+}
+
+async function refreshAdminPlayers() {
+  if (!isAdmin() || !ui.adminPlayersList) return;
+  if (ui.adminPlayersMsg) ui.adminPlayersMsg.textContent = "Loading…";
+  try {
+    const data = await adminApi("/api/admin/players");
+    if (!data?.ok) throw new Error(data?.error || "fail");
+    renderAdminPlayersList(data.players || []);
+  } catch {
+    if (ui.adminPlayersMsg) ui.adminPlayersMsg.textContent = "Could not load players.";
+  }
+}
+
+function openAdminPlayers() {
+  if (!isAdmin()) return;
+  hideOverlay(ui.adminOverlay);
+  hideOverlay(ui.adminPlayerDetailOverlay);
+  showOverlay(ui.adminPlayersOverlay);
+  setStagePlaying(false);
+  refreshAdminPlayers();
+}
+
+function closeAdminPlayers() {
+  hideOverlay(ui.adminPlayersOverlay);
+  showOverlay(ui.adminOverlay);
+}
+
+function openAdminPlayerDetail(player) {
+  if (!isAdmin() || !player) return;
+  adminSelectedPlayer = player;
+  hideOverlay(ui.adminPlayersOverlay);
+  showOverlay(ui.adminPlayerDetailOverlay);
+  if (ui.adminPlayerTitle) ui.adminPlayerTitle.textContent = (player.username || "PLAYER").toUpperCase();
+  if (ui.adminPlayerSub) {
+    ui.adminPlayerSub.textContent = player.banned
+      ? "Banned account"
+      : player.online
+        ? "Currently online"
+        : "Registered account";
+  }
+  if (ui.adminPlayerName) ui.adminPlayerName.textContent = player.name || player.username || "Player";
+  if (ui.adminPlayerKind) {
+    ui.adminPlayerKind.textContent = player.isOwner
+      ? "Owner"
+      : player.isAdmin
+        ? `Admin · ${player.usernameKey || player.username || ""}`
+        : `Account · ${player.usernameKey || player.username || ""}`;
+  }
+  if (ui.adminPlayerStats) {
+    ui.adminPlayerStats.textContent = `${player.points || 0} pts · ${player.xp || 0} XP · Classic L${player.maxBotCleared || 0}`;
+  }
+  paintAdminPlayerAvatar(player);
+  if (ui.btnAdminBanPlayer) ui.btnAdminBanPlayer.classList.toggle("hidden", !!player.banned || !!player.isOwner);
+  if (ui.btnAdminUnbanPlayer) ui.btnAdminUnbanPlayer.classList.toggle("hidden", !player.banned);
+  if (ui.btnAdminKickPlayer) ui.btnAdminKickPlayer.classList.toggle("hidden", !!player.isOwner);
+  const canManageRole = isOwner() && !player.isOwner;
+  if (ui.adminRoleSection) ui.adminRoleSection.classList.toggle("hidden", !canManageRole);
+  if (ui.adminRoleActions) ui.adminRoleActions.classList.toggle("hidden", !canManageRole);
+  if (ui.btnAdminGrantAdmin) ui.btnAdminGrantAdmin.classList.toggle("hidden", !canManageRole || !!player.isAdmin);
+  if (ui.btnAdminRevokeAdmin) ui.btnAdminRevokeAdmin.classList.toggle("hidden", !canManageRole || !player.isAdmin);
+  if (ui.adminPlayerMsg) ui.adminPlayerMsg.textContent = "";
+}
+
+function closeAdminPlayerDetail() {
+  hideOverlay(ui.adminPlayerDetailOverlay);
+  showOverlay(ui.adminPlayersOverlay);
+  refreshAdminPlayers();
+}
+
+async function adminPlayerAction(action, amount) {
+  if (!isAdmin() || !adminSelectedPlayer) return;
+  if (ui.adminPlayerMsg) ui.adminPlayerMsg.textContent = "Working…";
+  try {
+    const data = await adminApi("/api/admin/player/action", {
+      playerId: adminSelectedPlayer.playerId,
+      username: adminSelectedPlayer.usernameKey || adminSelectedPlayer.username,
+      action,
+      amount,
+    });
+    if (!data?.ok) {
+      if (ui.adminPlayerMsg) ui.adminPlayerMsg.textContent = data?.error || "Action failed.";
+      return;
+    }
+    if (data.player) {
+      adminSelectedPlayer = { ...adminSelectedPlayer, ...data.player };
+      openAdminPlayerDetail(adminSelectedPlayer);
+    }
+    const labels = {
+      givePoints: "Points added.",
+      removePoints: "Points removed.",
+      giveXp: "XP added.",
+      removeXp: "XP removed.",
+      ban: "Player banned.",
+      unban: "Player unbanned.",
+      kick: `Kicked ${data.kicked || 0} connection(s).`,
+      grantAdmin: "Admin granted. They must refresh or re-login if already signed in.",
+      revokeAdmin: "Admin removed.",
+    };
+    if (ui.adminPlayerMsg) ui.adminPlayerMsg.textContent = labels[action] || "Done.";
+  } catch {
+    if (ui.adminPlayerMsg) ui.adminPlayerMsg.textContent = "Network error.";
+  }
+}
+
+function renderAdminReportsList(tickets) {
+  const list = ui.adminReportsList;
+  if (!list) return;
+  list.innerHTML = "";
+  const rows = Array.isArray(tickets) ? tickets : [];
+  if (!rows.length) {
+    if (ui.adminReportsMsg) ui.adminReportsMsg.textContent = "No tickets yet.";
+    return;
+  }
+  const openCount = rows.filter((t) => t.status === "open").length;
+  if (ui.adminReportsMsg) {
+    ui.adminReportsMsg.textContent = `${rows.length} ticket${rows.length === 1 ? "" : "s"} · ${openCount} open.`;
+  }
+  rows.forEach((t) => {
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = `admin-list-row status-${t.status || "open"}`;
+    btn.setAttribute("role", "listitem");
+    const title = document.createElement("div");
+    title.className = "admin-list-title";
+    title.textContent = t.subject || "Ticket";
+    const meta = document.createElement("div");
+    meta.className = "admin-list-meta";
+    meta.textContent = `${(t.category || "other").toUpperCase()} · ${t.status || "open"} · ${t.username || "player"}`;
+    btn.append(title, meta);
+    btn.addEventListener("click", () => {
+      playMenuClick();
+      openAdminReportDetail(t);
+    });
+    list.appendChild(btn);
+  });
+}
+
+async function refreshAdminReports() {
+  if (!isAdmin() || !ui.adminReportsList) return;
+  if (ui.adminReportsMsg) ui.adminReportsMsg.textContent = "Loading…";
+  try {
+    const data = await adminApi("/api/admin/tickets");
+    if (!data?.ok) throw new Error(data?.error || "fail");
+    renderAdminReportsList(data.tickets || []);
+  } catch {
+    if (ui.adminReportsMsg) ui.adminReportsMsg.textContent = "Could not load reports.";
+  }
+}
+
+function openAdminReports() {
+  if (!isAdmin()) return;
+  hideOverlay(ui.adminOverlay);
+  hideOverlay(ui.adminReportDetailOverlay);
+  showOverlay(ui.adminReportsOverlay);
+  setStagePlaying(false);
+  refreshAdminReports();
+}
+
+function closeAdminReports() {
+  hideOverlay(ui.adminReportsOverlay);
+  showOverlay(ui.adminOverlay);
+}
+
+function openAdminReportDetail(ticket) {
+  if (!isAdmin() || !ticket) return;
+  adminSelectedTicket = ticket;
+  hideOverlay(ui.adminReportsOverlay);
+  showOverlay(ui.adminReportDetailOverlay);
+  if (ui.adminReportTitle) ui.adminReportTitle.textContent = (ticket.subject || "TICKET").toUpperCase();
+  if (ui.adminReportMeta) {
+    const when = ticket.createdAt ? new Date(ticket.createdAt).toLocaleString() : "";
+    ui.adminReportMeta.textContent = `${(ticket.category || "other").toUpperCase()} · ${ticket.status || "open"} · ${
+      ticket.username || "player"
+    }${ticket.reportedPlayer ? ` · vs ${ticket.reportedPlayer}` : ""}${when ? ` · ${when}` : ""}`;
+  }
+  if (ui.adminReportBody) ui.adminReportBody.textContent = ticket.message || "";
+  if (ui.adminReportMsg) ui.adminReportMsg.textContent = "";
+}
+
+function closeAdminReportDetail() {
+  hideOverlay(ui.adminReportDetailOverlay);
+  showOverlay(ui.adminReportsOverlay);
+  refreshAdminReports();
+}
+
+async function adminSetTicketStatus(status) {
+  if (!isAdmin() || !adminSelectedTicket) return;
+  if (ui.adminReportMsg) ui.adminReportMsg.textContent = "Updating…";
+  try {
+    const data = await adminApi("/api/admin/ticket", { ticketId: adminSelectedTicket.id, status });
+    if (!data?.ok) {
+      if (ui.adminReportMsg) ui.adminReportMsg.textContent = data?.error || "Update failed.";
+      return;
+    }
+    adminSelectedTicket = data.ticket;
+    openAdminReportDetail(adminSelectedTicket);
+    if (ui.adminReportMsg) ui.adminReportMsg.textContent = `Marked ${status}.`;
+  } catch {
+    if (ui.adminReportMsg) ui.adminReportMsg.textContent = "Network error.";
+  }
+}
+
+function refreshContactUI() {
+  const signedIn = !!authState.token;
+  if (ui.contactGuest) ui.contactGuest.classList.toggle("hidden", signedIn);
+  if (ui.contactForm) ui.contactForm.classList.toggle("hidden", !signedIn);
+  if (ui.contactMsg) ui.contactMsg.textContent = "";
+}
+
+function openContact() {
+  hideOverlay(ui.menuOverlay);
+  showOverlay(ui.contactOverlay);
+  setStagePlaying(false);
+  refreshContactUI();
+}
+
+function closeContact() {
+  hideOverlay(ui.contactOverlay);
+  showOverlay(ui.menuOverlay);
+}
+
+async function submitContactTicket() {
+  if (!authState.token) {
+    if (ui.contactMsg) ui.contactMsg.textContent = "Sign in from Profile first.";
+    return;
+  }
+  if (ui.contactMsg) ui.contactMsg.textContent = "Sending…";
+  try {
+    const data = await adminApi("/api/tickets", {
+      category: ui.contactCategory?.value || "other",
+      subject: ui.contactSubject?.value || "",
+      message: ui.contactMessage?.value || "",
+      reportedPlayer: ui.contactReported?.value || "",
+    });
+    if (!data?.ok) {
+      if (ui.contactMsg) ui.contactMsg.textContent = data?.error || "Could not send ticket.";
+      return;
+    }
+    if (ui.contactSubject) ui.contactSubject.value = "";
+    if (ui.contactMessage) ui.contactMessage.value = "";
+    if (ui.contactReported) ui.contactReported.value = "";
+    if (ui.contactMsg) ui.contactMsg.textContent = "Ticket sent — the owner can review it in Admin → Reports.";
+  } catch {
+    if (ui.contactMsg) ui.contactMsg.textContent = "Network error — try again.";
+  }
 }
 
 function updateAdminVisibility() {
@@ -4838,6 +5195,63 @@ const ui = {
   shopMsg: document.getElementById("shopMsg"),
   btnAdmin: document.getElementById("btnAdmin"),
   btnAdminBack: document.getElementById("btnAdminBack"),
+  btnAdminTools: document.getElementById("btnAdminTools"),
+  btnAdminPlayers: document.getElementById("btnAdminPlayers"),
+  btnAdminReports: document.getElementById("btnAdminReports"),
+  adminToolsOverlay: document.getElementById("adminToolsOverlay"),
+  btnAdminToolsBack: document.getElementById("btnAdminToolsBack"),
+  adminPlayersOverlay: document.getElementById("adminPlayersOverlay"),
+  adminPlayersList: document.getElementById("adminPlayersList"),
+  adminPlayersMsg: document.getElementById("adminPlayersMsg"),
+  btnAdminPlayersRefresh: document.getElementById("btnAdminPlayersRefresh"),
+  btnAdminPlayersBack: document.getElementById("btnAdminPlayersBack"),
+  adminPlayerDetailOverlay: document.getElementById("adminPlayerDetailOverlay"),
+  adminPlayerTitle: document.getElementById("adminPlayerTitle"),
+  adminPlayerSub: document.getElementById("adminPlayerSub"),
+  adminPlayerAvatar: document.getElementById("adminPlayerAvatar"),
+  adminPlayerName: document.getElementById("adminPlayerName"),
+  adminPlayerKind: document.getElementById("adminPlayerKind"),
+  adminPlayerStats: document.getElementById("adminPlayerStats"),
+  adminPlayerAmount: document.getElementById("adminPlayerAmount"),
+  adminPlayerMsg: document.getElementById("adminPlayerMsg"),
+  btnAdminGivePts: document.getElementById("btnAdminGivePts"),
+  btnAdminRemovePts: document.getElementById("btnAdminRemovePts"),
+  btnAdminGiveXp: document.getElementById("btnAdminGiveXp"),
+  btnAdminRemoveXp: document.getElementById("btnAdminRemoveXp"),
+  btnAdminKickPlayer: document.getElementById("btnAdminKickPlayer"),
+  btnAdminBanPlayer: document.getElementById("btnAdminBanPlayer"),
+  btnAdminUnbanPlayer: document.getElementById("btnAdminUnbanPlayer"),
+  adminRoleSection: document.getElementById("adminRoleSection"),
+  adminRoleActions: document.getElementById("adminRoleActions"),
+  btnAdminGrantAdmin: document.getElementById("btnAdminGrantAdmin"),
+  btnAdminRevokeAdmin: document.getElementById("btnAdminRevokeAdmin"),
+  btnAdminPlayerDetailBack: document.getElementById("btnAdminPlayerDetailBack"),
+  adminReportsOverlay: document.getElementById("adminReportsOverlay"),
+  adminReportsList: document.getElementById("adminReportsList"),
+  adminReportsMsg: document.getElementById("adminReportsMsg"),
+  btnAdminReportsRefresh: document.getElementById("btnAdminReportsRefresh"),
+  btnAdminReportsBack: document.getElementById("btnAdminReportsBack"),
+  adminReportDetailOverlay: document.getElementById("adminReportDetailOverlay"),
+  adminReportTitle: document.getElementById("adminReportTitle"),
+  adminReportMeta: document.getElementById("adminReportMeta"),
+  adminReportBody: document.getElementById("adminReportBody"),
+  adminReportMsg: document.getElementById("adminReportMsg"),
+  btnReportOpen: document.getElementById("btnReportOpen"),
+  btnReportResolved: document.getElementById("btnReportResolved"),
+  btnReportClosed: document.getElementById("btnReportClosed"),
+  btnAdminReportDetailBack: document.getElementById("btnAdminReportDetailBack"),
+  contactOverlay: document.getElementById("contactOverlay"),
+  btnContact: document.getElementById("btnContact"),
+  btnContactBack: document.getElementById("btnContactBack"),
+  btnContactGoProfile: document.getElementById("btnContactGoProfile"),
+  btnContactSubmit: document.getElementById("btnContactSubmit"),
+  contactGuest: document.getElementById("contactGuest"),
+  contactForm: document.getElementById("contactForm"),
+  contactCategory: document.getElementById("contactCategory"),
+  contactSubject: document.getElementById("contactSubject"),
+  contactReported: document.getElementById("contactReported"),
+  contactMessage: document.getElementById("contactMessage"),
+  contactMsg: document.getElementById("contactMsg"),
   adminOverlay: document.getElementById("adminOverlay"),
   adminWelcome: document.getElementById("adminWelcome"),
   adminPoints: document.getElementById("adminPoints"),
@@ -4859,6 +5273,7 @@ const ui = {
   adminLevel: document.getElementById("adminLevel"),
   adminLevelInput: document.getElementById("adminLevelInput"),
   btnAdminSetLevel: document.getElementById("btnAdminSetLevel"),
+  btnAdminResetScoreboard: document.getElementById("btnAdminResetScoreboard"),
   adminMsg: document.getElementById("adminMsg"),
   abMegaPaddle: document.getElementById("abMegaPaddle"),
   abFreeShop: document.getElementById("abFreeShop"),
@@ -7915,7 +8330,7 @@ function requireName(action) {
 function showOverlay(el) {
   el.classList.remove("hidden");
   el.setAttribute("aria-hidden", "false");
-  if (stageEl && (el === ui.nameOverlay || el === ui.menuOverlay || el === ui.botModesOverlay || el === ui.modeSoonOverlay || el === ui.botLevelOverlay || el === ui.chaosLevelOverlay || el === ui.survivalLevelOverlay || el === ui.bossHubOverlay || el === ui.bossShopOverlay || el === ui.bossLevelOverlay || el === ui.lobbyOverlay || el === ui.onlineHubOverlay || el === ui.onlineSearchOverlay || el === ui.scoreboardOverlay || el === ui.customizeOverlay || el === ui.profileOverlay || el === ui.settingsOverlay || el === ui.updatesOverlay || el === ui.adminOverlay || el === ui.passkeyOverlay || el === ui.masterClearOverlay)) {
+  if (stageEl && (el === ui.nameOverlay || el === ui.menuOverlay || el === ui.botModesOverlay || el === ui.modeSoonOverlay || el === ui.botLevelOverlay || el === ui.chaosLevelOverlay || el === ui.survivalLevelOverlay || el === ui.bossHubOverlay || el === ui.bossShopOverlay || el === ui.bossLevelOverlay || el === ui.lobbyOverlay || el === ui.onlineHubOverlay || el === ui.onlineSearchOverlay || el === ui.scoreboardOverlay || el === ui.customizeOverlay || el === ui.profileOverlay || el === ui.settingsOverlay || el === ui.updatesOverlay || el === ui.adminOverlay || el === ui.adminToolsOverlay || el === ui.adminPlayersOverlay || el === ui.adminPlayerDetailOverlay || el === ui.adminReportsOverlay || el === ui.adminReportDetailOverlay || el === ui.contactOverlay || el === ui.passkeyOverlay || el === ui.masterClearOverlay)) {
     stageEl.classList.add("menu-open");
   }
 }
@@ -7923,7 +8338,7 @@ function showOverlay(el) {
 function hideOverlay(el) {
   el.classList.add("hidden");
   el.setAttribute("aria-hidden", "true");
-  if (stageEl && (el === ui.nameOverlay || el === ui.menuOverlay || el === ui.botModesOverlay || el === ui.modeSoonOverlay || el === ui.botLevelOverlay || el === ui.chaosLevelOverlay || el === ui.survivalLevelOverlay || el === ui.bossHubOverlay || el === ui.bossShopOverlay || el === ui.bossLevelOverlay || el === ui.lobbyOverlay || el === ui.onlineHubOverlay || el === ui.onlineSearchOverlay || el === ui.scoreboardOverlay || el === ui.customizeOverlay || el === ui.profileOverlay || el === ui.settingsOverlay || el === ui.updatesOverlay || el === ui.adminOverlay || el === ui.passkeyOverlay || el === ui.masterClearOverlay)) {
+  if (stageEl && (el === ui.nameOverlay || el === ui.menuOverlay || el === ui.botModesOverlay || el === ui.modeSoonOverlay || el === ui.botLevelOverlay || el === ui.chaosLevelOverlay || el === ui.survivalLevelOverlay || el === ui.bossHubOverlay || el === ui.bossShopOverlay || el === ui.bossLevelOverlay || el === ui.lobbyOverlay || el === ui.onlineHubOverlay || el === ui.onlineSearchOverlay || el === ui.scoreboardOverlay || el === ui.customizeOverlay || el === ui.profileOverlay || el === ui.settingsOverlay || el === ui.updatesOverlay || el === ui.adminOverlay || el === ui.adminToolsOverlay || el === ui.adminPlayersOverlay || el === ui.adminPlayerDetailOverlay || el === ui.adminReportsOverlay || el === ui.adminReportDetailOverlay || el === ui.contactOverlay || el === ui.passkeyOverlay || el === ui.masterClearOverlay)) {
     stageEl.classList.remove("menu-open");
   }
 }
@@ -9228,6 +9643,24 @@ function handleWsMessage(msg) {
     return;
   }
 
+  if (msg.type === "kicked") {
+    stopGameMusic();
+    stopSearchUI();
+    closeWs();
+    s.mode = "menu";
+    s.running = false;
+    s.gameOver = false;
+    hideOverlay(ui.gameOver);
+    hideOverlay(ui.lobbyOverlay);
+    hideOverlay(ui.onlineHubOverlay);
+    hideOverlay(ui.onlineSearchOverlay);
+    showOverlay(ui.menuOverlay);
+    setStagePlaying(false);
+    ui.status.textContent = msg.reason || "Disconnected by admin";
+    ui.hint.textContent = msg.reason || "You were kicked by an admin.";
+    return;
+  }
+
   if (msg.type === "opponentLeft") {
     stopGameMusic();
     stopSearchUI();
@@ -9486,7 +9919,9 @@ function renderOnlineScoreboard(entries) {
     applyLevelClass(name, entry.rank || 0);
     const stats = document.createElement("div");
     stats.className = "online-score-stats";
-    stats.textContent = `L${entry.rank || 0} · XP ${entry.xpLevel || 1} · ${entry.matches || 0} played`;
+    stats.textContent = `L${entry.rank || 0} · XP ${entry.xpLevel || 1} · ${entry.matches || 0} played${
+      entry.bestWinStreak > 0 ? ` · best ${entry.bestWinStreak} streak` : ""
+    }${entry.winStreak > 1 ? ` · 🔥${entry.winStreak}` : ""}`;
     meta.append(name, stats);
     player.append(avatar, meta);
 
@@ -9524,7 +9959,7 @@ async function refreshOnlineScoreboard() {
     const res = await fetch("/api/leaderboard", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ limit: 100 }),
+      body: JSON.stringify({ limit: 500 }),
     });
     const data = await res.json();
     if (!data?.ok) throw new Error("bad response");
@@ -9578,6 +10013,12 @@ function backToMenu() {
   hideOverlay(ui.settingsOverlay);
   hideOverlay(ui.updatesOverlay);
   hideOverlay(ui.adminOverlay);
+  hideOverlay(ui.adminToolsOverlay);
+  hideOverlay(ui.adminPlayersOverlay);
+  hideOverlay(ui.adminPlayerDetailOverlay);
+  hideOverlay(ui.adminReportsOverlay);
+  hideOverlay(ui.adminReportDetailOverlay);
+  hideOverlay(ui.contactOverlay);
   hideOverlay(ui.passkeyOverlay);
   hideOverlay(ui.masterClearOverlay);
   hideOverlay(ui.profileOverlay);
@@ -9633,6 +10074,55 @@ function bindAdminControls() {
     const n = parseInt(ui.adminLevelInput?.value, 10);
     adminSetPlayerLevel(Number.isFinite(n) ? n : 0);
   });
+  bind(ui.btnAdminResetScoreboard, () => {
+    adminResetScoreboard();
+  });
+  bind(ui.btnAdminTools, openAdminTools);
+  bind(ui.btnAdminPlayers, openAdminPlayers);
+  bind(ui.btnAdminReports, openAdminReports);
+  bind(ui.btnAdminToolsBack, closeAdminTools);
+  bind(ui.btnAdminPlayersBack, closeAdminPlayers);
+  bind(ui.btnAdminPlayersRefresh, refreshAdminPlayers);
+  bind(ui.btnAdminPlayerDetailBack, closeAdminPlayerDetail);
+  bind(ui.btnAdminGivePts, () => {
+    const n = parseInt(ui.adminPlayerAmount?.value, 10);
+    adminPlayerAction("givePoints", Number.isFinite(n) ? n : 10);
+  });
+  bind(ui.btnAdminRemovePts, () => {
+    const n = parseInt(ui.adminPlayerAmount?.value, 10);
+    adminPlayerAction("removePoints", Number.isFinite(n) ? n : 10);
+  });
+  bind(ui.btnAdminGiveXp, () => {
+    const n = parseInt(ui.adminPlayerAmount?.value, 10);
+    adminPlayerAction("giveXp", Number.isFinite(n) ? n : 10);
+  });
+  bind(ui.btnAdminRemoveXp, () => {
+    const n = parseInt(ui.adminPlayerAmount?.value, 10);
+    adminPlayerAction("removeXp", Number.isFinite(n) ? n : 10);
+  });
+  bind(ui.btnAdminKickPlayer, () => adminPlayerAction("kick"));
+  bind(ui.btnAdminBanPlayer, () => {
+    if (window.confirm("Ban this player? They will be kicked and cannot log in.")) {
+      adminPlayerAction("ban");
+    }
+  });
+  bind(ui.btnAdminUnbanPlayer, () => adminPlayerAction("unban"));
+  bind(ui.btnAdminGrantAdmin, () => {
+    if (window.confirm("Give this player admin access? They will see the Admin menu.")) {
+      adminPlayerAction("grantAdmin");
+    }
+  });
+  bind(ui.btnAdminRevokeAdmin, () => {
+    if (window.confirm("Remove admin access from this player?")) {
+      adminPlayerAction("revokeAdmin");
+    }
+  });
+  bind(ui.btnAdminReportsBack, closeAdminReports);
+  bind(ui.btnAdminReportsRefresh, refreshAdminReports);
+  bind(ui.btnAdminReportDetailBack, closeAdminReportDetail);
+  bind(ui.btnReportOpen, () => adminSetTicketStatus("open"));
+  bind(ui.btnReportResolved, () => adminSetTicketStatus("resolved"));
+  bind(ui.btnReportClosed, () => adminSetTicketStatus("closed"));
   if (ui.adminLevelInput) {
     ui.adminLevelInput.addEventListener("keydown", (e) => {
       if (e.key === "Enter") {
@@ -9915,6 +10405,17 @@ function bindUi() {
   bind(ui.btnCustomizeBack, closeCustomize);
   bind(ui.btnAdmin, openAdminOrPasskey);
   bind(ui.btnAdminBack, closeAdmin);
+  bind(ui.btnContact, openContact);
+  bind(ui.btnContactBack, closeContact);
+  bind(ui.btnContactGoProfile, () => {
+    hideOverlay(ui.contactOverlay);
+    if (typeof openProfile === "function") openProfile();
+    else {
+      showOverlay(ui.profileOverlay);
+      refreshProfileUI();
+    }
+  });
+  bind(ui.btnContactSubmit, submitContactTicket);
   bind(ui.backToMenu, backToMenu);
   bind(ui.btnCreateRoom, () => connectWs(() => sendWs({ type: "create" })));
   bind(ui.btnSearch, startMatchSearch);

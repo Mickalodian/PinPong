@@ -60,12 +60,13 @@ function verifyPassword(password, salt, expectedHash) {
   }
 }
 
-function createSession(username, playerId, isOwner = false) {
+function createSession(username, playerId, isOwner = false, isAdmin = false) {
   const token = crypto.randomBytes(24).toString("hex");
   sessions.set(token, {
     username,
     playerId,
     isOwner: !!isOwner,
+    isAdmin: !!(isOwner || isAdmin),
     expires: Date.now() + 30 * 24 * 60 * 60 * 1000,
   });
   return token;
@@ -101,6 +102,7 @@ function ensureOwnerAccount() {
     salt,
     playerId,
     isOwner: true,
+    isAdmin: true,
     createdAt: existing?.createdAt || Date.now(),
     updatedAt: Date.now(),
   };
@@ -114,6 +116,12 @@ function ensureOwnerAccount() {
 function accountIsOwner(acc, username) {
   if (!acc) return false;
   return !!(acc.isOwner || isOwnerUsername(username || acc.username));
+}
+
+function accountIsAdmin(acc, username) {
+  if (!acc) return false;
+  if (accountIsOwner(acc, username)) return true;
+  return !!acc.isAdmin;
 }
 
 function getAccount(username) {
@@ -143,11 +151,12 @@ function registerAccount({ username, password, playerId }) {
     salt,
     playerId: pid,
     isOwner: false,
+    isAdmin: false,
     createdAt: Date.now(),
   };
   saveAccounts(db);
-  const token = createSession(user, pid, false);
-  return { ok: true, token, username: user, playerId: pid, isOwner: false };
+  const token = createSession(user, pid, false, false);
+  return { ok: true, token, username: user, playerId: pid, isOwner: false, isAdmin: false };
 }
 
 function loginAccount({ username, password }) {
@@ -156,18 +165,110 @@ function loginAccount({ username, password }) {
   const db = loadAccounts();
   const acc = db[user];
   if (!acc) return { ok: false, error: "Account not found" };
+  if (acc.banned) {
+    return { ok: false, error: "This account is banned." };
+  }
   if (!verifyPassword(password, acc.salt, acc.passwordHash)) {
     return { ok: false, error: "Wrong password" };
   }
   const owner = accountIsOwner(acc, user);
-  const token = createSession(acc.username, acc.playerId, owner);
+  const admin = accountIsAdmin(acc, user);
+  const token = createSession(acc.username, acc.playerId, owner, admin);
   return {
     ok: true,
     token,
     username: acc.displayName || acc.username,
     playerId: acc.playerId,
     isOwner: owner,
+    isAdmin: admin,
   };
+}
+
+function listAccountsPublic() {
+  ensureOwnerAccount();
+  const db = loadAccounts();
+  return Object.values(db)
+    .filter((a) => a && a.username && a.playerId)
+    .map((a) => ({
+      username: a.displayName || a.username,
+      usernameKey: a.username,
+      playerId: a.playerId,
+      isOwner: !!a.isOwner || isOwnerUsername(a.username),
+      isAdmin: !!(a.isAdmin || a.isOwner || isOwnerUsername(a.username)),
+      banned: !!a.banned,
+      createdAt: a.createdAt || 0,
+      updatedAt: a.updatedAt || 0,
+    }))
+    .sort((a, b) => {
+      if (a.isOwner !== b.isOwner) return a.isOwner ? -1 : 1;
+      return String(a.username).localeCompare(String(b.username));
+    });
+}
+
+function findAccountByPlayerId(playerId) {
+  const pid = String(playerId || "").trim();
+  if (!pid) return null;
+  const db = loadAccounts();
+  for (const acc of Object.values(db)) {
+    if (acc && acc.playerId === pid) return acc;
+  }
+  return null;
+}
+
+function setAccountBanned(usernameOrKey, banned) {
+  const user = sanitizeUsername(usernameOrKey);
+  const db = loadAccounts();
+  const acc = db[user];
+  if (!acc) return { ok: false, error: "Account not found" };
+  if (accountIsOwner(acc, user)) return { ok: false, error: "Cannot ban the owner account" };
+  acc.banned = !!banned;
+  acc.updatedAt = Date.now();
+  saveAccounts(db);
+  // Kill active sessions for this user
+  for (const [token, session] of sessions.entries()) {
+    if (session && sanitizeUsername(session.username) === user) sessions.delete(token);
+  }
+  return { ok: true, username: acc.displayName || acc.username, banned: !!acc.banned, playerId: acc.playerId };
+}
+
+function setAccountAdmin(usernameOrKey, makeAdmin) {
+  const user = sanitizeUsername(usernameOrKey);
+  const db = loadAccounts();
+  const acc = db[user];
+  if (!acc) return { ok: false, error: "Account not found" };
+  if (accountIsOwner(acc, user)) {
+    return { ok: false, error: "Owner always has admin — cannot change" };
+  }
+  acc.isAdmin = !!makeAdmin;
+  acc.updatedAt = Date.now();
+  saveAccounts(db);
+  // Refresh live sessions so grant/revoke applies immediately
+  for (const [, session] of sessions.entries()) {
+    if (session && sanitizeUsername(session.username) === user) {
+      session.isAdmin = !!makeAdmin;
+      session.isOwner = false;
+    }
+  }
+  return {
+    ok: true,
+    username: acc.displayName || acc.username,
+    playerId: acc.playerId,
+    isAdmin: !!acc.isAdmin,
+    isOwner: false,
+  };
+}
+
+function destroySessionsForPlayerId(playerId) {
+  const pid = String(playerId || "").trim();
+  if (!pid) return 0;
+  let n = 0;
+  for (const [token, session] of sessions.entries()) {
+    if (session && session.playerId === pid) {
+      sessions.delete(token);
+      n += 1;
+    }
+  }
+  return n;
 }
 
 function saveAvatarFile(playerId, dataUrl) {
@@ -217,7 +318,13 @@ module.exports = {
   ensureOwnerAccount,
   isOwnerUsername,
   accountIsOwner,
+  accountIsAdmin,
   getAccount,
+  listAccountsPublic,
+  findAccountByPlayerId,
+  setAccountBanned,
+  setAccountAdmin,
+  destroySessionsForPlayerId,
   AVATARS_DIR,
   sanitizeUsername,
   OWNER_USERNAME,
