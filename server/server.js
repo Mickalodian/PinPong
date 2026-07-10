@@ -49,6 +49,15 @@ function saveProfiles(db) {
   fs.writeFileSync(PROFILES_PATH, JSON.stringify(db, null, 2));
 }
 
+const VALID_BOSS_POWERS = new Set(["block", "iron", "timeslow", "reflect"]);
+
+function mergeBossPowers(prevList, nextList, force = false) {
+  const clean = (list) =>
+    [...new Set((Array.isArray(list) ? list : []).map(String).filter((id) => VALID_BOSS_POWERS.has(id)))];
+  if (force) return clean(nextList);
+  return clean([...(prevList || []), ...(nextList || [])]);
+}
+
 function defaultProfile() {
   return {
     name: "",
@@ -56,9 +65,11 @@ function defaultProfile() {
     maxBotCleared: 0,
     maxChaosCleared: 0,
     maxSurvivalCleared: 0,
+    maxBossCleared: 0,
     owned: { paddle: ["white"], table: ["classic"] },
     equipped: { paddle: "white", table: "classic" },
     redeemedCodes: [],
+    bossPowers: [],
   };
 }
 
@@ -89,6 +100,8 @@ function mergeProfileRecord(existing, incoming, { force = false } = {}) {
   const prevChaos = Math.max(0, Math.min(25, Math.floor(Number(prev.maxChaosCleared) || 0)));
   const incomingSurvival = Math.max(0, Math.min(25, Math.floor(Number(p.maxSurvivalCleared) || 0)));
   const prevSurvival = Math.max(0, Math.min(25, Math.floor(Number(prev.maxSurvivalCleared) || 0)));
+  const incomingBoss = Math.max(0, Math.min(10, Math.floor(Number(p.maxBossCleared) || 0)));
+  const prevBoss = Math.max(0, Math.min(10, Math.floor(Number(prev.maxBossCleared) || 0)));
   const incomingPoints = Math.max(0, Math.floor(Number(p.points) || 0));
   const prevPoints = Math.max(0, Math.floor(Number(prev.points) || 0));
   return {
@@ -97,6 +110,7 @@ function mergeProfileRecord(existing, incoming, { force = false } = {}) {
     maxBotCleared: force ? incomingLevel : Math.max(prevLevel, incomingLevel),
     maxChaosCleared: force ? incomingChaos : Math.max(prevChaos, incomingChaos),
     maxSurvivalCleared: force ? incomingSurvival : Math.max(prevSurvival, incomingSurvival),
+    maxBossCleared: force ? incomingBoss : Math.max(prevBoss, incomingBoss),
     owned: {
       paddle: ownedPaddle.includes("white") ? ownedPaddle : ["white", ...ownedPaddle],
       table: ownedTable.includes("classic") ? ownedTable : ["classic", ...ownedTable],
@@ -111,6 +125,7 @@ function mergeProfileRecord(existing, incoming, { force = false } = {}) {
         ...(Array.isArray(p.redeemedCodes) ? p.redeemedCodes.map(String) : []),
       ]),
     ],
+    bossPowers: mergeBossPowers(prev.bossPowers, p.bossPowers, force),
     updatedAt: Date.now(),
   };
 }
@@ -127,13 +142,13 @@ const VALID_PADDLE = new Set([
   "white", "blue", "pink", "orange", "red", "green", "yellow", "purple", "cyan",
   "galaxy", "moon", "sunset", "neon", "lava", "ice", "rainbow", "aurora",
   "nebula", "interstellar", "voidpulse", "solarflare", "plasma", "quantum", "darkmatter", "hypernova",
-  "rosegold", "voidstorm", "hearthflame", "skywyrm", "obsidian", "chaosrift", "endurance", "heartbloom", "blushgarden",
+  "rosegold", "voidstorm", "hearthflame", "skywyrm", "obsidian", "chaosrift", "endurance", "overlord", "heartbloom", "blushgarden",
 ]);
 const VALID_TABLE = new Set([
   "classic", "blue", "pink", "orange", "red", "green", "yellow", "purple", "cyan",
   "galaxy", "moon", "sunset", "neon", "lava", "ice", "rainbow", "aurora",
   "nebula", "interstellar", "voidpulse", "solarflare", "plasma", "quantum", "darkmatter", "hypernova",
-  "rosegold", "voidstorm", "hearthflame", "skywyrm", "obsidian", "chaosrift", "endurance", "heartbloom", "blushgarden",
+  "rosegold", "voidstorm", "hearthflame", "skywyrm", "obsidian", "chaosrift", "endurance", "overlord", "heartbloom", "blushgarden",
 ]);
 
 function sanitizeCosmetics(cos) {

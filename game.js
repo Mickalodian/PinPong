@@ -21,11 +21,42 @@ const POINTS_PER_WIN = 2;
 const POINTS_PER_BOT_CLEAR = 5;
 const POINTS_PER_CHAOS_CLEAR = 3;
 const POINTS_PER_SURVIVAL_WIN = 5;
+const POINTS_PER_BOSS_WIN = 8;
 const CHAOS_MAX_LEVEL = 25;
 const SURVIVAL_MAX_ROUND = 25;
+const BOSS_MAX_LEVEL = 10;
+const BOSS_HP = 5;
 const SURVIVAL_MATCH_SECONDS = 120;
 const PARRY_CHARGE_NEED = 10;
 const FIRE_SMASH_SPEED = 1650;
+const BOSS_REFLECT_SPEED = 1320;
+const VALID_BOSS_POWERS = new Set(["block", "iron", "timeslow", "reflect"]);
+const BOSS_SHOP = [
+  {
+    id: "block",
+    name: "Block",
+    price: 500,
+    desc: "Negate the next goal scored against you. 15s cooldown after use.",
+  },
+  {
+    id: "iron",
+    name: "Iron Paddle",
+    price: 350,
+    desc: "Your paddle grows 30% larger for 30 seconds.",
+  },
+  {
+    id: "timeslow",
+    name: "Time Slow",
+    price: 450,
+    desc: "Slow the boss and its abilities by 40% for 5 seconds.",
+  },
+  {
+    id: "reflect",
+    name: "Reflect",
+    price: 500,
+    desc: "Next hit launches the ball. If it strikes the boss, freeze them 10s. 20s cooldown.",
+  },
+];
 
 const SHOP = {
   paddle: [
@@ -109,6 +140,14 @@ const SHOP = {
       style: "endurance",
       survival: true,
       requireSurvivalLevel: 25,
+    },
+    {
+      id: "overlord",
+      name: "Overlord",
+      price: 0,
+      style: "overlord",
+      boss: true,
+      requireBossLevel: 10,
     },
     {
       id: "heartbloom",
@@ -214,6 +253,14 @@ const SHOP = {
       requireSurvivalLevel: 25,
     },
     {
+      id: "overlord",
+      name: "Overlord",
+      price: 0,
+      style: "overlord",
+      boss: true,
+      requireBossLevel: 10,
+    },
+    {
       id: "heartbloom",
       name: "Heart Bloom",
       price: 0,
@@ -265,10 +312,12 @@ const save = {
   maxBotCleared: 0,
   maxChaosCleared: 0,
   maxSurvivalCleared: 0,
+  maxBossCleared: 0,
   owned: { paddle: ["white"], table: ["classic"] },
   equipped: { paddle: "white", table: "classic" },
   redeemedCodes: [],
   shopTab: "paddle",
+  bossPowers: [],
   abilities: { megaPaddle: false, freeShop: false, slowBot: false, pauseBot: false, bonusPts: false },
 };
 
@@ -354,6 +403,11 @@ function applyProfile(data, { replace = false } = {}) {
     save.maxSurvivalCleared = replace ? incoming : Math.max(save.maxSurvivalCleared || 0, incoming);
   }
 
+  if (typeof data.maxBossCleared === "number" && Number.isFinite(data.maxBossCleared)) {
+    const incoming = Math.max(0, Math.min(BOSS_MAX_LEVEL, Math.floor(data.maxBossCleared)));
+    save.maxBossCleared = replace ? incoming : Math.max(save.maxBossCleared || 0, incoming);
+  }
+
   if (data.owned?.paddle || data.owned?.table) {
     save.owned.paddle = replace
       ? uniqIds(data.owned?.paddle, "white")
@@ -368,6 +422,14 @@ function applyProfile(data, { replace = false } = {}) {
   if (Array.isArray(data.redeemedCodes)) {
     const merged = new Set([...(save.redeemedCodes || []), ...data.redeemedCodes.map(String)]);
     save.redeemedCodes = [...merged];
+  }
+  if (Array.isArray(data.bossPowers)) {
+    const merged = new Set([...(save.bossPowers || []), ...data.bossPowers.map(String).filter((id) => VALID_BOSS_POWERS.has(id))]);
+    if (replace) {
+      save.bossPowers = [...new Set(data.bossPowers.map(String).filter((id) => VALID_BOSS_POWERS.has(id)))];
+    } else {
+      save.bossPowers = [...merged];
+    }
   }
   if (!save.owned.paddle.includes("white")) save.owned.paddle.unshift("white");
   if (!save.owned.table.includes("classic")) save.owned.table.unshift("classic");
@@ -387,6 +449,9 @@ function itemUnlocked(item) {
   if (item.requireSurvivalLevel) {
     return (save.maxSurvivalCleared || 0) >= item.requireSurvivalLevel;
   }
+  if (item.requireBossLevel) {
+    return (save.maxBossCleared || 0) >= item.requireBossLevel;
+  }
   if (!item.requireLevel) return true;
   return getPlayerLevel() >= item.requireLevel;
 }
@@ -395,7 +460,7 @@ function sanitizeEquippedCosmetics() {
   let changed = false;
   for (const kind of ["paddle", "table"]) {
     for (const item of SHOP[kind]) {
-      const gated = !!(item.requireLevel || item.requireChaosLevel || item.requireSurvivalLevel);
+      const gated = !!(item.requireLevel || item.requireChaosLevel || item.requireSurvivalLevel || item.requireBossLevel);
       if (gated && itemUnlocked(item) && !save.owned[kind].includes(item.id)) {
         save.owned[kind].push(item.id);
         changed = true;
@@ -422,6 +487,10 @@ function isSurvivalRoundUnlocked(round) {
   return round === 1 || round <= (save.maxSurvivalCleared || 0) + 1;
 }
 
+function isBossLevelUnlocked(level) {
+  return level === 1 || level <= (save.maxBossCleared || 0) + 1;
+}
+
 function chaosWinPoints(level) {
   const lv = clamp(Math.round(Number(level) || 1), 1, CHAOS_MAX_LEVEL);
   return Math.round(2 + ((lv - 1) * 48) / (CHAOS_MAX_LEVEL - 1));
@@ -445,6 +514,18 @@ function grantEnduranceIfEligible() {
   for (const kind of ["paddle", "table"]) {
     if (!save.owned[kind].includes("endurance")) {
       save.owned[kind].push("endurance");
+      granted = true;
+    }
+  }
+  return granted;
+}
+
+function grantOverlordIfEligible() {
+  let granted = false;
+  if ((save.maxBossCleared || 0) < BOSS_MAX_LEVEL) return false;
+  for (const kind of ["paddle", "table"]) {
+    if (!save.owned[kind].includes("overlord")) {
+      save.owned[kind].push("overlord");
       granted = true;
     }
   }
@@ -514,7 +595,7 @@ function applyLevelClass(el, level) {
 }
 
 function awardBotClear(level) {
-  if (s.mode !== "local" || s.botMode === "chaos" || s.botMode === "survival") return 0;
+  if (s.mode !== "local" || s.botMode === "chaos" || s.botMode === "survival" || s.botMode === "boss") return 0;
   const lv = Math.max(1, Math.min(100, level || s.botLevel));
   if (lv <= save.maxBotCleared) return 0;
   save.maxBotCleared = lv;
@@ -553,6 +634,19 @@ function awardSurvivalClear(round) {
   return 1;
 }
 
+function awardBossClear(level) {
+  if (s.mode !== "local" || s.botMode !== "boss") return 0;
+  const lv = Math.max(1, Math.min(BOSS_MAX_LEVEL, level || s.botLevel));
+  if (lv <= (save.maxBossCleared || 0)) return 0;
+  save.maxBossCleared = lv;
+  grantOverlordIfEligible();
+  sanitizeEquippedCosmetics();
+  persistSave();
+  updatePointsUI();
+  updateNameUI();
+  return 1;
+}
+
 function profilePayload() {
   return {
     name: save.name,
@@ -560,9 +654,11 @@ function profilePayload() {
     maxBotCleared: save.maxBotCleared,
     maxChaosCleared: save.maxChaosCleared || 0,
     maxSurvivalCleared: save.maxSurvivalCleared || 0,
+    maxBossCleared: save.maxBossCleared || 0,
     owned: save.owned,
     equipped: save.equipped,
     redeemedCodes: Array.isArray(save.redeemedCodes) ? save.redeemedCodes : [],
+    bossPowers: Array.isArray(save.bossPowers) ? save.bossPowers.filter((id) => VALID_BOSS_POWERS.has(id)) : [],
   };
 }
 
@@ -593,6 +689,7 @@ async function syncProfileFromServer() {
       maxBotCleared: save.maxBotCleared || 0,
       maxChaosCleared: save.maxChaosCleared || 0,
       maxSurvivalCleared: save.maxSurvivalCleared || 0,
+      maxBossCleared: save.maxBossCleared || 0,
       ownedPaddle: (save.owned.paddle || []).length,
       ownedTable: (save.owned.table || []).length,
     };
@@ -611,6 +708,7 @@ async function syncProfileFromServer() {
         maxBotCleared: save.maxBotCleared || 0,
         maxChaosCleared: save.maxChaosCleared || 0,
         maxSurvivalCleared: save.maxSurvivalCleared || 0,
+        maxBossCleared: save.maxBossCleared || 0,
         ownedPaddle: (save.owned.paddle || []).length,
         ownedTable: (save.owned.table || []).length,
       };
@@ -620,12 +718,14 @@ async function syncProfileFromServer() {
         after.maxBotCleared > (Number(data.profile.maxBotCleared) || 0) ||
         after.maxChaosCleared > (Number(data.profile.maxChaosCleared) || 0) ||
         after.maxSurvivalCleared > (Number(data.profile.maxSurvivalCleared) || 0) ||
+        after.maxBossCleared > (Number(data.profile.maxBossCleared) || 0) ||
         after.ownedPaddle > (data.profile.owned?.paddle || []).length ||
         after.ownedTable > (data.profile.owned?.table || []).length ||
         before.points > (Number(data.profile.points) || 0) ||
         before.maxBotCleared > (Number(data.profile.maxBotCleared) || 0) ||
         before.maxChaosCleared > (Number(data.profile.maxChaosCleared) || 0) ||
-        before.maxSurvivalCleared > (Number(data.profile.maxSurvivalCleared) || 0)
+        before.maxSurvivalCleared > (Number(data.profile.maxSurvivalCleared) || 0) ||
+        before.maxBossCleared > (Number(data.profile.maxBossCleared) || 0)
       ) {
         await syncProfileToServer();
       }
@@ -720,10 +820,17 @@ function awardWinPoints(winner) {
 }
 
 function effectivePaddleH(side) {
+  let h = paddle.h;
   if (side === mySide() && isAdmin() && save.abilities.megaPaddle) {
-    return Math.round(paddle.h * 1.55);
+    h = Math.round(paddle.h * 1.55);
   }
-  return paddle.h;
+  if (side === "p1" && isBossMode() && s.boss?.powers?.ironT > 0) {
+    h = Math.round(h * 1.3);
+  }
+  if (side === "p2" && isBossMode() && s.boss && s.boss.growT > 0) {
+    h = Math.round(h * (s.boss.growMul || 1.55));
+  }
+  return h;
 }
 
 function mySide() {
@@ -916,6 +1023,14 @@ function applyFillStyle(c, item, x, y, w, h, alpha) {
     safeColorStop(g, 0.55, "#081210");
     safeColorStop(g, 0.78 - shift, "#0a100c");
     safeColorStop(g, 1, "#030201");
+  } else if (item.style === "overlord") {
+    const shift = Math.sin(t * 1.1) * 0.05;
+    g = c.createLinearGradient(x, y, x + w, y + h);
+    safeColorStop(g, 0, "#1a0505");
+    safeColorStop(g, 0.28 + shift, "#450a0a");
+    safeColorStop(g, 0.5, "#14532d");
+    safeColorStop(g, 0.72 - shift, "#7f1d1d");
+    safeColorStop(g, 1, "#052e16");
   } else if (item.style === "heartbloom") {
     const ox = Math.sin(t * 0.7) * w * 0.18;
     g = c.createLinearGradient(x + ox, y, x + w - ox, y + h);
@@ -1596,7 +1711,7 @@ function drawSkywyrmDragon(c, ox, oy, unit, wingPhase, pitch, alpha, mouthOpen =
 }
 
 function drawEpicOverlay(c, item, x, y, w, h, alpha) {
-  if (!item.epic && !item.legendary && !item.chaos && !item.survival && !item.secret) return;
+  if (!item.epic && !item.legendary && !item.chaos && !item.survival && !item.boss && !item.secret) return;
   const t = performance.now() * 0.001;
   c.save();
   c.beginPath();
@@ -2550,6 +2665,61 @@ function drawEpicOverlay(c, item, x, y, w, h, alpha) {
     c.fillRect(x, y, w, h);
   }
 
+  if (item.style === "overlord") {
+    const scale = Math.max(0.55, Math.min(3.5, Math.min(w, h) / 22));
+    const area = Math.max(1, w * h);
+    const flow = t * 1.15;
+
+    const wash = c.createRadialGradient(
+      x + w * (0.48 + Math.sin(flow * 0.4) * 0.1),
+      y + h * (0.5 + Math.cos(flow * 0.32) * 0.08),
+      1,
+      x + w * 0.5,
+      y + h * 0.5,
+      Math.max(w, h) * 0.95
+    );
+    wash.addColorStop(0, `rgba(239, 68, 68,${0.16 + Math.sin(flow) * 0.04})`);
+    wash.addColorStop(0.4, `rgba(74, 222, 128,${0.12})`);
+    wash.addColorStop(0.75, `rgba(153, 27, 27,${0.1})`);
+    wash.addColorStop(1, "rgba(0,0,0,0)");
+    c.globalAlpha = alpha;
+    c.fillStyle = wash;
+    c.fillRect(x, y, w, h);
+
+    // Crown crest arcs
+    for (let i = 0; i < 3; i++) {
+      const cy = y + h * (0.22 + i * 0.12);
+      c.beginPath();
+      c.moveTo(x + w * 0.15, cy);
+      c.quadraticCurveTo(x + w * 0.5, cy - h * (0.1 + i * 0.02), x + w * 0.85, cy);
+      c.globalAlpha = alpha * (0.35 + Math.sin(flow * 2 + i) * 0.15);
+      c.strokeStyle = i % 2 ? "rgba(134,239,172,0.9)" : "rgba(252,165,165,0.9)";
+      c.lineWidth = Math.max(1.2, 2.2 * scale * 0.45);
+      c.stroke();
+    }
+
+    // Multi-eye glow motes
+    const moteN = Math.min(90, Math.max(24, Math.floor(area / 110)));
+    for (let i = 0; i < moteN; i++) {
+      const seed = i * 9.7 + 4.1;
+      const u = (hashNoise(seed) + Math.sin(flow * 0.25 + i) * 0.03 + 1) % 1;
+      const v = (hashNoise(seed + 2) + Math.cos(flow * 0.2 + i * 0.3) * 0.03 + 1) % 1;
+      const mx = x + u * w;
+      const my = y + v * h;
+      const mr = (0.5 + hashNoise(seed + 5) * 1.6) * scale;
+      const hot = i % 3 !== 1;
+      const glow = c.createRadialGradient(mx, my, 0, mx, my, mr * 2.6);
+      glow.addColorStop(0, hot ? "rgba(254,202,202,0.95)" : "rgba(187,247,208,0.9)");
+      glow.addColorStop(0.4, hot ? "rgba(239,68,68,0.3)" : "rgba(74,222,128,0.3)");
+      glow.addColorStop(1, "rgba(0,0,0,0)");
+      c.globalAlpha = alpha * (0.3 + hashNoise(seed + 8) * 0.45);
+      c.fillStyle = glow;
+      c.beginPath();
+      c.arc(mx, my, mr * 2.6, 0, Math.PI * 2);
+      c.fill();
+    }
+  }
+
   if (item.style === "heartbloom") {
     const scale = Math.max(0.7, Math.min(2.4, Math.min(w, h) / 28));
     for (let i = 0; i < 22; i++) {
@@ -2703,7 +2873,7 @@ function drawSwatch(item, el) {
     cctx.fillStyle = item.color || "#7c3aed";
     cctx.fillRect(0, 0, c.width, c.height);
   }
-  if (item.epic || item.legendary || item.chaos || item.survival || item.secret) {
+  if (item.epic || item.legendary || item.chaos || item.survival || item.boss || item.secret) {
     el.dataset.epicStyle = item.style;
     shopAnimSwatches.push(entry);
     if (shopAnimSwatches.length <= 3) {
@@ -2782,6 +2952,7 @@ function renderShop() {
     if (item.epic) btn.classList.add("epic");
     if (item.chaos) btn.classList.add("chaos");
     else if (item.survival) btn.classList.add("survival");
+    else if (item.boss) btn.classList.add("boss");
     else if (item.legendary) btn.classList.add("legendary");
     if (item.secret) btn.classList.add("secret");
     if (item.limitedEdition) btn.classList.add("limited");
@@ -2790,7 +2961,7 @@ function renderShop() {
     const cantAfford = unlocked && !owned && !free && item.price > 0 && save.points < item.price;
     if (!unlocked) btn.classList.add("level-locked");
     else if (cantAfford) btn.classList.add("cant-afford");
-    if (item.epic || item.legendary || item.chaos || item.survival || item.secret || item.limitedEdition) {
+    if (item.epic || item.legendary || item.chaos || item.survival || item.boss || item.secret || item.limitedEdition) {
       epicCount += 1;
       if (cantAfford || !unlocked) cantAffordEpic += 1;
     }
@@ -2799,6 +2970,7 @@ function renderShop() {
     if (item.epic) swatch.classList.add("epic-swatch");
     if (item.chaos) swatch.classList.add("chaos-swatch");
     else if (item.survival) swatch.classList.add("survival-swatch");
+    else if (item.boss) swatch.classList.add("boss-swatch");
     else if (item.legendary) swatch.classList.add("legendary-swatch");
     if (item.secret) swatch.classList.add("secret-swatch");
     if (item.limitedEdition) swatch.classList.add("limited-swatch");
@@ -2813,10 +2985,11 @@ function renderShop() {
     if (!unlocked) {
       if (item.requireChaosLevel) price.textContent = `CHAOS L${item.requireChaosLevel}`;
       else if (item.requireSurvivalLevel) price.textContent = `SURVIVAL L${item.requireSurvivalLevel}`;
+      else if (item.requireBossLevel) price.textContent = `BOSS L${item.requireBossLevel}`;
       else price.textContent = `LVL ${item.requireLevel}`;
     } else if (item.limitedEdition) price.textContent = owned ? "Limited edition" : "Hidden";
     else if (item.secret) price.textContent = owned ? "Code unlock" : "Hidden";
-    else if (item.price === 0) price.textContent = owned || item.legendary || item.chaos || item.survival ? "Unlocked" : "Free";
+    else if (item.price === 0) price.textContent = owned || item.legendary || item.chaos || item.survival || item.boss ? "Unlocked" : "Free";
     else price.textContent = `${item.price} pts`;
 
     let rarityTag = null;
@@ -2836,6 +3009,10 @@ function renderShop() {
       rarityTag = document.createElement("span");
       rarityTag.className = "shop-rarity-tag shop-survival-tag";
       rarityTag.textContent = "SURVIVAL";
+    } else if (item.boss) {
+      rarityTag = document.createElement("span");
+      rarityTag.className = "shop-rarity-tag shop-boss-tag";
+      rarityTag.textContent = "BOSS";
     } else if (item.legendary) {
       rarityTag = document.createElement("span");
       rarityTag.className = "shop-rarity-tag shop-legendary-tag";
@@ -2856,7 +3033,9 @@ function renderShop() {
         ? `LOCKED · CHAOS L${item.requireChaosLevel}`
         : item.requireSurvivalLevel
           ? `LOCKED · SURVIVAL L${item.requireSurvivalLevel}`
-          : `LOCKED · L${item.requireLevel}`;
+          : item.requireBossLevel
+            ? `LOCKED · BOSS L${item.requireBossLevel}`
+            : `LOCKED · L${item.requireLevel}`;
       btn.appendChild(lock);
     } else if (equipped) {
       const b = document.createElement("span");
@@ -2941,6 +3120,9 @@ function openCustomize() {
   hideOverlay(ui.botLevelOverlay);
   hideOverlay(ui.chaosLevelOverlay);
   hideOverlay(ui.survivalLevelOverlay);
+  hideOverlay(ui.bossHubOverlay);
+  hideOverlay(ui.bossShopOverlay);
+  hideOverlay(ui.bossLevelOverlay);
   hideOverlay(ui.botModesOverlay);
   hideOverlay(ui.lobbyOverlay);
   hideOverlay(ui.settingsOverlay);
@@ -2955,7 +3137,7 @@ function openCustomize() {
     overlayHidden: ui.customizeOverlay.classList.contains("hidden"),
   });
   setShopTab(save.shopTab);
-  if (ui.shopMsg) ui.shopMsg.textContent = "Buy or equip a colour. Legendaries: Rose Gold L20 · Void Storm L40 · Hearthflame L60 · Skywyrm L80 · Obsidian L100. Chaos Rift (Chaos L25). Endurance (Survival R25).";
+  if (ui.shopMsg) ui.shopMsg.textContent = "Buy or equip a colour. Legendaries: Rose Gold L20 · Void Storm L40 · Hearthflame L60 · Skywyrm L80 · Obsidian L100. Chaos Rift (Chaos L25). Endurance (Survival R25). Overlord (Boss B10).";
   // #region agent log
   requestAnimationFrame(() => {
     const overlay = ui.customizeOverlay;
@@ -3028,6 +3210,10 @@ function openAdmin() {
   }
   hideOverlay(ui.menuOverlay);
   hideOverlay(ui.botLevelOverlay);
+  hideOverlay(ui.chaosLevelOverlay);
+  hideOverlay(ui.survivalLevelOverlay);
+  hideOverlay(ui.bossLevelOverlay);
+  hideOverlay(ui.botModesOverlay);
   hideOverlay(ui.customizeOverlay);
   hideOverlay(ui.settingsOverlay);
   hideOverlay(ui.lobbyOverlay);
@@ -3168,6 +3354,18 @@ function adminUnlockAllSurvivalRounds() {
   if (ui.adminMsg) ui.adminMsg.textContent = "All Survival rounds unlocked (R25) — Endurance granted.";
 }
 
+function adminUnlockAllBossLevels() {
+  if (!isAdmin()) return;
+  save.maxBossCleared = BOSS_MAX_LEVEL;
+  grantOverlordIfEligible();
+  sanitizeEquippedCosmetics();
+  persistSave();
+  updateNameUI();
+  refreshAdminPanel();
+  if (ui.bossLevelGrid) renderBossLevelGrid();
+  if (ui.adminMsg) ui.adminMsg.textContent = "All Boss battles unlocked (B10) — Overlord granted.";
+}
+
 function adminSetPlayerLevel(n) {
   if (!isAdmin()) return;
   const lv = Math.max(0, Math.min(100, Math.floor(Number(n) || 0)));
@@ -3206,20 +3404,42 @@ function equippedForSide(side) {
 }
 
 function drawTableHalf(side) {
+  if (isBossMode() && side === "p2") {
+    drawBossTableHalf();
+    return;
+  }
   const eq = equippedForSide(side);
   const style = shopItem("table", eq.table);
   if (style.id === "classic") return;
   const halfW = table.w / 2;
   const x = side === "p1" ? table.x : table.x + halfW;
-  const alpha = style.chaos || style.survival ? 0.68 : style.legendary || style.secret ? 0.62 : style.epic ? 0.58 : style.price >= 20 ? 0.5 : 0.38;
+  const alpha = style.chaos || style.survival || style.boss ? 0.68 : style.legendary || style.secret ? 0.62 : style.epic ? 0.58 : style.price >= 20 ? 0.5 : 0.38;
   drawCosmeticFill(ctx, style, x, table.y, halfW, table.h, alpha);
 }
 
 function drawPaddleRect(p, side) {
   const h = effectivePaddleH(side);
+  if (isBossMode() && side === "p2") {
+    drawBossPaddle(p, h);
+    return;
+  }
+  if (isBossMode() && side === "p1" && s.boss.brokenPlayerT > 0) return;
   const eq = equippedForSide(side);
   const style = shopItem("paddle", eq.paddle);
   drawCosmeticFill(ctx, style, p.x, p.y, paddle.w, h, 1);
+  if (isLightTheme()) {
+    ctx.strokeStyle = "rgba(24, 24, 27, 0.55)";
+    ctx.lineWidth = 1.5;
+    ctx.strokeRect(p.x + 0.5, p.y + 0.5, paddle.w - 1, h - 1);
+  }
+  if (side === "p1" && isBossMode() && s.boss?.powers?.ironT > 0) {
+    ctx.save();
+    ctx.globalAlpha = 0.55 + Math.sin(performance.now() * 0.008) * 0.15;
+    ctx.strokeStyle = "#94a3b8";
+    ctx.lineWidth = 2.5;
+    ctx.strokeRect(p.x - 2, p.y - 2, paddle.w + 4, h + 4);
+    ctx.restore();
+  }
   if (side === "p1" && s.mode === "local" && s.ability.armed) {
     drawFirePaddle(p.x, p.y, paddle.w, h);
   }
@@ -3401,6 +3621,28 @@ function updateBatBreakFx(dt) {
 function scorePointLocal(scorer) {
   if (s.gameOver) return;
   bumpChaosShake(10);
+  if (isBossMode()) {
+    clearBossReflectBoost();
+    if (scorer === "p1") {
+      s.p1.score += 1;
+      ui.p1.textContent = String(s.p1.score);
+      scoreFx("p1");
+      damageBoss();
+    } else {
+      if (tryConsumeBossBlock()) {
+        resetBall(false);
+        ui.status.textContent = "BLOCKED! — " + serveHint();
+        return;
+      }
+      resetAbility();
+      playPointLossSound();
+      s.p2.score += 1;
+      ui.p2.textContent = String(s.p2.score);
+      scoreFx("p2", { silent: true });
+      damagePlayer();
+    }
+    return;
+  }
   if (scorer === "p1") {
     s.p1.score += 1;
     ui.p1.textContent = String(s.p1.score);
@@ -3495,6 +3737,21 @@ const ui = {
   p2Label: document.getElementById("p2Label"),
   status: document.getElementById("status"),
   survivalTimer: document.getElementById("survivalTimer"),
+  bossHud: document.getElementById("bossHud"),
+  bossHudYouFill: document.getElementById("bossHudYouFill"),
+  bossHudBossFill: document.getElementById("bossHudBossFill"),
+  bossHudYouHp: document.getElementById("bossHudYouHp"),
+  bossHudBossHp: document.getElementById("bossHudBossHp"),
+  bossHudName: document.getElementById("bossHudName"),
+  bossPowerBar: document.getElementById("bossPowerBar"),
+  btnBossPowerBlock: document.getElementById("btnBossPowerBlock"),
+  btnBossPowerIron: document.getElementById("btnBossPowerIron"),
+  btnBossPowerTimeslow: document.getElementById("btnBossPowerTimeslow"),
+  btnBossPowerReflect: document.getElementById("btnBossPowerReflect"),
+  bossPowerMetaBlock: document.getElementById("bossPowerMetaBlock"),
+  bossPowerMetaIron: document.getElementById("bossPowerMetaIron"),
+  bossPowerMetaTimeslow: document.getElementById("bossPowerMetaTimeslow"),
+  bossPowerMetaReflect: document.getElementById("bossPowerMetaReflect"),
   menuOverlay: document.getElementById("menuOverlay"),
   botModesOverlay: document.getElementById("botModesOverlay"),
   btnModeClassic: document.getElementById("btnModeClassic"),
@@ -3514,6 +3771,19 @@ const ui = {
   survivalLevelGrid: document.getElementById("survivalLevelGrid"),
   survivalLevelHint: document.getElementById("survivalLevelHint"),
   btnSurvivalLevelBack: document.getElementById("btnSurvivalLevelBack"),
+  bossHubOverlay: document.getElementById("bossHubOverlay"),
+  btnBossHubLevels: document.getElementById("btnBossHubLevels"),
+  btnBossHubShop: document.getElementById("btnBossHubShop"),
+  btnBossHubBack: document.getElementById("btnBossHubBack"),
+  bossShopOverlay: document.getElementById("bossShopOverlay"),
+  bossShopList: document.getElementById("bossShopList"),
+  bossShopHint: document.getElementById("bossShopHint"),
+  bossShopPoints: document.getElementById("bossShopPoints"),
+  btnBossShopBack: document.getElementById("btnBossShopBack"),
+  bossLevelOverlay: document.getElementById("bossLevelOverlay"),
+  bossLevelGrid: document.getElementById("bossLevelGrid"),
+  bossLevelHint: document.getElementById("bossLevelHint"),
+  btnBossLevelBack: document.getElementById("btnBossLevelBack"),
   botLevelOverlay: document.getElementById("botLevelOverlay"),
   botLevelGrid: document.getElementById("botLevelGrid"),
   botLevelHint: document.getElementById("botLevelHint"),
@@ -3564,6 +3834,9 @@ const ui = {
   btnMasterMenu: document.getElementById("btnMasterMenu"),
   btnFullscreen: document.getElementById("btnFullscreen"),
   btnMusicToggle: document.getElementById("btnMusicToggle"),
+  btnThemeDark: document.getElementById("btnThemeDark"),
+  btnThemeLight: document.getElementById("btnThemeLight"),
+  themeSwitch: document.getElementById("themeSwitch"),
   fullscreenHint: document.getElementById("fullscreenHint"),
   settingsMsg: document.getElementById("settingsMsg"),
   musicTrackGrid: document.getElementById("musicTrackGrid"),
@@ -3592,6 +3865,7 @@ const ui = {
   btnAdminUnlockLevels: document.getElementById("btnAdminUnlockLevels"),
   btnAdminUnlockChaos: document.getElementById("btnAdminUnlockChaos"),
   btnAdminUnlockSurvival: document.getElementById("btnAdminUnlockSurvival"),
+  btnAdminUnlockBoss: document.getElementById("btnAdminUnlockBoss"),
   adminLevel: document.getElementById("adminLevel"),
   adminLevelInput: document.getElementById("adminLevelInput"),
   btnAdminSetLevel: document.getElementById("btnAdminSetLevel"),
@@ -3676,6 +3950,7 @@ const settings = {
   musicTrack: "arcade",
   fullscreen: false,
   phoneZoom: PHONE_ZOOM_DEFAULT,
+  theme: "dark",
 };
 
 let phonePanX = 0;
@@ -3701,6 +3976,7 @@ function loadSettings() {
     if (typeof data.musicOn === "boolean") settings.musicOn = data.musicOn;
     if (data.musicTrack && MUSIC_TRACKS[data.musicTrack]) settings.musicTrack = data.musicTrack;
     if (typeof data.phoneZoom === "number") settings.phoneZoom = clampPhoneZoom(data.phoneZoom);
+    if (data.theme === "light" || data.theme === "dark") settings.theme = data.theme;
   } catch {
     /* ignore */
   }
@@ -3714,11 +3990,46 @@ function persistSettings() {
         musicOn: settings.musicOn,
         musicTrack: settings.musicTrack,
         phoneZoom: clampPhoneZoom(settings.phoneZoom),
+        theme: settings.theme === "light" ? "light" : "dark",
       })
     );
   } catch {
     /* ignore */
   }
+}
+
+function applyTheme() {
+  const light = settings.theme === "light";
+  if (light) document.body.dataset.theme = "light";
+  else delete document.body.dataset.theme;
+  const darkBtn = ui.btnThemeDark || document.getElementById("btnThemeDark");
+  const lightBtn = ui.btnThemeLight || document.getElementById("btnThemeLight");
+  if (darkBtn) {
+    darkBtn.classList.toggle("active", !light);
+    darkBtn.setAttribute("aria-pressed", !light ? "true" : "false");
+  }
+  if (lightBtn) {
+    lightBtn.classList.toggle("active", light);
+    lightBtn.setAttribute("aria-pressed", light ? "true" : "false");
+  }
+}
+
+function setTheme(theme) {
+  settings.theme = theme === "light" ? "light" : "dark";
+  persistSettings();
+  applyTheme();
+}
+
+function isLightTheme() {
+  return settings.theme === "light";
+}
+
+function courtStockColor() {
+  return isLightTheme() ? "#d4d4d8" : "#000000";
+}
+
+function courtInkColor() {
+  return isLightTheme() ? "#27272a" : "#ffffff";
 }
 
 let ws = null;
@@ -3874,6 +4185,31 @@ const s = {
   fx: { scoreT: 0, who: "p1", particles: [] },
   chaos: { hitCount: 0, shake: 0, fogTimer: 0, fogHits: 0, nextFogAt: 6, nextSplitAt: 5 },
   survival: { timeLeft: SURVIVAL_MATCH_SECONDS, active: false },
+  boss: {
+    id: 1,
+    hpPlayer: BOSS_HP,
+    hpBoss: BOSS_HP,
+    parryHits: 0,
+    decoyReadyAt: 4,
+    laser: { phase: "idle", t: 0, aimY: 0 },
+    growT: 0,
+    growMul: 1.55,
+    teleportCd: 0,
+    fogT: 0,
+    slowT: 0,
+    teleportFlash: 0,
+    brokenPlayerT: 0,
+    shake: 0,
+    powers: {
+      blockArmed: false,
+      blockCd: 0,
+      ironT: 0,
+      slowT: 0,
+      reflectArmed: false,
+      reflectCd: 0,
+      freezeT: 0,
+    },
+  },
   p1: { x: table.x + paddle.inset, y: table.y + (table.h - paddle.h) / 2, score: 0 },
   p2: {
     x: table.x + table.w - paddle.inset - paddle.w,
@@ -3893,12 +4229,228 @@ function isSurvivalMode() {
   return s.mode === "local" && s.botMode === "survival";
 }
 
+function isBossMode() {
+  return s.mode === "local" && s.botMode === "boss";
+}
+
+const BOSS_DEFS = [
+  null,
+  {
+    id: 1,
+    name: "Verdant Warden",
+    style: "boss-warden",
+    eyeColor: "#4ade80",
+    eyeStyle: "twin",
+    decoy: true,
+    decoyAfter: 4,
+    teleport: false,
+    grow: false,
+    laser: false,
+    laserTrack: false,
+    decoyCurve: false,
+    shake: false,
+    fog: false,
+    slowField: false,
+    doubleDecoy: false,
+    classicEquiv: 55,
+    fill: ["#052e16", "#14532d", "#166534"],
+  },
+  {
+    id: 2,
+    name: "Blink Shade",
+    style: "boss-blink",
+    eyeColor: "#c084fc",
+    eyeStyle: "slit",
+    decoy: true,
+    decoyAfter: 4,
+    teleport: true,
+    grow: false,
+    laser: false,
+    laserTrack: false,
+    decoyCurve: false,
+    shake: false,
+    fog: false,
+    slowField: false,
+    doubleDecoy: false,
+    classicEquiv: 60,
+    fill: ["#1e0533", "#4c1d95", "#2e1065"],
+  },
+  {
+    id: 3,
+    name: "Ember Maw",
+    style: "boss-ember",
+    eyeColor: "#fb923c",
+    eyeStyle: "twin",
+    decoy: true,
+    decoyAfter: 4,
+    teleport: false,
+    grow: true,
+    laser: false,
+    laserTrack: false,
+    decoyCurve: false,
+    shake: false,
+    fog: false,
+    slowField: false,
+    doubleDecoy: false,
+    classicEquiv: 65,
+    fill: ["#1c0a05", "#7c2d12", "#431407"],
+  },
+  {
+    id: 4,
+    name: "Iris Laser",
+    style: "boss-iris",
+    eyeColor: "#86efac",
+    eyeStyle: "twin",
+    decoy: false,
+    decoyAfter: 99,
+    teleport: false,
+    grow: false,
+    laser: true,
+    laserTrack: false,
+    decoyCurve: false,
+    shake: false,
+    fog: false,
+    slowField: false,
+    doubleDecoy: false,
+    classicEquiv: 70,
+    fill: ["#111827", "#374151", "#6b7280"],
+  },
+  {
+    id: 5,
+    name: "Twin Fang",
+    style: "boss-fang",
+    eyeColor: "#4ade80",
+    eyeStyle: "dual",
+    decoy: true,
+    decoyAfter: 3,
+    teleport: false,
+    grow: false,
+    laser: true,
+    laserTrack: false,
+    decoyCurve: true,
+    shake: false,
+    fog: false,
+    slowField: false,
+    doubleDecoy: false,
+    classicEquiv: 74,
+    fill: ["#0f172a", "#334155", "#1e293b"],
+  },
+  {
+    id: 6,
+    name: "Rift Howler",
+    style: "boss-howler",
+    eyeColor: "#67e8f9",
+    eyeStyle: "twin",
+    decoy: false,
+    decoyAfter: 99,
+    teleport: true,
+    grow: false,
+    laser: false,
+    laserTrack: false,
+    decoyCurve: false,
+    shake: true,
+    fog: true,
+    slowField: false,
+    doubleDecoy: false,
+    classicEquiv: 78,
+    fill: ["#0a0510", "#831843", "#0e7490"],
+  },
+  {
+    id: 7,
+    name: "Colossus",
+    style: "boss-colossus",
+    eyeColor: "#fde047",
+    eyeStyle: "twin",
+    decoy: true,
+    decoyAfter: 3,
+    teleport: false,
+    grow: true,
+    laser: false,
+    laserTrack: false,
+    decoyCurve: false,
+    shake: false,
+    fog: false,
+    slowField: false,
+    doubleDecoy: false,
+    classicEquiv: 82,
+    fill: ["#1c1917", "#57534e", "#292524"],
+  },
+  {
+    id: 8,
+    name: "Chrono Serpent",
+    style: "boss-chrono",
+    eyeColor: "#a3e635",
+    eyeStyle: "slit",
+    decoy: false,
+    decoyAfter: 99,
+    teleport: true,
+    grow: false,
+    laser: false,
+    laserTrack: false,
+    decoyCurve: false,
+    shake: false,
+    fog: false,
+    slowField: true,
+    doubleDecoy: false,
+    classicEquiv: 86,
+    fill: ["#052e16", "#365314", "#1a2e05"],
+  },
+  {
+    id: 9,
+    name: "Null Priest",
+    style: "boss-null",
+    eyeColor: "#34d399",
+    eyeStyle: "twin",
+    decoy: true,
+    decoyAfter: 3,
+    teleport: true,
+    grow: false,
+    laser: true,
+    laserTrack: true,
+    decoyCurve: false,
+    shake: false,
+    fog: false,
+    slowField: false,
+    doubleDecoy: false,
+    classicEquiv: 90,
+    fill: ["#fafafa", "#18181b", "#e4e4e7"],
+  },
+  {
+    id: 10,
+    name: "Overlord",
+    style: "overlord",
+    eyeColor: "#86efac",
+    eyeStyle: "multi",
+    decoy: true,
+    decoyAfter: 2,
+    teleport: true,
+    grow: true,
+    laser: true,
+    laserTrack: true,
+    decoyCurve: true,
+    shake: true,
+    fog: true,
+    slowField: true,
+    doubleDecoy: true,
+    classicEquiv: 95,
+    fill: ["#450a0a", "#14532d", "#7f1d1d"],
+  },
+];
+
+function bossDef() {
+  if (!isBossMode()) return null;
+  const id = clamp(Math.round(s.boss?.id || s.botLevel || 1), 1, BOSS_MAX_LEVEL);
+  return BOSS_DEFS[id] || BOSS_DEFS[1];
+}
+
 function chaosSpeed0() {
+  if (isBossMode()) return ballCfg.speed0 * 1.25;
   if (isSurvivalMode()) return ballCfg.speed0 * 1.45;
   return isChaosMode() ? ballCfg.speed0 * 2 : ballCfg.speed0;
 }
 
 function chaosSpeedMax() {
+  if (isBossMode()) return ballCfg.speedMax * 1.12;
   if (isSurvivalMode()) return ballCfg.speedMax * 1.18;
   return isChaosMode() ? ballCfg.speedMax * 1.35 : ballCfg.speedMax;
 }
@@ -3939,6 +4491,914 @@ function resolveSurvivalTimeUp() {
   else endGame(null, { draw: true });
 }
 
+function resetBossFx(soft = false) {
+  const def = bossDef();
+  s.boss.parryHits = 0;
+  s.boss.decoyReadyAt = def?.decoyAfter || 4;
+  const prev = s.boss.laser;
+  const keepShot = soft && prev && (prev.phase === "aim" || prev.phase === "fire");
+  if (keepShot) {
+    // Keep an in-flight Overlord shot / countdown intact across soft resets.
+  } else {
+    s.boss.laser = {
+      phase: soft && prev?.phase === "cd" ? "cd" : "idle",
+      t: soft ? (prev?.t || 0) : 2.5 + Math.random() * 2,
+      aimY: table.y + table.h / 2,
+      lockedY: table.y + table.h / 2,
+      beamX: s.p2.x,
+      beamSpeed: 0,
+      aimDur: 0,
+      pulseN: 0,
+      hit: false,
+    };
+  }
+  if (!soft) {
+    s.boss.growT = 0;
+    s.boss.growMul = def?.id === 7 || def?.id === 10 ? 1.75 : 1.55;
+    s.boss.teleportCd = 3 + Math.random() * 2;
+    s.boss.fogT = 0;
+    s.boss.slowT = 0;
+    s.boss.teleportFlash = 0;
+    s.boss.brokenPlayerT = 0;
+    s.boss.shake = 0;
+  }
+}
+
+function setBossHudVisible(on) {
+  if (!ui.bossHud) return;
+  ui.bossHud.classList.toggle("hidden", !on);
+}
+
+function updateBossHud() {
+  if (!ui.bossHud) return;
+  if (!isBossMode() || s.gameOver) {
+    setBossHudVisible(false);
+    return;
+  }
+  const def = bossDef();
+  const hpP = s.boss.hpPlayer ?? BOSS_HP;
+  const hpB = s.boss.hpBoss ?? BOSS_HP;
+  setBossHudVisible(true);
+  if (ui.bossHudName) ui.bossHudName.textContent = `BOSS · ${(def?.name || "UNKNOWN").toUpperCase()}`;
+  if (ui.bossHudYouHp) ui.bossHudYouHp.textContent = String(hpP);
+  if (ui.bossHudBossHp) ui.bossHudBossHp.textContent = String(hpB);
+  if (ui.bossHudYouFill) ui.bossHudYouFill.style.width = `${(hpP / BOSS_HP) * 100}%`;
+  if (ui.bossHudBossFill) ui.bossHudBossFill.style.width = `${(hpB / BOSS_HP) * 100}%`;
+}
+
+function damageBoss() {
+  if (!isBossMode() || s.gameOver) return;
+  s.boss.hpBoss = Math.max(0, (s.boss.hpBoss ?? BOSS_HP) - 1);
+  updateBossHud();
+  if (s.boss.hpBoss <= 0) {
+    endGame("p1");
+    return;
+  }
+  resetBall(true);
+  resetBossFx(true);
+}
+
+function damagePlayer() {
+  if (!isBossMode() || s.gameOver) return;
+  s.boss.hpPlayer = Math.max(0, (s.boss.hpPlayer ?? BOSS_HP) - 1);
+  updateBossHud();
+  if (s.boss.hpPlayer <= 0) {
+    endGame("p2");
+    return;
+  }
+  resetBall(false);
+  ui.status.textContent = "Parry charge lost — " + serveHint();
+}
+
+function bumpBossShake(amount) {
+  if (!isBossMode()) return;
+  const def = bossDef();
+  if (!def?.shake && amount < 8) return;
+  s.boss.shake = Math.max(s.boss.shake || 0, amount);
+}
+
+function tryBossDecoy(source) {
+  if (!isBossMode() || !s.balls) return;
+  const def = bossDef();
+  if (!def?.decoy) return;
+  const maxBalls = def.doubleDecoy ? 3 : 2;
+  if (s.balls.length >= maxBalls) return;
+  s.boss.parryHits += 1;
+  if (s.boss.parryHits < (s.boss.decoyReadyAt || def.decoyAfter)) return;
+  s.boss.parryHits = 0;
+  s.boss.decoyReadyAt = Math.max(2, (def.decoyAfter || 4) - (def.doubleDecoy ? 1 : 0));
+  const spawnOne = () => {
+    if (s.balls.length >= maxBalls) return;
+    const speed = (Math.hypot(source.vx, source.vy) || chaosSpeed0()) * (0.55 + Math.random() * 0.15);
+    const baseAng = Math.atan2(source.vy, source.vx);
+    const split = baseAng + (Math.random() > 0.5 ? 1 : -1) * (0.3 + Math.random() * 0.5);
+    const decoy = {
+      x: source.x,
+      y: clamp(source.y + (Math.random() * 28 - 14), table.y + ballCfg.r + 2, table.y + table.h - ballCfg.r - 2),
+      vx: Math.cos(split) * speed,
+      vy: Math.sin(split) * speed,
+      decoyCurve: !!def.decoyCurve,
+    };
+    s.balls.push(decoy);
+  };
+  spawnOne();
+  if (def.doubleDecoy && Math.random() < 0.32) spawnOne();
+  bumpBossShake(6);
+  if (ui.status && s.running) ui.status.textContent = "DECOY BALL!";
+}
+
+function tryBossTeleport(dt) {
+  if (!isBossMode() || !s.running || s.gameOver) return;
+  const def = bossDef();
+  if (!def?.teleport) return;
+  s.boss.teleportCd = Math.max(0, (s.boss.teleportCd || 0) - dt);
+  if (s.boss.teleportCd > 0) return;
+  const ball = pickThreatBall();
+  if (!ball || ball.vx >= -40) return;
+  const midL = table.x + table.w * 0.32;
+  const midR = table.x + table.w * 0.72;
+  if (ball.x < midL || ball.x > midR) return;
+  if (Math.random() > (def.id >= 10 ? 0.018 : 0.01)) return;
+  ball.x = table.x + table.w * (0.22 + Math.random() * 0.14);
+  ball.y = clamp(
+    s.p1.y + effectivePaddleH("p1") * (0.25 + Math.random() * 0.5) + (Math.random() * 40 - 20),
+    table.y + ballCfg.r + 4,
+    table.y + table.h - ballCfg.r - 4
+  );
+  s.boss.teleportFlash = 0.4;
+  s.boss.teleportCd = (def.id >= 10 ? 4.2 : 6.2) + Math.random() * 2.4;
+  bumpBossShake(9);
+  if (def.fog && Math.random() < 0.45) s.boss.fogT = 1.8 + Math.random() * 1.2;
+  if (ui.status && s.running) ui.status.textContent = "TELEPORT!";
+}
+
+function tryBossGrow(dt) {
+  if (!isBossMode() || s.gameOver) return;
+  const def = bossDef();
+  if (s.boss.growT > 0) {
+    s.boss.growT = Math.max(0, s.boss.growT - dt);
+    return;
+  }
+  if (!def?.grow || !s.running) return;
+  if (Math.random() > (def.id >= 10 ? 0.0045 : def.id === 7 ? 0.0055 : 0.0035)) return;
+  s.boss.growMul = def.id === 7 || def.id === 10 ? 1.75 : 1.5;
+  s.boss.growT = (def.id === 7 || def.id === 10 ? 4.5 : 3.2) + Math.random() * 1.4;
+  bumpBossShake(5);
+  if (ui.status && s.running) ui.status.textContent = "BOSS GROWS!";
+}
+
+function updateBossLaser(dt) {
+  if (!isBossMode() || s.gameOver) return false;
+  const def = bossDef();
+  const laser = s.boss.laser || { phase: "idle", t: 0, aimY: 0 };
+  s.boss.laser = laser;
+  if (!def?.laser) {
+    laser.phase = "idle";
+    return false;
+  }
+  const overlord = def.id >= 10;
+  const p1h = effectivePaddleH("p1");
+  const p1Mid = s.p1.y + p1h / 2;
+
+  // Don't tick the travel timer the same way during Overlord fire — shot ends by position.
+  if (!(overlord && laser.phase === "fire")) {
+    laser.t = Math.max(0, (laser.t || 0) - dt);
+  }
+
+  if (laser.phase === "idle" || laser.phase === "cd") {
+    if (laser.t > 0 || !s.running) return false;
+    laser.phase = "aim";
+    laser.t = overlord ? 4 : 1.05 + Math.random() * 0.35;
+    laser.aimDur = laser.t;
+    laser.aimY = p1Mid;
+    laser.lockedY = p1Mid;
+    laser.beamX = s.p2.x + paddle.w * 0.5;
+    laser.pulseN = overlord ? 4 : 0;
+    laser.hit = false;
+    if (ui.status) ui.status.textContent = overlord ? "LASER 4…" : "LASER LOCK…";
+    return false;
+  }
+
+  if (laser.phase === "aim") {
+    if (def.laserTrack && !overlord) {
+      laser.aimY += (p1Mid - laser.aimY) * Math.min(1, dt * 3.2);
+    } else if (overlord && def.laserTrack) {
+      laser.aimY += (p1Mid - laser.aimY) * Math.min(1, dt * 1.1);
+    }
+    if (overlord) {
+      const n = Math.max(1, Math.ceil(Math.max(0, laser.t)));
+      if (n !== laser.pulseN) {
+        laser.pulseN = n;
+        bumpBossShake(3);
+      }
+      if (ui.status) ui.status.textContent = `LASER ${n}…`;
+    }
+    if (laser.t > 0) return false;
+    laser.phase = "fire";
+    laser.lockedY = laser.aimY;
+    laser.aimY = laser.lockedY;
+    laser.beamX = s.p2.x + paddle.w * 0.5;
+    laser.beamSpeed = overlord ? 520 : 0;
+    laser.t = overlord ? 0 : 0.32 + Math.random() * 0.08;
+    laser.hit = false;
+    bumpBossShake(overlord ? 5 : 7);
+    if (ui.status) ui.status.textContent = "LASER!";
+    return false;
+  }
+
+  if (laser.phase === "fire") {
+    const beamHalf = overlord ? 22 : 14;
+    const yLine = laser.lockedY ?? laser.aimY;
+
+    if (overlord) {
+      const speed = laser.beamSpeed || 520;
+      const prevX = laser.beamX ?? s.p2.x;
+      laser.beamX = prevX - speed * dt;
+      const tipX = laser.beamX;
+      const paddleLeft = s.p1.x;
+      const paddleRight = s.p1.x + paddle.w;
+      // Swept hit so large frames can't tunnel through the paddle.
+      const crossedPaddle = prevX >= paddleLeft - 4 && tipX <= paddleRight + 4;
+      const hitY = Math.abs(p1Mid - yLine) <= p1h / 2 + beamHalf;
+
+      if (crossedPaddle && hitY && !laser.hit) {
+        laser.hit = true;
+        breakPlayerBat();
+        if (ui.status) ui.status.textContent = "LASER HIT!";
+        return true;
+      }
+
+      // Always run all the way off the left side of the court.
+      if (tipX < table.x - 24) {
+        laser.phase = "cd";
+        laser.t = 8 + Math.random() * 3;
+        if (ui.status && (ui.status.textContent === "LASER!" || ui.status.textContent === "LASER HIT!")) {
+          ui.status.textContent = "Playing";
+        }
+        return false;
+      }
+      return false;
+    }
+
+    const hit = Math.abs(p1Mid - yLine) < p1h / 2 + beamHalf;
+    if (hit && laser.t > 0.08) {
+      breakPlayerBat();
+      laser.phase = "cd";
+      laser.t = 9 + Math.random() * 3;
+      return true;
+    }
+    if (laser.t > 0) return false;
+    laser.phase = "cd";
+    laser.t = 10 + Math.random() * 2.5;
+    if (ui.status?.textContent === "LASER!") ui.status.textContent = "Playing";
+  }
+  return false;
+}
+
+function breakPlayerBat() {
+  if (!isBossMode() || s.gameOver) return;
+  if (tryConsumeBossBlock()) {
+    resetBall(true);
+    resetBossFx(true);
+    ui.status.textContent = "BLOCKED LASER!";
+    return;
+  }
+  s.boss.brokenPlayerT = 0.55;
+  playBatBreakSound();
+  bumpBossShake(11);
+  resetAbility();
+  playPointLossSound();
+  s.p2.score += 1;
+  ui.p2.textContent = String(s.p2.score);
+  scoreFx("p2", { silent: true });
+  ui.status.textContent = "BAT SHATTERED!";
+  damagePlayer();
+}
+
+function applyBossSlowField(ball, dt) {
+  if (!isBossMode()) return;
+  const def = bossDef();
+  if (!def?.slowField) return;
+  if (s.boss.slowT > 0) {
+    s.boss.slowT = Math.max(0, s.boss.slowT - dt);
+  } else if (s.running && Math.random() < 0.0028) {
+    s.boss.slowT = 1.6 + Math.random() * 1.1;
+    if (ui.status) ui.status.textContent = "SLOW FIELD!";
+  }
+  if (s.boss.slowT <= 0) return;
+  const mid = table.x + table.w / 2;
+  if (ball.vx < 0 && ball.x < mid && ball.x > mid - 90) {
+    const sp = Math.hypot(ball.vx, ball.vy) || 0;
+    if (sp < 1) return;
+    // Ease toward ~70% speed; never decay below a playable floor.
+    const floor = Math.max(chaosSpeed0() * 0.62, sp * 0.68);
+    const next = Math.max(floor, sp * Math.pow(0.88, dt * 3));
+    const scale = next / sp;
+    ball.vx *= scale;
+    ball.vy *= scale;
+  }
+}
+
+function applyBossDecoyCurve(ball, dt) {
+  if (!ball?.decoyCurve) return;
+  ball.vy += Math.sin(performance.now() * 0.008 + ball.x * 0.02) * 220 * dt;
+}
+
+function applyBossBotLevel(level) {
+  const lv = clamp(Math.round(Number(level) || 1), 1, BOSS_MAX_LEVEL);
+  s.botLevel = lv;
+  s.boss.id = lv;
+  const def = BOSS_DEFS[lv] || BOSS_DEFS[1];
+  const classicEquiv = def.classicEquiv || 55 + ((lv - 1) / 9) * 40;
+  const t = (classicEquiv - 1) / 99;
+  s.ai.errorPx = 72 - t * 70;
+  s.ai.interval = 0.28 - t * 0.255;
+  s.ai.speed = 220 + t * 980;
+  s.ai.track = 0.35 + t * 0.62;
+  if (lv >= 7) s.ai.track = Math.min(0.98, s.ai.track + 0.08);
+  if (isAdmin() && save.abilities.slowBot) s.ai.speed *= 0.45;
+}
+
+function bossPalette(def) {
+  return def?.fill || ["#111", "#333", "#222"];
+}
+
+function drawBossPaddleEyes(x, y, w, h, def) {
+  if (!def) return;
+  const t = performance.now() * 0.001;
+  const ball = pickThreatBall() || s.ball;
+  const lookY = clamp(((ball?.y || y + h / 2) - (y + h / 2)) / (h * 0.5), -1, 1);
+  const pupilOff = lookY * Math.min(3.5, h * 0.04);
+  const eyeColor = def.eyeColor || "#4ade80";
+  const drawEye = (ex, ey, ew, eh, slit) => {
+    ctx.save();
+    ctx.globalAlpha = 0.95;
+    ctx.fillStyle = "#052e16";
+    ctx.beginPath();
+    if (slit) {
+      ctx.ellipse(ex, ey, ew * 0.55, eh, 0, 0, Math.PI * 2);
+    } else {
+      ctx.ellipse(ex, ey, ew, eh, 0, 0, Math.PI * 2);
+    }
+    ctx.fill();
+    const pulse = 0.75 + Math.sin(t * 4) * 0.25;
+    ctx.globalAlpha = 0.55 * pulse;
+    ctx.fillStyle = eyeColor;
+    ctx.beginPath();
+    ctx.ellipse(ex, ey, ew * 1.35, eh * 1.35, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.globalAlpha = 1;
+    ctx.fillStyle = eyeColor;
+    ctx.beginPath();
+    if (slit) {
+      ctx.ellipse(ex, ey + pupilOff * 0.4, ew * 0.22, eh * 0.85, 0, 0, Math.PI * 2);
+    } else {
+      ctx.ellipse(ex + 0.5, ey + pupilOff, ew * 0.45, eh * 0.45, 0, 0, Math.PI * 2);
+    }
+    ctx.fill();
+    ctx.fillStyle = "#fff";
+    ctx.globalAlpha = 0.85;
+    ctx.beginPath();
+    ctx.arc(ex - ew * 0.2, ey - eh * 0.25 + pupilOff * 0.3, Math.max(0.8, ew * 0.18), 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+  };
+
+  const cx = x + w * 0.45;
+  if (def.eyeStyle === "multi") {
+    drawEye(cx, y + h * 0.22, 3.2, 2.4, false);
+    drawEye(cx, y + h * 0.5, 3.6, 2.8, false);
+    drawEye(cx, y + h * 0.78, 3.2, 2.4, false);
+  } else if (def.eyeStyle === "dual") {
+    drawEye(cx, y + h * 0.28, 3.4, 2.6, false);
+    drawEye(cx, y + h * 0.42, 3.4, 2.6, false);
+    drawEye(cx, y + h * 0.62, 3.4, 2.6, false);
+    drawEye(cx, y + h * 0.76, 3.4, 2.6, false);
+  } else if (def.eyeStyle === "slit") {
+    drawEye(cx, y + h * 0.35, 2.8, 4.2, true);
+    drawEye(cx, y + h * 0.65, 2.8, 4.2, true);
+  } else {
+    drawEye(cx, y + h * 0.32, 3.5, 2.8, false);
+    drawEye(cx, y + h * 0.68, 3.5, 2.8, false);
+  }
+}
+
+function drawBossPaddle(p, h) {
+  const def = bossDef();
+  const cols = bossPalette(def);
+  const t = performance.now() * 0.001;
+  const g = ctx.createLinearGradient(p.x, p.y, p.x + paddle.w, p.y + h);
+  safeColorStop(g, 0, cols[0]);
+  safeColorStop(g, 0.45 + Math.sin(t) * 0.05, cols[1]);
+  safeColorStop(g, 1, cols[2] || cols[0]);
+  ctx.globalAlpha = 1;
+  ctx.fillStyle = g;
+  ctx.fillRect(p.x, p.y, paddle.w, h);
+  if (def?.style === "overlord" || def?.id === 10) {
+    drawEpicOverlay(ctx, { style: "overlord", boss: true }, p.x, p.y, paddle.w, h, 0.9);
+  }
+  if (s.boss.growT > 0) {
+    ctx.save();
+    ctx.globalAlpha = 0.55 + Math.sin(t * 8) * 0.2;
+    ctx.strokeStyle = def?.eyeColor || "#86efac";
+    ctx.lineWidth = 2.5;
+    ctx.strokeRect(p.x - 3, p.y - 3, paddle.w + 6, h + 6);
+    ctx.restore();
+  }
+  drawBossPaddleEyes(p.x, p.y, paddle.w, h, def);
+  ctx.globalAlpha = 1;
+}
+
+function drawBossTableHalf() {
+  const def = bossDef();
+  const cols = bossPalette(def);
+  const halfW = table.w / 2;
+  const x = table.x + halfW;
+  const t = performance.now() * 0.001;
+  const g = ctx.createLinearGradient(x, table.y, x + halfW, table.y + table.h);
+  safeColorStop(g, 0, cols[0]);
+  safeColorStop(g, 0.5, cols[1]);
+  safeColorStop(g, 1, cols[2] || cols[0]);
+  ctx.globalAlpha = 0.42 + Math.sin(t * 1.2) * 0.04;
+  ctx.fillStyle = g;
+  ctx.fillRect(x, table.y, halfW, table.h);
+  if (def?.id === 10) {
+    drawEpicOverlay(ctx, { style: "overlord", boss: true }, x, table.y, halfW, table.h, 0.55);
+  }
+  ctx.globalAlpha = 1;
+}
+
+function drawBossFx() {
+  if (!isBossMode()) return;
+  const def = bossDef();
+  const laser = s.boss.laser;
+  if (def?.laser && laser && (laser.phase === "aim" || laser.phase === "fire")) {
+    const overlord = def.id >= 10;
+    const x0 = s.p2.x;
+    const y0 = laser.phase === "fire" ? laser.lockedY ?? laser.aimY : laser.aimY;
+    const x1 = overlord && laser.phase === "fire" ? laser.beamX ?? x0 : table.x + 8;
+    ctx.save();
+    if (laser.phase === "aim") {
+      const pulse = 0.35 + Math.sin(performance.now() * (overlord ? 0.014 : 0.02)) * 0.2;
+      ctx.globalAlpha = pulse;
+      ctx.strokeStyle = def.eyeColor || "#86efac";
+      ctx.setLineDash(overlord ? [10, 8] : [6, 6]);
+      ctx.lineWidth = overlord ? 3 : 2;
+      ctx.beginPath();
+      ctx.moveTo(x0, y0);
+      ctx.lineTo(table.x + 8, y0);
+      ctx.stroke();
+      ctx.setLineDash([]);
+      if (overlord) {
+        const n = Math.max(1, Math.ceil(laser.t || 0));
+        const beat = 0.55 + Math.sin(performance.now() * 0.012) * 0.45;
+        ctx.globalAlpha = clamp(beat, 0.35, 1);
+        ctx.fillStyle = def.eyeColor || "#86efac";
+        ctx.font = `900 ${Math.round(42 + beat * 18)}px system-ui, sans-serif`;
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        ctx.shadowColor = "rgba(220,38,38,0.85)";
+        ctx.shadowBlur = 18;
+        ctx.fillText(String(n), table.x + table.w * 0.5, y0);
+        ctx.shadowBlur = 0;
+      }
+    } else {
+      const tipX = overlord ? laser.beamX ?? x0 : x1;
+      ctx.globalAlpha = 0.95;
+      const beam = ctx.createLinearGradient(x0, y0, tipX, y0);
+      beam.addColorStop(0, "rgba(255,255,255,0.35)");
+      beam.addColorStop(0.55, def.eyeColor || "#86efac");
+      beam.addColorStop(1, overlord ? "rgba(239,68,68,0.95)" : "rgba(220,38,38,0.15)");
+      ctx.strokeStyle = beam;
+      ctx.lineWidth = overlord ? 10 : 10;
+      ctx.shadowColor = def.eyeColor || "#4ade80";
+      ctx.shadowBlur = 18;
+      ctx.beginPath();
+      ctx.moveTo(x0, y0);
+      ctx.lineTo(tipX, y0);
+      ctx.stroke();
+      if (overlord) {
+        // Laser ball projectile — travels the full locked line.
+        const r = 10;
+        ctx.globalAlpha = 1;
+        ctx.fillStyle = "#fff";
+        ctx.shadowColor = def.eyeColor || "#86efac";
+        ctx.shadowBlur = 26;
+        ctx.beginPath();
+        ctx.arc(tipX, y0, r, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.shadowBlur = 0;
+        ctx.fillStyle = def.eyeColor || "#86efac";
+        ctx.beginPath();
+        ctx.arc(tipX, y0, r * 0.45, 0, Math.PI * 2);
+        ctx.fill();
+      } else {
+        ctx.lineWidth = 3;
+        ctx.strokeStyle = "#fff";
+        ctx.shadowBlur = 0;
+        ctx.beginPath();
+        ctx.moveTo(x0, y0);
+        ctx.lineTo(tipX, y0);
+        ctx.stroke();
+      }
+    }
+    ctx.restore();
+  }
+
+  if (s.boss.teleportFlash > 0) {
+    const ball = s.ball;
+    const r = 18 + (1 - s.boss.teleportFlash / 0.4) * 28;
+    ctx.save();
+    ctx.globalAlpha = clamp(s.boss.teleportFlash * 2.2, 0, 0.85);
+    ctx.strokeStyle = def?.eyeColor || "#a855f7";
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.arc(ball.x, ball.y, r, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  if (def?.fog && s.boss.fogT > 0) {
+    const hx = table.x + table.w / 2;
+    const fadeOut = clamp(s.boss.fogT / 0.45, 0, 1);
+    const fadeIn = clamp((2.8 - s.boss.fogT) / 0.3, 0, 1);
+    const strength = Math.min(fadeIn, fadeOut);
+    const fog = ctx.createLinearGradient(table.x, table.y, hx, table.y);
+    fog.addColorStop(0, `rgba(0,0,0,${0.92 * strength})`);
+    fog.addColorStop(0.55, `rgba(5,5,8,${0.8 * strength})`);
+    fog.addColorStop(1, `rgba(0,0,0,${0.35 * strength})`);
+    ctx.globalAlpha = 1;
+    ctx.fillStyle = fog;
+    ctx.fillRect(table.x, table.y, table.w / 2, table.h);
+  }
+
+  if (s.boss.brokenPlayerT > 0) {
+    ctx.save();
+    ctx.globalAlpha = Math.min(1, s.boss.brokenPlayerT * 2);
+    ctx.fillStyle = "#fff7ed";
+    ctx.fillRect(s.p1.x - 16, table.y, paddle.w + 32, table.h);
+    ctx.restore();
+  }
+}
+
+function ensureBossPowersState() {
+  if (!s.boss.powers) {
+    s.boss.powers = {
+      blockArmed: false,
+      blockCd: 0,
+      ironT: 0,
+      slowT: 0,
+      reflectArmed: false,
+      reflectCd: 0,
+      freezeT: 0,
+    };
+  }
+  return s.boss.powers;
+}
+
+function resetBossPowersFx() {
+  const p = ensureBossPowersState();
+  p.blockArmed = false;
+  p.blockCd = 0;
+  p.ironT = 0;
+  p.slowT = 0;
+  p.reflectArmed = false;
+  p.reflectCd = 0;
+  p.freezeT = 0;
+  clearBossReflectBoost();
+  updateBossPowerBar();
+}
+
+function ownsBossPower(id) {
+  return Array.isArray(save.bossPowers) && save.bossPowers.includes(id);
+}
+
+function clearBossReflectBoost() {
+  for (const ball of activeBalls()) {
+    if (ball) ball.reflectBoost = false;
+  }
+  if (s.ball) s.ball.reflectBoost = false;
+}
+
+function bossTimeScale() {
+  if (!isBossMode()) return 1;
+  const p = ensureBossPowersState();
+  if (p.freezeT > 0) return 0;
+  if (p.slowT > 0) return 0.6;
+  return 1;
+}
+
+function tryConsumeBossBlock() {
+  if (!isBossMode()) return false;
+  const p = ensureBossPowersState();
+  if (!p.blockArmed) return false;
+  p.blockArmed = false;
+  p.blockCd = 15;
+  bumpBossShake(8);
+  updateBossPowerBar();
+  return true;
+}
+
+function tickBossPowers(dt) {
+  if (!isBossMode()) return;
+  const p = ensureBossPowersState();
+  if (p.blockCd > 0) p.blockCd = Math.max(0, p.blockCd - dt);
+  if (p.reflectCd > 0) p.reflectCd = Math.max(0, p.reflectCd - dt);
+  if (p.ironT > 0) p.ironT = Math.max(0, p.ironT - dt);
+  if (p.slowT > 0) p.slowT = Math.max(0, p.slowT - dt);
+  if (p.freezeT > 0) p.freezeT = Math.max(0, p.freezeT - dt);
+  updateBossPowerBar();
+}
+
+function setBossPowerBarVisible(on) {
+  if (!ui.bossPowerBar) return;
+  ui.bossPowerBar.classList.toggle("hidden", !on);
+}
+
+function updateBossPowerBar() {
+  if (!ui.bossPowerBar) return;
+  const show = isBossMode() && !s.gameOver;
+  setBossPowerBarVisible(show);
+  if (!show) return;
+  const p = ensureBossPowersState();
+  const configs = [
+    {
+      id: "block",
+      btn: ui.btnBossPowerBlock,
+      meta: ui.bossPowerMetaBlock,
+      ready: () => !p.blockArmed && p.blockCd <= 0,
+      armed: () => p.blockArmed,
+      active: () => false,
+      cooling: () => p.blockCd > 0,
+      label: () => (p.blockArmed ? "ARMED" : p.blockCd > 0 ? `${Math.ceil(p.blockCd)}s` : "Ready"),
+    },
+    {
+      id: "iron",
+      btn: ui.btnBossPowerIron,
+      meta: ui.bossPowerMetaIron,
+      ready: () => p.ironT <= 0,
+      armed: () => false,
+      active: () => p.ironT > 0,
+      cooling: () => false,
+      label: () => (p.ironT > 0 ? `${Math.ceil(p.ironT)}s` : "Ready"),
+    },
+    {
+      id: "timeslow",
+      btn: ui.btnBossPowerTimeslow,
+      meta: ui.bossPowerMetaTimeslow,
+      ready: () => p.slowT <= 0 && p.freezeT <= 0,
+      armed: () => false,
+      active: () => p.slowT > 0,
+      cooling: () => false,
+      label: () => (p.slowT > 0 ? `${Math.ceil(p.slowT)}s` : "Ready"),
+    },
+    {
+      id: "reflect",
+      btn: ui.btnBossPowerReflect,
+      meta: ui.bossPowerMetaReflect,
+      ready: () => !p.reflectArmed && p.reflectCd <= 0,
+      armed: () => p.reflectArmed,
+      active: () => p.freezeT > 0,
+      cooling: () => p.reflectCd > 0 && !p.reflectArmed,
+      label: () =>
+        p.freezeT > 0
+          ? `FREEZE ${Math.ceil(p.freezeT)}s`
+          : p.reflectArmed
+            ? "ARMED"
+            : p.reflectCd > 0
+              ? `${Math.ceil(p.reflectCd)}s`
+              : "Ready",
+    },
+  ];
+  let anyOwned = false;
+  for (const cfg of configs) {
+    if (!cfg.btn) continue;
+    const owned = ownsBossPower(cfg.id);
+    cfg.btn.classList.toggle("hidden", !owned);
+    if (!owned) continue;
+    anyOwned = true;
+    const canUse = cfg.ready();
+    cfg.btn.disabled = !canUse;
+    cfg.btn.classList.toggle("armed", cfg.armed());
+    cfg.btn.classList.toggle("active", cfg.active());
+    cfg.btn.classList.toggle("cooling", cfg.cooling());
+    if (cfg.meta) cfg.meta.textContent = cfg.label();
+  }
+  if (!anyOwned) setBossPowerBarVisible(false);
+}
+
+function activateBossPower(id) {
+  if (!isBossMode() || s.gameOver || !ownsBossPower(id)) return false;
+  const p = ensureBossPowersState();
+  ensureAudio();
+  if (id === "block") {
+    if (p.blockArmed || p.blockCd > 0) return false;
+    p.blockArmed = true;
+    ui.status.textContent = "Block armed — next goal against you is negated.";
+  } else if (id === "iron") {
+    if (p.ironT > 0) return false;
+    p.ironT = 30;
+    ui.status.textContent = "Iron Paddle — +30% size for 30s!";
+  } else if (id === "timeslow") {
+    if (p.slowT > 0) return false;
+    p.slowT = 5;
+    ui.status.textContent = "Time Slow — boss slowed 40% for 5s!";
+  } else if (id === "reflect") {
+    if (p.reflectArmed || p.reflectCd > 0) return false;
+    p.reflectArmed = true;
+    ui.status.textContent = isTouchDevice
+      ? "Reflect armed — next paddle hit launches the ball!"
+      : "Reflect armed — next paddle hit launches the ball!";
+  } else {
+    return false;
+  }
+  const t = audioCtx.currentTime;
+  playTone(260, t, 0.08, "square", 0.1);
+  playTone(420, t + 0.06, 0.1, "triangle", 0.08);
+  updateBossPowerBar();
+  return true;
+}
+
+function openBossHub() {
+  hideOverlay(ui.menuOverlay);
+  hideOverlay(ui.botModesOverlay);
+  hideOverlay(ui.modeSoonOverlay);
+  hideOverlay(ui.botLevelOverlay);
+  hideOverlay(ui.chaosLevelOverlay);
+  hideOverlay(ui.survivalLevelOverlay);
+  hideOverlay(ui.bossLevelOverlay);
+  hideOverlay(ui.bossShopOverlay);
+  hideOverlay(ui.lobbyOverlay);
+  hideOverlay(ui.customizeOverlay);
+  hideOverlay(ui.settingsOverlay);
+  hideOverlay(ui.adminOverlay);
+  hideOverlay(ui.passkeyOverlay);
+  hideOverlay(ui.gameOver);
+  showOverlay(ui.bossHubOverlay);
+  setStagePlaying(false);
+  startMenuBg();
+  ui.hint.textContent = "Boss Battles — shop powers or pick a boss.";
+  updateNameUI();
+}
+
+function closeBossHub() {
+  hideOverlay(ui.bossHubOverlay);
+  showOverlay(ui.botModesOverlay);
+  startMenuBg();
+  updateNameUI();
+}
+
+function openBossShop() {
+  hideOverlay(ui.bossHubOverlay);
+  hideOverlay(ui.bossLevelOverlay);
+  hideOverlay(ui.botModesOverlay);
+  showOverlay(ui.bossShopOverlay);
+  setStagePlaying(false);
+  startMenuBg();
+  renderBossShop();
+  ui.hint.textContent = "Boss Shop — buy support powers for hard fights.";
+  updateNameUI();
+}
+
+function closeBossShop() {
+  hideOverlay(ui.bossShopOverlay);
+  showOverlay(ui.bossHubOverlay);
+  startMenuBg();
+  updateNameUI();
+}
+
+function renderBossShop() {
+  if (ui.bossShopPoints) ui.bossShopPoints.textContent = String(save.points || 0);
+  if (!ui.bossShopList) return;
+  ui.bossShopList.innerHTML = "";
+  for (const item of BOSS_SHOP) {
+    const owned = ownsBossPower(item.id);
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = `boss-shop-item${owned ? " owned" : ""}`;
+    btn.disabled = owned;
+    btn.innerHTML = `
+      <div class="boss-shop-item-top">
+        <span class="boss-shop-item-name">${item.name}</span>
+        <span class="boss-shop-item-price">${owned ? "OWNED" : `${item.price} PTS`}</span>
+      </div>
+      <div class="boss-shop-item-desc">${item.desc}</div>
+    `;
+    if (!owned) {
+      btn.addEventListener("click", () => {
+        playMenuClick();
+        buyBossPower(item.id);
+      });
+    }
+    ui.bossShopList.appendChild(btn);
+  }
+  if (ui.bossShopHint) {
+    const ownedCount = (save.bossPowers || []).length;
+    ui.bossShopHint.textContent =
+      ownedCount >= BOSS_SHOP.length
+        ? "All Boss powers owned — use them under the table in Boss fights."
+        : "Buy once. In Boss fights, tap/click the buttons under the table to activate.";
+  }
+}
+
+function buyBossPower(id) {
+  const item = BOSS_SHOP.find((x) => x.id === id);
+  if (!item || ownsBossPower(id)) return;
+  if ((save.points || 0) < item.price) {
+    if (ui.bossShopHint) {
+      ui.bossShopHint.textContent = `Need ${item.price - (save.points || 0)} more pts for ${item.name}.`;
+    }
+    return;
+  }
+  save.points -= item.price;
+  if (!Array.isArray(save.bossPowers)) save.bossPowers = [];
+  save.bossPowers.push(id);
+  persistSave();
+  updatePointsUI();
+  renderBossShop();
+  if (ui.bossShopHint) ui.bossShopHint.textContent = `${item.name} unlocked — available in Boss fights.`;
+}
+
+function openBossLevelSelect() {
+  hideOverlay(ui.menuOverlay);
+  hideOverlay(ui.botModesOverlay);
+  hideOverlay(ui.modeSoonOverlay);
+  hideOverlay(ui.botLevelOverlay);
+  hideOverlay(ui.chaosLevelOverlay);
+  hideOverlay(ui.survivalLevelOverlay);
+  hideOverlay(ui.bossHubOverlay);
+  hideOverlay(ui.bossShopOverlay);
+  hideOverlay(ui.lobbyOverlay);
+  hideOverlay(ui.customizeOverlay);
+  hideOverlay(ui.settingsOverlay);
+  hideOverlay(ui.adminOverlay);
+  hideOverlay(ui.passkeyOverlay);
+  hideOverlay(ui.gameOver);
+  showOverlay(ui.bossLevelOverlay);
+  setStagePlaying(false);
+  startMenuBg();
+  renderBossLevelGrid();
+  ui.hint.textContent = "Select a Boss battle.";
+  updateNameUI();
+}
+
+function closeBossLevelSelect() {
+  hideOverlay(ui.bossLevelOverlay);
+  showOverlay(ui.bossHubOverlay);
+  startMenuBg();
+  updateNameUI();
+}
+
+function renderBossLevelGrid() {
+  if (!ui.bossLevelGrid) return;
+  ui.bossLevelGrid.innerHTML = "";
+  const nextUnlock = Math.min(BOSS_MAX_LEVEL, (save.maxBossCleared || 0) + 1);
+  for (let i = 1; i <= BOSS_MAX_LEVEL; i++) {
+    const unlocked = isBossLevelUnlocked(i);
+    const cleared = i <= (save.maxBossCleared || 0);
+    const def = BOSS_DEFS[i];
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = `bot-level-btn ${botTierClass(Math.min(100, def?.classicEquiv || 55))}`;
+    if (!unlocked) btn.classList.add("locked");
+    if (cleared) btn.classList.add("cleared");
+    if (i === nextUnlock && unlocked) btn.classList.add("next");
+    btn.textContent = unlocked ? String(i) : "🔒";
+    btn.disabled = !unlocked;
+    btn.title = unlocked
+      ? `Boss ${i} — ${def?.name || "Boss"} · +${POINTS_PER_BOSS_WIN} pts${cleared ? " (cleared)" : ""}`
+      : `Locked — clear Boss ${i - 1} first`;
+    btn.addEventListener("click", () => {
+      if (!unlocked) {
+        if (ui.bossLevelHint) {
+          ui.bossLevelHint.textContent = `Locked. Clear Boss ${i - 1} to unlock.`;
+        }
+        return;
+      }
+      playMenuClick();
+      startBossMode(i);
+    });
+    btn.addEventListener("mouseenter", () => {
+      if (!ui.bossLevelHint) return;
+      if (!unlocked) {
+        ui.bossLevelHint.textContent = `Locked — beat Boss ${i - 1} first.`;
+      } else if (cleared) {
+        ui.bossLevelHint.textContent = `B${i} cleared — ${def?.name || "Boss"} · Rematch for +${POINTS_PER_BOSS_WIN} pts`;
+      } else {
+        ui.bossLevelHint.textContent = `B${i} — ${def?.name || "Boss"} · Win for +${POINTS_PER_BOSS_WIN} pts`;
+      }
+    });
+    ui.bossLevelGrid.appendChild(btn);
+  }
+  if (ui.bossLevelHint) {
+    const cleared = save.maxBossCleared || 0;
+    ui.bossLevelHint.textContent =
+      cleared >= BOSS_MAX_LEVEL
+        ? "All Boss battles cleared — Overlord unlocked!"
+        : `Progress: B${cleared}/${BOSS_MAX_LEVEL} · Next: B${nextUnlock} · B10 unlocks Overlord`;
+  }
+}
+
 function resetChaosFx(soft = false) {
   s.chaos.hitCount = 0;
   s.chaos.nextSplitAt = 4 + Math.floor(Math.random() * 3);
@@ -3949,6 +5409,10 @@ function resetChaosFx(soft = false) {
 }
 
 function bumpChaosShake(amount) {
+  if (isBossMode()) {
+    bumpBossShake(amount);
+    return;
+  }
   if (!isChaosMode()) return;
   s.chaos.shake = Math.max(s.chaos.shake || 0, amount);
 }
@@ -4128,6 +5592,7 @@ function openBotModes() {
   hideOverlay(ui.botLevelOverlay);
   hideOverlay(ui.chaosLevelOverlay);
   hideOverlay(ui.survivalLevelOverlay);
+  hideOverlay(ui.bossLevelOverlay);
   hideOverlay(ui.modeSoonOverlay);
   hideOverlay(ui.lobbyOverlay);
   hideOverlay(ui.customizeOverlay);
@@ -4244,6 +5709,7 @@ function openBotLevelSelect() {
   hideOverlay(ui.modeSoonOverlay);
   hideOverlay(ui.chaosLevelOverlay);
   hideOverlay(ui.survivalLevelOverlay);
+  hideOverlay(ui.bossLevelOverlay);
   hideOverlay(ui.lobbyOverlay);
   hideOverlay(ui.customizeOverlay);
   hideOverlay(ui.settingsOverlay);
@@ -4380,6 +5846,7 @@ function openChaosLevelSelect() {
   hideOverlay(ui.modeSoonOverlay);
   hideOverlay(ui.botLevelOverlay);
   hideOverlay(ui.survivalLevelOverlay);
+  hideOverlay(ui.bossLevelOverlay);
   hideOverlay(ui.lobbyOverlay);
   hideOverlay(ui.customizeOverlay);
   hideOverlay(ui.settingsOverlay);
@@ -4457,6 +5924,7 @@ function openSurvivalLevelSelect() {
   hideOverlay(ui.modeSoonOverlay);
   hideOverlay(ui.botLevelOverlay);
   hideOverlay(ui.chaosLevelOverlay);
+  hideOverlay(ui.bossLevelOverlay);
   hideOverlay(ui.lobbyOverlay);
   hideOverlay(ui.customizeOverlay);
   hideOverlay(ui.settingsOverlay);
@@ -5140,6 +6608,7 @@ function refreshSettingsUI() {
   document.querySelectorAll(".music-track-btn").forEach((btn) => {
     btn.classList.toggle("active", btn.dataset.track === settings.musicTrack);
   });
+  applyTheme();
   refreshPhoneZoomUI();
 }
 
@@ -5148,6 +6617,7 @@ function openSettings() {
   hideOverlay(ui.botLevelOverlay);
   hideOverlay(ui.chaosLevelOverlay);
   hideOverlay(ui.survivalLevelOverlay);
+  hideOverlay(ui.bossLevelOverlay);
   hideOverlay(ui.botModesOverlay);
   hideOverlay(ui.lobbyOverlay);
   hideOverlay(ui.customizeOverlay);
@@ -5442,7 +6912,7 @@ function requireName(action) {
 function showOverlay(el) {
   el.classList.remove("hidden");
   el.setAttribute("aria-hidden", "false");
-  if (stageEl && (el === ui.nameOverlay || el === ui.menuOverlay || el === ui.botModesOverlay || el === ui.modeSoonOverlay || el === ui.botLevelOverlay || el === ui.chaosLevelOverlay || el === ui.survivalLevelOverlay || el === ui.lobbyOverlay || el === ui.customizeOverlay || el === ui.settingsOverlay || el === ui.updatesOverlay || el === ui.adminOverlay || el === ui.passkeyOverlay || el === ui.masterClearOverlay)) {
+  if (stageEl && (el === ui.nameOverlay || el === ui.menuOverlay || el === ui.botModesOverlay || el === ui.modeSoonOverlay || el === ui.botLevelOverlay || el === ui.chaosLevelOverlay || el === ui.survivalLevelOverlay || el === ui.bossHubOverlay || el === ui.bossShopOverlay || el === ui.bossLevelOverlay || el === ui.lobbyOverlay || el === ui.customizeOverlay || el === ui.settingsOverlay || el === ui.updatesOverlay || el === ui.adminOverlay || el === ui.passkeyOverlay || el === ui.masterClearOverlay)) {
     stageEl.classList.add("menu-open");
   }
 }
@@ -5450,7 +6920,7 @@ function showOverlay(el) {
 function hideOverlay(el) {
   el.classList.add("hidden");
   el.setAttribute("aria-hidden", "true");
-  if (stageEl && (el === ui.nameOverlay || el === ui.menuOverlay || el === ui.botModesOverlay || el === ui.modeSoonOverlay || el === ui.botLevelOverlay || el === ui.chaosLevelOverlay || el === ui.survivalLevelOverlay || el === ui.lobbyOverlay || el === ui.customizeOverlay || el === ui.settingsOverlay || el === ui.updatesOverlay || el === ui.adminOverlay || el === ui.passkeyOverlay || el === ui.masterClearOverlay)) {
+  if (stageEl && (el === ui.nameOverlay || el === ui.menuOverlay || el === ui.botModesOverlay || el === ui.modeSoonOverlay || el === ui.botLevelOverlay || el === ui.chaosLevelOverlay || el === ui.survivalLevelOverlay || el === ui.bossHubOverlay || el === ui.bossShopOverlay || el === ui.bossLevelOverlay || el === ui.lobbyOverlay || el === ui.customizeOverlay || el === ui.settingsOverlay || el === ui.updatesOverlay || el === ui.adminOverlay || el === ui.passkeyOverlay || el === ui.masterClearOverlay)) {
     stageEl.classList.remove("menu-open");
   }
 }
@@ -5483,8 +6953,10 @@ function resetBall(servingToRight = true) {
   s.ability.smashing = false;
   if (!s.ability.breakFx) s.p2.broken = false;
   if (isChaosMode()) resetChaosFx(true);
+  if (isBossMode()) resetBossFx(true);
   if (!s.gameOver) {
     if (isSurvivalMode()) updateSurvivalHud();
+    if (isBossMode()) updateBossHud();
     ui.status.textContent = serveHint();
   }
 }
@@ -5672,6 +7144,7 @@ function openUpdates() {
   hideOverlay(ui.botLevelOverlay);
   hideOverlay(ui.chaosLevelOverlay);
   hideOverlay(ui.survivalLevelOverlay);
+  hideOverlay(ui.bossLevelOverlay);
   hideOverlay(ui.botModesOverlay);
   hideOverlay(ui.modeSoonOverlay);
   hideOverlay(ui.lobbyOverlay);
@@ -5698,6 +7171,10 @@ function endGame(winner, opts = {}) {
   if (isSurvivalMode()) {
     s.survival.active = false;
     setSurvivalTimerVisible(false);
+  }
+  if (isBossMode()) {
+    setBossHudVisible(false);
+    setBossPowerBarVisible(false);
   }
   ui.status.textContent = "Game over";
   stopGameMusic();
@@ -5757,6 +7234,21 @@ function endGame(winner, opts = {}) {
           ui.gameOverTitle.textContent = "YOU WIN";
           setGameOverReward(winPts);
         }
+      } else if (s.botMode === "boss") {
+        winPts = POINTS_PER_BOSS_WIN;
+        if (isAdmin() && save.abilities.bonusPts) winPts = Math.max(winPts, 10);
+        save.points += winPts;
+        clearBonus = awardBossClear(s.botLevel);
+        persistSave();
+        updatePointsUI();
+        const def = bossDef();
+        if (clearBonus > 0) {
+          ui.gameOverTitle.textContent = `BOSS ${s.botLevel} CLEARED`;
+          setGameOverReward(winPts);
+        } else {
+          ui.gameOverTitle.textContent = def ? `${def.name.toUpperCase()} FALLEN` : "YOU WIN";
+          setGameOverReward(winPts);
+        }
       } else {
         winPts = awardWinPoints(winner);
         clearBonus = awardBotClear(s.botLevel);
@@ -5790,7 +7282,9 @@ function endGame(winner, opts = {}) {
         ? CHAOS_MAX_LEVEL
         : s.botMode === "survival"
           ? SURVIVAL_MAX_ROUND
-          : 100;
+          : s.botMode === "boss"
+            ? BOSS_MAX_LEVEL
+            : 100;
     const showNext =
       s.mode === "local" && youWon && !opts.resigned && !opts.draw && s.botLevel < maxLevel;
     ui.btnNextLevel.classList.toggle("hidden", !showNext);
@@ -5800,7 +7294,9 @@ function endGame(winner, opts = {}) {
           ? `Next Chaos (L${s.botLevel + 1})`
           : s.botMode === "survival"
             ? `Next round (R${s.botLevel + 1})`
-            : `Next level (L${s.botLevel + 1})`;
+            : s.botMode === "boss"
+              ? `Next boss (B${s.botLevel + 1})`
+              : `Next level (L${s.botLevel + 1})`;
     }
   }
   if (justEnded) {
@@ -5823,10 +7319,18 @@ function endGame(winner, opts = {}) {
     !opts.resigned &&
     s.botLevel === SURVIVAL_MAX_ROUND &&
     clearBonus > 0;
+  const bossOverlordUnlock =
+    s.mode === "local" &&
+    s.botMode === "boss" &&
+    youWon &&
+    !opts.resigned &&
+    s.botLevel === BOSS_MAX_LEVEL &&
+    clearBonus > 0;
   const masterClear =
     s.mode === "local" &&
     s.botMode !== "chaos" &&
     s.botMode !== "survival" &&
+    s.botMode !== "boss" &&
     youWon &&
     !opts.resigned &&
     s.botLevel === 100;
@@ -5835,14 +7339,21 @@ function endGame(winner, opts = {}) {
     openMasterClearCelebration(justEnded ? winPts + clearBonus : 0, {
       title: "CHAOS RIFT UNLOCKED",
       lead: "You cleared Chaos Mode — Level 25.",
-      msg: "Chaos Rift legendary cosmetic is now yours in Customize. Boss Battles are still coming!",
+      msg: "Chaos Rift legendary cosmetic is now yours in Customize.",
     });
   } else if (survivalEnduranceUnlock) {
     hideOverlay(ui.gameOver);
     openMasterClearCelebration(justEnded ? winPts : 0, {
       title: "SURVIVAL ENDURANCE UNLOCKED",
       lead: "You cleared Survival Mode — Round 25.",
-      msg: "Endurance Survival cosmetic is now yours in Customize. Boss Battles are still coming!",
+      msg: "Endurance Survival cosmetic is now yours in Customize.",
+    });
+  } else if (bossOverlordUnlock) {
+    hideOverlay(ui.gameOver);
+    openMasterClearCelebration(justEnded ? winPts : 0, {
+      title: "OVERLORD UNLOCKED",
+      lead: "You cleared Boss Battles — Overlord defeated.",
+      msg: "Overlord BOSS cosmetic is now yours in Customize. The climb is complete!",
     });
   } else if (masterClear) {
     hideOverlay(ui.gameOver);
@@ -5863,6 +7374,17 @@ function resetLocalMatch() {
   closeMasterClearCelebration();
   resetAbility();
   if (isChaosMode()) resetChaosFx();
+  if (isBossMode()) {
+    s.boss.hpPlayer = BOSS_HP;
+    s.boss.hpBoss = BOSS_HP;
+    resetBossFx();
+    resetBossPowersFx();
+    updateBossHud();
+    updateBossPowerBar();
+  } else {
+    setBossHudVisible(false);
+    setBossPowerBarVisible(false);
+  }
   if (isSurvivalMode()) {
     s.survival.timeLeft = SURVIVAL_MATCH_SECONDS;
     s.survival.active = true;
@@ -5872,6 +7394,7 @@ function resetLocalMatch() {
   }
   resetBall(true);
   if (isSurvivalMode()) updateSurvivalHud();
+  if (isBossMode()) updateBossHud();
   ui.status.textContent = serveHint();
   setStagePlaying(true);
   startGameMusic();
@@ -5890,6 +7413,7 @@ function serve() {
   s.running = true;
   ui.status.textContent = "Playing";
   if (isSurvivalMode()) updateSurvivalHud();
+  if (isBossMode()) updateBossHud();
 }
 
 function rectsOverlap(ax, ay, aw, ah, bx, by, bw, bh) {
@@ -5901,15 +7425,19 @@ function reflectFromPaddle(p, side, ball = s.ball) {
   const mid = p.y + h / 2;
   const t = clamp((ball.y - mid) / (h / 2), -1, 1);
   const fireSmash = side === "p1" && s.mode === "local" && s.ability.armed;
+  const powers = isBossMode() ? ensureBossPowersState() : null;
+  const reflectHit = side === "p1" && powers?.reflectArmed && !fireSmash;
   const speed = fireSmash
     ? FIRE_SMASH_SPEED
-    : clamp(Math.hypot(ball.vx, ball.vy) * 1.065, chaosSpeed0(), chaosSpeedMax());
-  const maxBounce = fireSmash ? 0.12 * Math.PI : 0.42 * Math.PI;
+    : reflectHit
+      ? Math.max(BOSS_REFLECT_SPEED, Math.hypot(ball.vx, ball.vy) * 1.55)
+      : clamp(Math.hypot(ball.vx, ball.vy) * 1.065, chaosSpeed0(), chaosSpeedMax());
+  const maxBounce = fireSmash ? 0.12 * Math.PI : reflectHit ? 0.28 * Math.PI : 0.42 * Math.PI;
   const a = t * maxBounce;
   const dir = side === "p1" ? 1 : -1;
   ball.vx = Math.cos(a) * speed * dir;
   ball.vy = Math.sin(a) * speed;
-  bumpChaosShake(fireSmash ? 12 : 4);
+  bumpChaosShake(fireSmash ? 12 : reflectHit ? 10 : 4);
   if (fireSmash) {
     s.ability.armed = false;
     s.ability.smashing = true;
@@ -5919,7 +7447,24 @@ function reflectFromPaddle(p, side, ball = s.ball) {
     updateAbilityUI();
   } else {
     playPaddleHit();
-    if (side === "p1") registerParry();
+    if (side === "p1") {
+      if (reflectHit) {
+        powers.reflectArmed = false;
+        powers.reflectCd = 20;
+        ball.reflectBoost = true;
+        ui.status.textContent = "REFLECT!";
+        updateBossPowerBar();
+      }
+      registerParry();
+      tryBossDecoy(ball);
+    }
+    if (side === "p2" && powers && ball.reflectBoost) {
+      ball.reflectBoost = false;
+      powers.freezeT = Math.max(powers.freezeT || 0, 10);
+      bumpBossShake(12);
+      ui.status.textContent = "BOSS FROZEN!";
+      updateBossPowerBar();
+    }
     tryChaosBallSplit(ball);
     tryTriggerChaosFog();
   }
@@ -5962,11 +7507,29 @@ function updateLocal(dt) {
     }
   }
 
+  if (isBossMode()) {
+    tickBossPowers(dt);
+    const bossDt = dt * bossTimeScale();
+    if (s.boss.shake > 0) s.boss.shake = Math.max(0, s.boss.shake - dt * 16);
+    if (s.boss.teleportFlash > 0) s.boss.teleportFlash = Math.max(0, s.boss.teleportFlash - dt);
+    if (s.boss.fogT > 0) s.boss.fogT = Math.max(0, s.boss.fogT - dt);
+    if (s.boss.brokenPlayerT > 0) s.boss.brokenPlayerT = Math.max(0, s.boss.brokenPlayerT - dt);
+    if (bossDt > 0) {
+      tryBossGrow(bossDt);
+      tryBossTeleport(bossDt);
+    }
+    // Laser aim/fire uses real dt so the shot always reaches the player side.
+    if (updateBossLaser(dt)) return;
+    updateBossHud();
+  }
+
   const threat = pickThreatBall();
   if (threat) s.ball = threat;
 
-  if (!s.gameOver && !s.p2.broken && !(isAdmin() && save.abilities.pauseBot)) {
-    const botSpeed = s.ai.speed;
+  const p2h = effectivePaddleH("p2");
+  const bossFrozen = isBossMode() && ensureBossPowersState().freezeT > 0;
+  if (!s.gameOver && !s.p2.broken && !bossFrozen && !(isAdmin() && save.abilities.pauseBot)) {
+    const botSpeed = s.ai.speed * (isBossMode() ? bossTimeScale() || 0.001 : 1);
     s.ai.timer -= dt;
     if (s.ai.timer <= 0) {
       s.ai.timer = s.ai.interval + (Math.random() * 0.04 - 0.015);
@@ -5976,16 +7539,18 @@ function updateLocal(dt) {
         ? (s.botLevel - 1) / Math.max(1, CHAOS_MAX_LEVEL - 1)
         : isSurvivalMode()
           ? (s.botLevel - 1) / Math.max(1, SURVIVAL_MAX_ROUND - 1)
-          : (s.botLevel - 1) / 99;
+          : isBossMode()
+            ? (s.botLevel - 1) / Math.max(1, BOSS_MAX_LEVEL - 1)
+            : (s.botLevel - 1) / 99;
       const lead = trackBall.vx > 0 ? trackBall.vy * 0.08 * chaosT : 0;
-      s.ai.targetY = trackBall.y + lead - paddle.h / 2 + err;
+      s.ai.targetY = trackBall.y + lead - p2h / 2 + err;
     }
     const dy = s.ai.targetY - s.p2.y;
     const maxStep = botSpeed * dt;
     s.p2.y = clamp(
       s.p2.y + clamp(dy * s.ai.track, -maxStep, maxStep),
       table.y + 6,
-      table.y + table.h - paddle.h - 6
+      table.y + table.h - p2h - 6
     );
   }
 
@@ -5999,6 +7564,8 @@ function updateLocal(dt) {
 
   for (let i = 0; i < balls.length; i++) {
     const ball = balls[i];
+    applyBossSlowField(ball, dt);
+    applyBossDecoyCurve(ball, dt);
     ball.x += ball.vx * dt;
     ball.y += ball.vy * dt;
 
@@ -6010,7 +7577,7 @@ function updateLocal(dt) {
       ball.vy *= -1;
     }
 
-    tryLocalPaddleHit(s.p1, "p1", ball);
+    if (!(isBossMode() && s.boss.brokenPlayerT > 0)) tryLocalPaddleHit(s.p1, "p1", ball);
     if (!s.ability.smashing) tryLocalPaddleHit(s.p2, "p2", ball);
 
     if (s.ability.smashing && ball.vx > 0 && ball.x + ballCfg.r >= s.p2.x) {
@@ -6165,12 +7732,19 @@ function updateFx(dt) {
 
 function draw() {
   ctx.clearRect(0, 0, W, H);
-  ctx.fillStyle = "#000";
+  const stock = courtStockColor();
+  const ink = courtInkColor();
+  ctx.fillStyle = isLightTheme() ? "#e8e8ec" : "#000";
   ctx.fillRect(0, 0, W, H);
+  ctx.fillStyle = stock;
+  ctx.fillRect(table.x, table.y, table.w, table.h);
 
   ctx.save();
   if (isChaosMode() && s.chaos.shake > 0) {
     const sh = s.chaos.shake;
+    ctx.translate((Math.random() - 0.5) * 2 * sh, (Math.random() - 0.5) * 2 * sh);
+  } else if (isBossMode() && s.boss.shake > 0) {
+    const sh = s.boss.shake;
     ctx.translate((Math.random() - 0.5) * 2 * sh, (Math.random() - 0.5) * 2 * sh);
   }
 
@@ -6179,7 +7753,7 @@ function draw() {
     drawTableHalf("p2");
   }
 
-  ctx.strokeStyle = "#fff";
+  ctx.strokeStyle = ink;
   ctx.lineWidth = 2;
   ctx.strokeRect(table.x, table.y, table.w, table.h);
   ctx.beginPath();
@@ -6227,7 +7801,7 @@ function draw() {
     }
   }
   for (const ball of drawBalls) {
-    ctx.fillStyle = s.ability.smashing && ball === s.ball ? "#ffe08a" : "#fff";
+    ctx.fillStyle = s.ability.smashing && ball === s.ball ? "#ffe08a" : ink;
     ctx.beginPath();
     ctx.arc(ball.x, ball.y, ballCfg.r, 0, Math.PI * 2);
     ctx.fill();
@@ -6235,12 +7809,14 @@ function draw() {
 
   // Fog drawn after balls so the opponent half is smoked out
   drawChaosFogOfWar();
+  drawBossFx();
 
   if (!s.running && (s.mode === "local" || s.mode === "online") && !s.gameOver) {
     ctx.font = `${isTouchDevice ? 14 : 16}px system-ui, -apple-system, Segoe UI, Arial`;
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
     ctx.globalAlpha = 0.85;
+    ctx.fillStyle = ink;
     ctx.fillText(serveHint().toUpperCase(), table.x + table.w / 2, table.y + table.h / 2);
     ctx.globalAlpha = 1;
   }
@@ -6254,7 +7830,7 @@ function draw() {
     ctx.translate(cx, cy - 10);
     ctx.scale(1 + pop * 0.08, 1 + pop * 0.08);
     ctx.globalAlpha = clamp(1 - t * 0.9, 0, 1);
-    ctx.fillStyle = "#fff";
+    ctx.fillStyle = ink;
     ctx.font = "900 54px system-ui, -apple-system, Segoe UI, Arial";
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
@@ -6263,7 +7839,7 @@ function draw() {
 
     ctx.save();
     ctx.lineWidth = 2;
-    ctx.strokeStyle = "#fff";
+    ctx.strokeStyle = ink;
     for (const p of s.fx.particles) {
       ctx.globalAlpha = (1 - p.t / p.life) * 0.9;
       ctx.beginPath();
@@ -6524,6 +8100,7 @@ function startLocalMode(level = 1) {
   hideOverlay(ui.botLevelOverlay);
   hideOverlay(ui.chaosLevelOverlay);
   hideOverlay(ui.survivalLevelOverlay);
+  hideOverlay(ui.bossLevelOverlay);
   hideOverlay(ui.botModesOverlay);
   hideOverlay(ui.lobbyOverlay);
   hideOverlay(ui.customizeOverlay);
@@ -6555,6 +8132,7 @@ function startChaosMode(level = 1) {
   hideOverlay(ui.botLevelOverlay);
   hideOverlay(ui.chaosLevelOverlay);
   hideOverlay(ui.survivalLevelOverlay);
+  hideOverlay(ui.bossLevelOverlay);
   hideOverlay(ui.botModesOverlay);
   hideOverlay(ui.lobbyOverlay);
   hideOverlay(ui.customizeOverlay);
@@ -6584,6 +8162,7 @@ function startSurvivalMode(round = 1) {
   hideOverlay(ui.botLevelOverlay);
   hideOverlay(ui.chaosLevelOverlay);
   hideOverlay(ui.survivalLevelOverlay);
+  hideOverlay(ui.bossLevelOverlay);
   hideOverlay(ui.botModesOverlay);
   hideOverlay(ui.lobbyOverlay);
   hideOverlay(ui.customizeOverlay);
@@ -6599,12 +8178,52 @@ function startSurvivalMode(round = 1) {
   resetLocalMatch();
 }
 
+function startBossMode(level = 1) {
+  if (!isBossLevelUnlocked(level)) {
+    openBossLevelSelect();
+    if (ui.bossLevelHint) ui.bossLevelHint.textContent = `Boss ${level} is locked.`;
+    return;
+  }
+  stopMenuBg();
+  s.botMode = "boss";
+  s.survival.active = false;
+  applyBossBotLevel(level);
+  s.mode = "local";
+  s.boss.hpPlayer = BOSS_HP;
+  s.boss.hpBoss = BOSS_HP;
+  resetBossFx();
+  hideOverlay(ui.menuOverlay);
+  hideOverlay(ui.botLevelOverlay);
+  hideOverlay(ui.chaosLevelOverlay);
+  hideOverlay(ui.survivalLevelOverlay);
+  hideOverlay(ui.bossHubOverlay);
+  hideOverlay(ui.bossShopOverlay);
+  hideOverlay(ui.bossLevelOverlay);
+  hideOverlay(ui.botModesOverlay);
+  hideOverlay(ui.lobbyOverlay);
+  hideOverlay(ui.customizeOverlay);
+  hideOverlay(ui.settingsOverlay);
+  hideOverlay(ui.adminOverlay);
+  hideOverlay(ui.gameOver);
+  const def = bossDef();
+  setScoreboardLabels(
+    formatNameWithLevel(getPlayerName() || "You", getPlayerLevel()),
+    `BOSS · ${(def?.name || `B${s.botLevel}`).toUpperCase()}`,
+    { p1Level: getPlayerLevel(), p2Level: null }
+  );
+  ui.hint.textContent = `Boss ${s.botLevel} — ${def?.name || "Boss"} · 5 HP each · +${POINTS_PER_BOSS_WIN} pts.`;
+  resetLocalMatch();
+}
+
 function openLobby() {
   stopMenuBg();
   hideOverlay(ui.menuOverlay);
   hideOverlay(ui.botLevelOverlay);
   hideOverlay(ui.chaosLevelOverlay);
   hideOverlay(ui.survivalLevelOverlay);
+  hideOverlay(ui.bossHubOverlay);
+  hideOverlay(ui.bossShopOverlay);
+  hideOverlay(ui.bossLevelOverlay);
   hideOverlay(ui.botModesOverlay);
   hideOverlay(ui.modeSoonOverlay);
   hideOverlay(ui.customizeOverlay);
@@ -6627,11 +8246,16 @@ function backToMenu() {
   s.running = false;
   s.survival.active = false;
   setSurvivalTimerVisible(false);
+  setBossHudVisible(false);
+  setBossPowerBarVisible(false);
   hideOverlay(ui.gameOver);
   hideOverlay(ui.lobbyOverlay);
   hideOverlay(ui.botLevelOverlay);
   hideOverlay(ui.chaosLevelOverlay);
   hideOverlay(ui.survivalLevelOverlay);
+  hideOverlay(ui.bossHubOverlay);
+  hideOverlay(ui.bossShopOverlay);
+  hideOverlay(ui.bossLevelOverlay);
   hideOverlay(ui.botModesOverlay);
   hideOverlay(ui.modeSoonOverlay);
   hideOverlay(ui.customizeOverlay);
@@ -6677,6 +8301,7 @@ function bindAdminControls() {
   bind(ui.btnAdminUnlockLevels, adminUnlockAllLevels);
   bind(ui.btnAdminUnlockChaos, adminUnlockAllChaosLevels);
   bind(ui.btnAdminUnlockSurvival, adminUnlockAllSurvivalRounds);
+  bind(ui.btnAdminUnlockBoss, adminUnlockAllBossLevels);
   bind(ui.btnAdminSetLevel, () => {
     const n = parseInt(ui.adminLevelInput?.value, 10);
     adminSetPlayerLevel(Number.isFinite(n) ? n : 0);
@@ -6761,7 +8386,7 @@ function bindUi() {
   bind(ui.btnModeClassic, openBotLevelSelect);
   bind(ui.btnModeChaos, openChaosLevelSelect);
   bind(ui.btnModeSurvival, openSurvivalLevelSelect);
-  bind(ui.btnModeBoss, () => openModeSoon("Boss Battles"));
+  bind(ui.btnModeBoss, openBossHub);
   bind(ui.btnModeSoonBack, closeModeSoon);
   bind(ui.btnModeSoonUpdates, () => {
     hideOverlay(ui.modeSoonOverlay);
@@ -6770,6 +8395,30 @@ function bindUi() {
   });
   bind(ui.btnChaosLevelBack, closeChaosLevelSelect);
   bind(ui.btnSurvivalLevelBack, closeSurvivalLevelSelect);
+  bind(ui.btnBossHubLevels, () => {
+    playMenuClick();
+    openBossLevelSelect();
+  });
+  bind(ui.btnBossHubShop, () => {
+    playMenuClick();
+    openBossShop();
+  });
+  bind(ui.btnBossHubBack, closeBossHub);
+  bind(ui.btnBossShopBack, closeBossShop);
+  bind(ui.btnBossLevelBack, closeBossLevelSelect);
+  const bindBossPower = (btn, id) => {
+    if (!btn) return;
+    const fire = (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      activateBossPower(id);
+    };
+    btn.addEventListener("click", fire);
+  };
+  bindBossPower(ui.btnBossPowerBlock, "block");
+  bindBossPower(ui.btnBossPowerIron, "iron");
+  bindBossPower(ui.btnBossPowerTimeslow, "timeslow");
+  bindBossPower(ui.btnBossPowerReflect, "reflect");
   document.querySelectorAll(".chaos-preset").forEach((btn) => {
     btn.addEventListener("click", () => {
       playMenuClick();
@@ -6794,6 +8443,19 @@ function bindUi() {
         return;
       }
       startSurvivalMode(level);
+    });
+  });
+  document.querySelectorAll(".boss-preset").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      playMenuClick();
+      const level = parseInt(btn.dataset.level, 10) || 1;
+      if (!isBossLevelUnlocked(level)) {
+        if (ui.bossLevelHint) {
+          ui.bossLevelHint.textContent = `Locked — clear Boss ${level - 1} first.`;
+        }
+        return;
+      }
+      startBossMode(level);
     });
   });
   bind(ui.btnMasterMenu, backToMenu);
@@ -6825,6 +8487,14 @@ function bindUi() {
   bind(ui.btnMusicToggle, () => {
     setMusicEnabled(!settings.musicOn);
   });
+  if (ui.themeSwitch) {
+    ui.themeSwitch.addEventListener("click", (e) => {
+      const btn = e.target.closest(".theme-switch-btn");
+      if (!btn || !btn.dataset.theme) return;
+      playMenuClick();
+      setTheme(btn.dataset.theme);
+    });
+  }
   if (ui.musicTrackGrid) {
     ui.musicTrackGrid.addEventListener("click", (e) => {
       const btn = e.target.closest(".music-track-btn");
@@ -6902,6 +8572,11 @@ function bindUi() {
       resetLocalMatch();
       return;
     }
+    if (s.botMode === "boss") {
+      applyBossBotLevel(s.botLevel);
+      resetLocalMatch();
+      return;
+    }
     applyBotLevel(s.botLevel);
     resetLocalMatch();
   });
@@ -6929,6 +8604,18 @@ function bindUi() {
         return;
       }
       startSurvivalMode(next);
+      return;
+    }
+    if (s.botMode === "boss") {
+      const next = Math.min(BOSS_MAX_LEVEL, (s.botLevel || 1) + 1);
+      if (!isBossLevelUnlocked(next)) {
+        openBossLevelSelect();
+        if (ui.bossLevelHint) {
+          ui.bossLevelHint.textContent = `Boss ${next} is locked. Clear Boss ${next - 1} first.`;
+        }
+        return;
+      }
+      startBossMode(next);
       return;
     }
     const next = Math.min(100, (s.botLevel || 1) + 1);
@@ -7146,6 +8833,7 @@ function updateMenuBg(now) {
   const ctx = menuBg.ctx;
   ctx.clearRect(0, 0, menuBg.w, menuBg.h);
 
+  const light = isLightTheme();
   const g = ctx.createRadialGradient(
     menuBg.w * 0.5,
     menuBg.h * 0.45,
@@ -7154,9 +8842,15 @@ function updateMenuBg(now) {
     menuBg.h * 0.5,
     Math.max(menuBg.w, menuBg.h) * 0.75
   );
-  g.addColorStop(0, "#12121a");
-  g.addColorStop(0.55, "#08080c");
-  g.addColorStop(1, "#030305");
+  if (light) {
+    g.addColorStop(0, "#ffffff");
+    g.addColorStop(0.45, "#f4f4f6");
+    g.addColorStop(1, "#e8e9ee");
+  } else {
+    g.addColorStop(0, "#12121a");
+    g.addColorStop(0.55, "#08080c");
+    g.addColorStop(1, "#030305");
+  }
   ctx.fillStyle = g;
   ctx.fillRect(0, 0, menuBg.w, menuBg.h);
 
@@ -7171,7 +8865,8 @@ function updateMenuBg(now) {
     sh.rot += sh.spin * dt;
     const fadeIn = Math.min(1, sh.life / 0.8);
     const fadeOut = Math.min(1, (sh.maxLife - sh.life) / 1.2);
-    sh.alpha = Math.max(0, Math.min(0.72, fadeIn * fadeOut * 0.72));
+    const peak = light ? 0.42 : 0.72;
+    sh.alpha = Math.max(0, Math.min(peak, fadeIn * fadeOut * peak));
     drawMenuShape(ctx, sh);
   }
 
@@ -7207,6 +8902,7 @@ window.addEventListener("resize", () => {
 
 async function boot() {
   loadSettings();
+  applyTheme();
   await loadSave();
   updatePointsUI();
   initAdminUi();

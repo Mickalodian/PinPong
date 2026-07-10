@@ -17,11 +17,15 @@
         color: #fff;
         margin: 0;
       }
+      html body[data-theme="light"] {
+        background: #f4f4f6;
+        color: #18181b;
+      }
       .overlay.hidden {
         display: none !important;
       }
     </style>
-    <link rel="stylesheet" href="style.css?v=20260710z" />
+    <link rel="stylesheet" href="style.css?v=20260710ak" />
   </head>
   <body>
     <canvas id="menuBg" class="menu-bg" aria-hidden="true"></canvas>
@@ -34,12 +38,43 @@
       <div class="stage">
         <canvas id="game" width="900" height="520" aria-label="Pong game"></canvas>
         <div class="survival-timer hidden" id="survivalTimer" aria-live="polite">2:00</div>
+        <div class="boss-hud hidden" id="bossHud" aria-live="polite">
+          <div class="boss-hud-row">
+            <span class="boss-hud-label">YOU</span>
+            <div class="boss-hud-track"><div class="boss-hud-fill you" id="bossHudYouFill"></div></div>
+            <span class="boss-hud-val" id="bossHudYouHp">5</span>
+          </div>
+          <div class="boss-hud-name" id="bossHudName">BOSS</div>
+          <div class="boss-hud-row">
+            <span class="boss-hud-label">BOSS</span>
+            <div class="boss-hud-track"><div class="boss-hud-fill boss" id="bossHudBossFill"></div></div>
+            <span class="boss-hud-val" id="bossHudBossHp">5</span>
+          </div>
+        </div>
         <div class="ability-bar hidden" id="abilityBar" aria-live="polite">
           <div class="ability-label" id="abilityLabel">PARRY 0/10</div>
           <div class="ability-track">
             <div class="ability-fill" id="abilityFill"></div>
           </div>
           <div class="ability-hint" id="abilityHint">Land 10 hits to charge Fire Smash</div>
+        </div>
+        <div class="boss-power-bar hidden" id="bossPowerBar" aria-label="Boss shop abilities">
+          <button type="button" class="boss-power-btn hidden" id="btnBossPowerBlock" data-power="block">
+            <span class="boss-power-name">Block</span>
+            <span class="boss-power-meta" id="bossPowerMetaBlock">Ready</span>
+          </button>
+          <button type="button" class="boss-power-btn hidden" id="btnBossPowerIron" data-power="iron">
+            <span class="boss-power-name">Iron</span>
+            <span class="boss-power-meta" id="bossPowerMetaIron">Ready</span>
+          </button>
+          <button type="button" class="boss-power-btn hidden" id="btnBossPowerTimeslow" data-power="timeslow">
+            <span class="boss-power-name">Slow</span>
+            <span class="boss-power-meta" id="bossPowerMetaTimeslow">Ready</span>
+          </button>
+          <button type="button" class="boss-power-btn hidden" id="btnBossPowerReflect" data-power="reflect">
+            <span class="boss-power-name">Reflect</span>
+            <span class="boss-power-meta" id="bossPowerMetaReflect">Ready</span>
+          </button>
         </div>
         <button type="button" class="resign-btn hidden" id="btnResign">Resign</button>
 
@@ -54,7 +89,11 @@
         </div>
 
         <div class="overlay hidden" id="menuOverlay">
-          <div class="overlay-card menu-card">
+          <div class="overlay-card menu-card main-menu-card">
+            <div class="theme-switch" id="themeSwitch" role="group" aria-label="Color theme">
+              <button type="button" class="theme-switch-btn active" data-theme="dark" id="btnThemeDark" aria-pressed="true">Dark</button>
+              <button type="button" class="theme-switch-btn" data-theme="light" id="btnThemeLight" aria-pressed="false">Light</button>
+            </div>
             <div class="overlay-title">SELECT MODE</div>
             <button type="button" class="play-again" id="btnLocal">Play vs Bot</button>
             <button type="button" class="play-again secondary" id="btnOnline">Online 1v1</button>
@@ -73,9 +112,7 @@
             <button type="button" class="play-again" id="btnModeClassic">Classic Levels</button>
             <button type="button" class="play-again secondary" id="btnModeChaos">Chaos Mode</button>
             <button type="button" class="play-again secondary" id="btnModeSurvival">Survival Mode</button>
-            <button type="button" class="play-again secondary mode-soon-btn" id="btnModeBoss" data-mode="Boss Battles">
-              Boss Battles <span class="mode-soon-tag">Soon</span>
-            </button>
+            <button type="button" class="play-again secondary" id="btnModeBoss">Boss Battles</button>
             <button type="button" class="link-btn" id="btnBotModesBack">Back</button>
           </div>
         </div>
@@ -128,6 +165,55 @@
           </div>
         </div>
 
+        <div class="overlay hidden" id="bossHubOverlay" aria-hidden="true">
+          <div class="overlay-card menu-card boss-hub-card">
+            <div class="overlay-title">BOSS BATTLES</div>
+            <p class="lobby-text">
+              Climb 10 bosses · buy support powers in the Boss Shop · clear B10 for Overlord.
+            </p>
+            <button type="button" class="play-again" id="btnBossHubLevels">Boss Levels</button>
+            <button type="button" class="play-again secondary" id="btnBossHubShop">Boss Shop</button>
+            <button type="button" class="link-btn" id="btnBossHubBack">Back</button>
+          </div>
+        </div>
+
+        <div class="overlay hidden" id="bossShopOverlay" aria-hidden="true">
+          <div class="overlay-card menu-card boss-shop-card">
+            <div class="overlay-title">BOSS SHOP</div>
+            <p class="lobby-text">
+              Buy once, then tap/click the buttons under the table in Boss fights. Points:
+              <strong id="bossShopPoints">0</strong>
+            </p>
+            <div class="boss-shop-list" id="bossShopList"></div>
+            <p class="shop-msg" id="bossShopHint">Powers help on the hardest bosses without lowering AI difficulty.</p>
+            <button type="button" class="link-btn" id="btnBossShopBack">Back</button>
+          </div>
+        </div>
+
+        <div class="overlay hidden" id="bossLevelOverlay" aria-hidden="true">
+          <div class="overlay-card menu-card bot-level-card boss-level-card">
+            <div class="bot-level-header">
+              <div class="overlay-title">BOSS LEVELS</div>
+              <p class="lobby-text">
+                5 HP each · unique boss abilities · +8 pts per win. Clear B10 Overlord to unlock the Overlord cosmetic.
+              </p>
+              <div class="bot-level-presets">
+                <button type="button" class="play-again secondary boss-preset" data-level="1">Boss 1</button>
+                <button type="button" class="play-again secondary boss-preset" data-level="4">Boss 4</button>
+                <button type="button" class="play-again secondary boss-preset" data-level="7">Boss 7</button>
+                <button type="button" class="play-again secondary boss-preset" data-level="10">Boss 10</button>
+              </div>
+            </div>
+            <div class="bot-level-body">
+              <div class="bot-level-grid" id="bossLevelGrid"></div>
+            </div>
+            <div class="bot-level-footer">
+              <p class="shop-msg" id="bossLevelHint">Boss 1 — Verdant Warden</p>
+              <button type="button" class="link-btn" id="btnBossLevelBack">Back</button>
+            </div>
+          </div>
+        </div>
+
         <div class="overlay hidden" id="modeSoonOverlay" aria-hidden="true">
           <div class="overlay-card menu-card mode-soon-card">
             <div class="overlay-title">UNDER CONSTRUCTION</div>
@@ -145,13 +231,23 @@
             <div class="overlay-title updates-title">UPDATES</div>
             <div class="updates-body" id="updatesBody">
               <article class="update-entry">
+                <h3 class="update-heading">Patch — Boss Battles</h3>
+                <p class="update-date">July 10, 2026</p>
+                <ul class="update-list">
+                  <li>Boss Battles live: 10 unique bosses, 5 HP each, ability ability kits</li>
+                  <li>+8 shop points on every Boss win · sequential unlock climb</li>
+                  <li>Decoy balls, teleport, grow paddle, telegraphed lasers, and more</li>
+                  <li>Clear B10 Overlord to unlock Overlord (BOSS rarity cosmetic)</li>
+                  <li>Boss Shop: Block, Iron Paddle, Time Slow, Reflect — buy once, use in fights</li>
+                </ul>
+              </article>
+              <article class="update-entry">
                 <h3 class="update-heading">Patch — Survival Mode</h3>
                 <p class="update-date">July 10, 2026</p>
                 <ul class="update-list">
                   <li>Survival Mode live: 25 rounds, 2:00 timer, highest score wins</li>
                   <li>+5 shop points on every Survival win · ties are draws</li>
                   <li>Clear Survival R25 to unlock Endurance (SURVIVAL rarity)</li>
-                  <li>Boss Battles still under construction</li>
                 </ul>
               </article>
               <article class="update-entry">
@@ -169,7 +265,6 @@
                 <p class="update-date">Roadmap</p>
                 <ul class="update-list">
                   <li>More bot levels beyond Master 100</li>
-                  <li>Boss Battles</li>
                   <li>New paddle abilities and match power-ups</li>
                   <li>Fresh legendary cosmetics and table themes</li>
                   <li>Extra game modes and ranked seasons</li>
@@ -258,8 +353,8 @@
                 <button type="button" class="play-again" id="btnRedeemSubmit">Redeem</button>
                 <p class="shop-msg" id="redeemMsg"></p>
               </div>
-              <button type="button" class="link-btn" id="btnSettingsBack">Back</button>
             </div>
+            <button type="button" class="link-btn" id="btnSettingsBack">Back</button>
           </div>
         </div>
 
@@ -316,6 +411,7 @@
                 <button type="button" class="play-again secondary" id="btnAdminUnlockLevels">Unlock all bot levels</button>
                 <button type="button" class="play-again secondary" id="btnAdminUnlockChaos">Unlock all Chaos levels</button>
                 <button type="button" class="play-again secondary" id="btnAdminUnlockSurvival">Unlock all Survival rounds</button>
+                <button type="button" class="play-again secondary" id="btnAdminUnlockBoss">Unlock all Boss battles</button>
               </div>
               <p class="admin-section-label">Player level (0–100)</p>
               <p class="shop-points">Level: <span id="adminLevel">0</span></p>
@@ -332,8 +428,8 @@
                 <label class="admin-toggle"><input type="checkbox" id="abBonusPts" /> +10 pts per win</label>
               </div>
               <p class="shop-msg" id="adminMsg">Abilities are local. Points sync globally.</p>
-              <button type="button" class="link-btn" id="btnAdminBack">Back</button>
             </div>
+            <button type="button" class="link-btn" id="btnAdminBack">Back</button>
           </div>
         </div>
 
@@ -426,6 +522,6 @@
       window.PONG_ADMIN = null;
     </script>
     <script src="admin.local.js"></script>
-    <script src="game.js?v=20260710z" defer></script>
+    <script src="game.js?v=20260710ak" defer></script>
   </body>
 </html>
