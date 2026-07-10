@@ -2,21 +2,30 @@
   "mikloit": {
     "username": "mikloit",
     "displayName": "MikLoit",
-    "passwordHash": "f963c451321e9b81baac48f1afb9fa98293f5caf01a2748e40a9d93503376dfc8b5f44226c1dfc421ebefac7f4b374eb90bc87346566eb7bff3e4e97028ef861",
-    "salt": "ad237aedf7e1c7f33cabfaee7cbb4c7a",
+    "passwordHash": "6de88a0ebd63e1e9b205af0561ea5e8b2a59d8b001d2fbe727e8f77465f11df6a1c106ec14f25d174b45a556f7d6202ca88d5b3a875289b3822bd3a874501564",
+    "salt": "939be3d8a4be81ac8169c9ab1afd1cb3",
     "playerId": "dccb8911-4688-419e-869e-cc2c2c00217d",
     "isOwner": true,
     "isAdmin": true,
     "createdAt": 1783713492688,
-    "updatedAt": 1783716598759
+    "updatedAt": 1783725512744
   },
   "nobody": {
     "username": "nobody",
-    "passwordHash": "66d9898434698b4860ae0414c73e27dbb57724d18737d040f1590e1e72404bf96ca157e30cba36f01ce17bc10b388065ae5766f8c7df3fadcfd6c9257e2cecf4",
-    "salt": "84d443895d8ddc8892ebcd6cb76be729",
+    "passwordHash": "2bf60e469049b3d5faa824fd72ea18bccded3d3900ad058b45e7dfadd012438af2c405e8ed498886e9a296e5a7e12ec7e86a91093d3426b87f01100ee51f38a4",
+    "salt": "e4cbc499a5f3f6f7adb89e028ebc6a81",
     "playerId": "abcdef12-3456-7890-abcd-ef1234567890",
     "isOwner": false,
-    "createdAt": 1783713514784
+    "createdAt": 1783713514784,
+    "banned": true,
+    "banDuration": "permanent",
+    "bannedUntil": 0,
+    "updatedAt": 1783723912595,
+    "passwordResetRequested": false,
+    "passwordResetRequestedAt": 1783722693060,
+    "passwordResetAllowed": false,
+    "passwordResetCode": "",
+    "passwordResetExpires": 0
   },
   "testban": {
     "username": "testban",
@@ -26,7 +35,13 @@
     "isOwner": false,
     "createdAt": 1783715652707,
     "banned": true,
-    "updatedAt": 1783715652886
+    "updatedAt": 1783719566737,
+    "bannedUntil": 0,
+    "banDuration": "permanent",
+    "passwordResetAllowed": false,
+    "passwordResetRequested": false,
+    "passwordResetExpires": 0,
+    "passwordResetCode": ""
   },
   "helper1": {
     "username": "helper1",
@@ -36,6 +51,13 @@
     "isOwner": false,
     "isAdmin": false,
     "createdAt": 1783716598391,
-    "updatedAt": 1783716598808
+    "updatedAt": 1783719596189,
+    "banned": true,
+    "banDuration": "permanent",
+    "bannedUntil": 0,
+    "passwordResetAllowed": false,
+    "passwordResetRequested": false,
+    "passwordResetExpires": 0,
+    "passwordResetCode": ""
   }
 }

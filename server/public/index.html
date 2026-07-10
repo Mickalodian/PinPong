@@ -25,7 +25,7 @@
         display: none !important;
       }
     </style>
-    <link rel="stylesheet" href="style.css?v=20260710bc" />
+    <link rel="stylesheet" href="style.css?v=20260711f" />
   </head>
   <body>
     <canvas id="menuBg" class="menu-bg" aria-hidden="true"></canvas>
@@ -96,6 +96,16 @@
           <div class="overlay-card menu-card main-menu-card menu-panel">
             <div class="menu-panel-header">
               <div class="overlay-title">SELECT MODE</div>
+              <p class="menu-version" aria-label="Version 1.0 live">
+                <span class="menu-version-num">1.0</span>
+                <span class="menu-version-live"><span class="menu-live-dot" aria-hidden="true"></span>LIVE</span>
+              </p>
+              <details class="menu-coming-soon">
+                <summary>Coming soon</summary>
+                <p class="menu-coming-soon-body">
+                  <strong>Weekly Events</strong> — rotating challenges, limited rewards, and weekend play drops. Check back soon.
+                </p>
+              </details>
               <p class="lobby-text">Choose where to play or manage your account.</p>
             </div>
             <div class="menu-grid" role="navigation" aria-label="Main menu">
@@ -105,14 +115,19 @@
                 <span class="menu-tile-hint">Classic · Chaos · Survival · Boss</span>
               </button>
               <button type="button" class="menu-tile" id="btnOnline">
-                <span class="menu-tile-kicker">Multiplayer</span>
-                <span class="menu-tile-label">Online</span>
-                <span class="menu-tile-hint">Scoreboard · rooms · search</span>
+                <span class="menu-tile-kicker">Online</span>
+                <span class="menu-tile-label">Multiplayer</span>
+                <span class="menu-tile-hint">Rooms · search · scoreboard</span>
               </button>
               <button type="button" class="menu-tile" id="btnProfile">
                 <span class="menu-tile-kicker">Account</span>
                 <span class="menu-tile-label">Profile</span>
-                <span class="menu-tile-hint">Name · XP · avatars · customize</span>
+                <span class="menu-tile-hint">Name · XP · avatars · login</span>
+              </button>
+              <button type="button" class="menu-tile" id="btnInbox">
+                <span class="menu-tile-kicker">Social</span>
+                <span class="menu-tile-label">Inbox <span class="inbox-badge hidden" id="inboxBadge">0</span></span>
+                <span class="menu-tile-hint">Message players by username</span>
               </button>
               <button type="button" class="menu-tile" id="btnSettings">
                 <span class="menu-tile-kicker">Options</span>
@@ -126,7 +141,7 @@
               </button>
               <button type="button" class="menu-tile" id="btnContact">
                 <span class="menu-tile-kicker">Support</span>
-                <span class="menu-tile-label">Contact Us</span>
+                <span class="menu-tile-label">Contact</span>
                 <span class="menu-tile-hint">Bugs · reports · feedback</span>
               </button>
               <button type="button" class="menu-tile hidden" id="btnAdmin" aria-hidden="true">
@@ -172,6 +187,7 @@
                     <button type="button" class="play-again" id="btnAuthRegister">Create account</button>
                     <button type="button" class="play-again secondary" id="btnAuthLogin">Log in</button>
                   </div>
+                  <button type="button" class="link-btn forgot-password-link" id="btnForgotPassword">Forgot password?</button>
                 </div>
                 <div class="profile-auth hidden" id="profileAuthSignedIn">
                   <p class="lobby-text" id="profileSignedInText">Signed in</p>
@@ -417,6 +433,27 @@
               <p class="lobby-text">Changelog and roadmap for this build.</p>
             </div>
             <div class="updates-body menu-panel-body" id="updatesBody">
+              <article class="update-entry">
+                <h3 class="update-heading">Update 1.0 — Live</h3>
+                <p class="update-date">July 11, 2026</p>
+                <ul class="update-list">
+                  <li>Smoother online play: remote paddles and ball motion feel less steppy</li>
+                  <li>Smoother menu transitions between screens</li>
+                  <li>Smoother animated paddle and table cosmetics in-game and in Customize</li>
+                  <li>Coming soon: Weekly Events — rotating challenges and limited rewards</li>
+                </ul>
+              </article>
+              <article class="update-entry">
+                <h3 class="update-heading">Patch — Inbox &amp; Safety</h3>
+                <p class="update-date">July 11, 2026</p>
+                <ul class="update-list">
+                  <li>Inbox messaging: find players by username, chat threads, unread badge</li>
+                  <li>Chat rules block emails, passwords/scams, addresses, and age talk</li>
+                  <li>Report players from Inbox or after online matches</li>
+                  <li>Forgot password recovery for locked-out accounts</li>
+                  <li>More profile avatars: unique emojis plus real photo unlocks (cars, cities, nature)</li>
+                </ul>
+              </article>
               <article class="update-entry">
                 <h3 class="update-heading">Patch — Profile &amp; Accounts</h3>
                 <p class="update-date">July 10, 2026</p>
@@ -719,27 +756,40 @@
                   <div class="profile-view-rank" id="adminPlayerStats">0 pts · 0 XP</div>
                 </div>
               </div>
-              <p class="admin-section-label">Adjust</p>
-              <div class="admin-row">
-                <input id="adminPlayerAmount" class="room-input admin-input" type="number" min="1" value="10" placeholder="Amount" />
+              <div id="adminPlayerControls">
+                <p class="admin-section-label">Adjust</p>
+                <div class="admin-row">
+                  <input id="adminPlayerAmount" class="room-input admin-input" type="number" min="1" value="10" placeholder="Amount" />
+                </div>
+                <div class="admin-actions">
+                  <button type="button" class="play-again secondary" id="btnAdminGivePts">Give points</button>
+                  <button type="button" class="play-again secondary" id="btnAdminRemovePts">Remove points</button>
+                  <button type="button" class="play-again secondary" id="btnAdminGiveXp">Give XP</button>
+                  <button type="button" class="play-again secondary" id="btnAdminRemoveXp">Remove XP</button>
+                </div>
+                <p class="admin-section-label">Moderation</p>
+                <label class="admin-section-label" for="adminBanDuration" id="adminBanDurationLabel">Ban length</label>
+                <select id="adminBanDuration" class="room-input contact-select">
+                  <option value="2h">2 hours</option>
+                  <option value="7h">7 hours</option>
+                  <option value="24h">24 hours</option>
+                  <option value="2d">2 days</option>
+                  <option value="7d">7 days</option>
+                  <option value="30d">30 days</option>
+                  <option value="permanent">Permanent ban</option>
+                </select>
+                <div class="admin-actions">
+                  <button type="button" class="play-again secondary" id="btnAdminKickPlayer">Kick online</button>
+                  <button type="button" class="play-again secondary" id="btnAdminBanPlayer">Ban</button>
+                  <button type="button" class="play-again secondary hidden" id="btnAdminUnbanPlayer">Unban</button>
+                </div>
+                <p class="admin-section-label owner-only-section" id="adminRoleSection">Admin role</p>
+                <div class="admin-actions owner-only-section" id="adminRoleActions">
+                  <button type="button" class="play-again secondary" id="btnAdminGrantAdmin">Give admin</button>
+                  <button type="button" class="play-again secondary hidden" id="btnAdminRevokeAdmin">Remove admin</button>
+                </div>
               </div>
-              <div class="admin-actions">
-                <button type="button" class="play-again secondary" id="btnAdminGivePts">Give points</button>
-                <button type="button" class="play-again secondary" id="btnAdminRemovePts">Remove points</button>
-                <button type="button" class="play-again secondary" id="btnAdminGiveXp">Give XP</button>
-                <button type="button" class="play-again secondary" id="btnAdminRemoveXp">Remove XP</button>
-              </div>
-              <p class="admin-section-label">Moderation</p>
-              <div class="admin-actions">
-                <button type="button" class="play-again secondary" id="btnAdminKickPlayer">Kick online</button>
-                <button type="button" class="play-again secondary" id="btnAdminBanPlayer">Ban</button>
-                <button type="button" class="play-again secondary hidden" id="btnAdminUnbanPlayer">Unban</button>
-              </div>
-              <p class="admin-section-label owner-only-section" id="adminRoleSection">Admin role</p>
-              <div class="admin-actions owner-only-section" id="adminRoleActions">
-                <button type="button" class="play-again secondary" id="btnAdminGrantAdmin">Give admin</button>
-                <button type="button" class="play-again secondary hidden" id="btnAdminRevokeAdmin">Remove admin</button>
-              </div>
+              <p class="shop-msg admin-daddy-msg hidden" id="adminDaddyMsg">No messing around with daddy</p>
               <p class="shop-msg" id="adminPlayerMsg"></p>
             </div>
             <div class="menu-panel-footer">
@@ -773,6 +823,34 @@
             </div>
             <div class="admin-body menu-panel-body">
               <p class="lobby-text" id="adminReportBody"></p>
+              <p class="lobby-text" id="adminReportResolution"></p>
+              <p class="admin-section-label">Outcome (for player)</p>
+              <select id="adminReportOutcome" class="room-input contact-select">
+                <option value="Bug fixed">Bug fixed</option>
+                <option value="Player was banned">Player was banned</option>
+                <option value="No action taken">No action taken</option>
+                <option value="Working as intended">Working as intended</option>
+                <option value="Feedback noted">Feedback noted</option>
+                <option value="More info needed — please submit again if it continues">More info needed</option>
+                <option value="Password reset approved">Password reset approved</option>
+                <option value="Password reset denied">Password reset denied</option>
+              </select>
+              <div id="adminPasswordResetBox" class="admin-password-reset hidden">
+                <p class="admin-section-label">Password reset</p>
+                <p class="lobby-text">Approve and the player gets a popup to set a new password. Deny closes the request.</p>
+                <div class="admin-actions">
+                  <button type="button" class="play-again" id="btnApprovePasswordReset">Approve</button>
+                  <button type="button" class="play-again secondary" id="btnDenyPasswordReset">Deny</button>
+                </div>
+                <p class="shop-msg admin-reset-code" id="adminResetCodeMsg"></p>
+              </div>
+              <div id="adminChatHistoryBox" class="admin-chat-history hidden">
+                <p class="admin-section-label">Chat history</p>
+                <p class="lobby-text">Open the conversation between the reporter and the reported player.</p>
+                <button type="button" class="play-again secondary" id="btnAdminCheckChat">Check chat history</button>
+                <div class="admin-chat-log hidden" id="adminChatLog" role="log"></div>
+                <p class="shop-msg" id="adminChatHistoryMsg"></p>
+              </div>
               <p class="admin-section-label">Status</p>
               <div class="admin-actions">
                 <button type="button" class="play-again secondary" id="btnReportOpen">Mark open</button>
@@ -783,6 +861,119 @@
             </div>
             <div class="menu-panel-footer">
               <button type="button" class="link-btn" id="btnAdminReportDetailBack">Back</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="overlay hidden" id="forgotPasswordOverlay" aria-hidden="true">
+          <div class="overlay-card menu-card menu-panel forgot-password-card">
+            <div class="menu-panel-header">
+              <div class="overlay-title">FORGOT PASSWORD</div>
+              <p class="lobby-text">Send a request. When an admin approves it, a window will open so you can set a new password.</p>
+            </div>
+            <div class="menu-panel-body">
+              <input id="forgotUsername" class="room-input" maxlength="16" placeholder="Your username" autocomplete="username" />
+              <button type="button" class="play-again" id="btnForgotRequest">Send request</button>
+              <p class="shop-msg" id="forgotPasswordMsg"></p>
+            </div>
+            <div class="menu-panel-footer">
+              <button type="button" class="link-btn" id="btnForgotPasswordBack">Back</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="overlay hidden" id="resetPasswordOverlay" aria-hidden="true">
+          <div class="overlay-card menu-card menu-panel forgot-password-card">
+            <div class="menu-panel-header">
+              <div class="overlay-title">SET NEW PASSWORD</div>
+              <p class="lobby-text" id="resetPasswordLead">Your reset was approved. Choose a new password.</p>
+            </div>
+            <div class="menu-panel-body">
+              <input id="resetNewPassword" class="room-input" type="password" maxlength="64" placeholder="New password" autocomplete="new-password" />
+              <input id="resetConfirmPassword" class="room-input" type="password" maxlength="64" placeholder="Confirm new password" autocomplete="new-password" />
+              <button type="button" class="play-again" id="btnForgotSubmitNew">Save password</button>
+              <p class="shop-msg" id="resetPasswordMsg"></p>
+            </div>
+            <div class="menu-panel-footer">
+              <button type="button" class="link-btn" id="btnResetPasswordLater">Later</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="overlay hidden" id="inboxOverlay" aria-hidden="true">
+          <div class="overlay-card menu-card menu-panel inbox-card">
+            <div class="menu-panel-header inbox-header">
+              <div class="overlay-title">INBOX</div>
+              <p class="lobby-text">Private messages · kept safe by chat rules</p>
+            </div>
+            <div class="menu-panel-body inbox-body">
+              <div id="inboxGuest" class="contact-guest">
+                <p class="lobby-text">Sign in from Profile to use Inbox.</p>
+                <button type="button" class="play-again" id="btnInboxGoProfile">Open Profile</button>
+              </div>
+              <div id="inboxSignedIn" class="inbox-signed hidden">
+                <div class="inbox-rules" id="inboxRules">
+                  <button type="button" class="inbox-rules-toggle" id="btnInboxRulesToggle" aria-expanded="false">
+                    Chat rules
+                  </button>
+                  <ul class="inbox-rules-list hidden" id="inboxRulesList">
+                    <li>No emails, phone numbers, or home addresses</li>
+                    <li>No passwords, logins, links, or scam requests</li>
+                    <li>No sharing or asking about age</li>
+                    <li>Be respectful — report abuse anytime</li>
+                  </ul>
+                </div>
+
+                <div id="inboxListView" class="inbox-list-view">
+                  <div class="inbox-toolbar">
+                    <button type="button" class="inbox-fab" id="btnInboxNew">New chat</button>
+                    <button type="button" class="inbox-icon-btn" id="btnInboxRefresh" title="Refresh" aria-label="Refresh">↻</button>
+                  </div>
+                  <div class="inbox-thread-list" id="inboxThreadList" role="list"></div>
+                  <p class="shop-msg inbox-empty-msg" id="inboxListMsg">Loading…</p>
+                </div>
+
+                <div id="inboxComposeView" class="inbox-compose-view hidden">
+                  <div class="inbox-chat-top">
+                    <button type="button" class="inbox-icon-btn" id="btnInboxComposeBack" aria-label="Back">←</button>
+                    <div class="inbox-chat-top-meta">
+                      <div class="inbox-chat-name">New message</div>
+                      <div class="inbox-chat-sub">Search a username first</div>
+                    </div>
+                  </div>
+                  <div class="inbox-compose-form">
+                    <div class="inbox-lookup-row">
+                      <input id="inboxLookupUser" class="room-input inbox-input" maxlength="16" placeholder="Username" autocomplete="off" />
+                      <button type="button" class="inbox-chip-btn" id="btnInboxLookup">Check</button>
+                    </div>
+                    <p class="shop-msg" id="inboxLookupMsg"></p>
+                    <textarea id="inboxComposeBody" class="room-input inbox-input inbox-composer-input" maxlength="500" rows="3" placeholder="Type a message…"></textarea>
+                    <button type="button" class="inbox-send-btn" id="btnInboxSendNew">Send</button>
+                    <p class="shop-msg" id="inboxComposeMsg"></p>
+                  </div>
+                </div>
+
+                <div id="inboxThreadView" class="inbox-thread-view hidden">
+                  <div class="inbox-chat-top">
+                    <button type="button" class="inbox-icon-btn" id="btnInboxThreadBack" aria-label="Back">←</button>
+                    <div class="inbox-chat-avatar" id="inboxThreadAvatar" aria-hidden="true">?</div>
+                    <div class="inbox-chat-top-meta">
+                      <div class="inbox-chat-name" id="inboxThreadTitle">Chat</div>
+                      <div class="inbox-chat-sub">Direct message</div>
+                    </div>
+                    <button type="button" class="inbox-report-btn" id="btnInboxReport">Report</button>
+                  </div>
+                  <div class="inbox-messages" id="inboxMessages" role="log"></div>
+                  <div class="inbox-composer">
+                    <textarea id="inboxReplyBody" class="room-input inbox-input inbox-composer-input" maxlength="500" rows="1" placeholder="Message…"></textarea>
+                    <button type="button" class="inbox-send-btn" id="btnInboxReply" aria-label="Send">Send</button>
+                  </div>
+                  <p class="shop-msg" id="inboxThreadMsg"></p>
+                </div>
+              </div>
+            </div>
+            <div class="menu-panel-footer">
+              <button type="button" class="link-btn" id="btnInboxBack">Back</button>
             </div>
           </div>
         </div>
@@ -818,6 +1009,21 @@
             </div>
             <div class="menu-panel-footer">
               <button type="button" class="link-btn" id="btnContactBack">Back</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="overlay hidden" id="ticketNoticeOverlay" aria-hidden="true">
+          <div class="overlay-card menu-card menu-panel ticket-notice-card">
+            <div class="menu-panel-header">
+              <div class="overlay-title" id="ticketNoticeTitle">TICKET UPDATE</div>
+              <p class="lobby-text" id="ticketNoticeSubject"></p>
+            </div>
+            <div class="menu-panel-body">
+              <p class="lobby-text" id="ticketNoticeBody"></p>
+            </div>
+            <div class="menu-panel-footer">
+              <button type="button" class="play-again" id="btnTicketNoticeOk">OK</button>
             </div>
           </div>
         </div>
@@ -958,7 +1164,35 @@
             <p class="lobby-text game-over-rematch-msg hidden" id="gameOverRematchMsg" aria-live="polite"></p>
             <button type="button" class="play-again hidden" id="btnNextLevel">Next level</button>
             <button type="button" class="play-again" id="playAgain">Play again</button>
+            <button type="button" class="play-again secondary hidden" id="btnReportPlayer">Report player</button>
             <button type="button" class="play-again secondary" id="backToMenu">Main menu</button>
+          </div>
+        </div>
+
+        <div class="overlay hidden" id="reportPlayerOverlay" aria-hidden="true">
+          <div class="overlay-card menu-card menu-panel">
+            <div class="menu-panel-header">
+              <div class="overlay-title">REPORT PLAYER</div>
+              <p class="lobby-text" id="reportPlayerLead">Report this opponent after your match.</p>
+            </div>
+            <div class="menu-panel-body">
+              <p class="admin-section-label">Opponent</p>
+              <input id="reportPlayerName" class="room-input" maxlength="24" readonly />
+              <p class="admin-section-label">Reason</p>
+              <select id="reportPlayerReason" class="room-input contact-select">
+                <option value="abusive_name">Abusive name</option>
+                <option value="cheating">Cheating</option>
+                <option value="harassment">Harassment</option>
+                <option value="other">Other</option>
+              </select>
+              <p class="admin-section-label">Details (optional)</p>
+              <textarea id="reportPlayerDetails" class="room-input contact-textarea" maxlength="2000" rows="4" placeholder="What happened?"></textarea>
+              <button type="button" class="play-again" id="btnReportPlayerSubmit">Submit report</button>
+              <p class="shop-msg" id="reportPlayerMsg"></p>
+            </div>
+            <div class="menu-panel-footer">
+              <button type="button" class="link-btn" id="btnReportPlayerBack">Back</button>
+            </div>
           </div>
         </div>
 
@@ -1004,6 +1238,6 @@
       window.PONG_ADMIN = null;
     </script>
     <script src="admin.local.js"></script>
-    <script src="game.js?v=20260710bc" defer></script>
+    <script src="game.js?v=20260711e" defer></script>
   </body>
 </html>

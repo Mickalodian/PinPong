@@ -2,22 +2,43 @@
   "9732f19b-faee-49a9-9a6c-929874a817c8": {
     "name": "Tester",
     "points": 2,
+    "xp": 0,
     "maxBotCleared": 100,
+    "maxChaosCleared": 0,
+    "maxSurvivalCleared": 0,
+    "maxBossCleared": 0,
     "owned": {
       "paddle": [
         "white",
-        "rosegold"
+        "rosegold",
+        "voidstorm",
+        "hearthflame",
+        "skywyrm",
+        "obsidian"
       ],
       "table": [
         "classic",
-        "rosegold"
+        "rosegold",
+        "voidstorm",
+        "hearthflame",
+        "skywyrm",
+        "obsidian"
       ]
     },
     "equipped": {
       "paddle": "rosegold",
       "table": "rosegold"
     },
-    "updatedAt": 1783637139796
+    "redeemedCodes": [],
+    "bossPowers": [],
+    "avatar": "default",
+    "ownedAvatars": [
+      "default",
+      "crown"
+    ],
+    "customAvatarUrl": "",
+    "title": "",
+    "updatedAt": 1783719498256
   },
   "testban-player-id-001": {
     "name": "",
@@ -48,5 +69,113 @@
     "customAvatarUrl": "",
     "title": "",
     "updatedAt": 1783715652876
+  },
+  "dccb8911-4688-419e-869e-cc2c2c00217d": {
+    "name": "Tester",
+    "points": 1000000,
+    "xp": 18000000,
+    "maxBotCleared": 0,
+    "maxChaosCleared": 0,
+    "maxSurvivalCleared": 0,
+    "maxBossCleared": 0,
+    "owned": {
+      "paddle": [
+        "white"
+      ],
+      "table": [
+        "classic"
+      ]
+    },
+    "equipped": {
+      "paddle": "white",
+      "table": "classic"
+    },
+    "redeemedCodes": [],
+    "bossPowers": [],
+    "avatar": "train",
+    "ownedAvatars": [
+      "default",
+      "smile",
+      "cool",
+      "bolt",
+      "robot",
+      "fox",
+      "rocket",
+      "pizza",
+      "dragon",
+      "ghost",
+      "sports_car",
+      "alien",
+      "panda",
+      "unicorn",
+      "classic_car",
+      "ninja",
+      "wizard",
+      "octopus",
+      "motorcycle",
+      "eagle",
+      "eiffel",
+      "gem",
+      "cactus",
+      "tokyo",
+      "galaxy",
+      "koala",
+      "beach",
+      "trophy",
+      "owl",
+      "mountains",
+      "medal",
+      "nyc",
+      "star",
+      "wolf",
+      "comet",
+      "train",
+      "moon",
+      "balloon",
+      "sun",
+      "rainbow",
+      "yacht",
+      "volcano",
+      "ocean",
+      "desert",
+      "forest",
+      "castle",
+      "aurora"
+    ],
+    "customAvatarUrl": "",
+    "title": "",
+    "adminSyncedAt": 1783721928608,
+    "updatedAt": 1783724875068
+  },
+  "abcdef12-3456-7890-abcd-ef1234567890": {
+    "name": "Tester",
+    "points": 0,
+    "xp": 0,
+    "maxBotCleared": 0,
+    "maxChaosCleared": 0,
+    "maxSurvivalCleared": 0,
+    "maxBossCleared": 0,
+    "owned": {
+      "paddle": [
+        "white"
+      ],
+      "table": [
+        "classic"
+      ]
+    },
+    "equipped": {
+      "paddle": "white",
+      "table": "classic"
+    },
+    "redeemedCodes": [],
+    "bossPowers": [],
+    "avatar": "default",
+    "ownedAvatars": [
+      "default"
+    ],
+    "customAvatarUrl": "",
+    "title": "",
+    "adminSyncedAt": 1783721928608,
+    "updatedAt": 1783723279851
   }
 }

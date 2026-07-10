@@ -38,8 +38,25 @@ const connectedClients = new Set();
 const PROFILES_PATH = path.join(__dirname, "profiles.json");
 const LEADERBOARD_PATH = path.join(__dirname, "leaderboard.json");
 const TICKETS_PATH = path.join(__dirname, "tickets.json");
+const TICKET_NOTICES_PATH = path.join(__dirname, "ticket-notices.json");
+const MESSAGES_PATH = path.join(__dirname, "messages.json");
+const CLOSED_TICKET_TTL_MS = 24 * 60 * 60 * 1000;
+const MAX_MESSAGES_LOG = 5000;
+const MAX_THREAD_MESSAGES = 200;
+const MAX_MESSAGE_BODY = 500;
 const ADMIN_CODE = process.env.ADMIN_CODE || "4536";
 const adminSessions = new Map();
+
+const TICKET_RESOLUTIONS = [
+  "Bug fixed",
+  "Player was banned",
+  "No action taken",
+  "Working as intended",
+  "Feedback noted",
+  "More info needed — please submit again if it continues",
+  "Password reset approved",
+  "Password reset denied",
+];
 
 function requireOwner(token) {
   const session = authDb.getSession(token);
@@ -74,14 +91,106 @@ function saveTickets(list) {
   fs.writeFileSync(TICKETS_PATH, JSON.stringify(Array.isArray(list) ? list : [], null, 2));
 }
 
-function createTicket({ username, playerId, category, subject, message, reportedPlayer }) {
-  const cats = new Set(["bug", "report", "other", "feedback"]);
+function loadTicketNotices() {
+  try {
+    if (fs.existsSync(TICKET_NOTICES_PATH)) {
+      const data = JSON.parse(fs.readFileSync(TICKET_NOTICES_PATH, "utf8"));
+      return Array.isArray(data) ? data : [];
+    }
+  } catch {
+    /* ignore */
+  }
+  return [];
+}
+
+function saveTicketNotices(list) {
+  fs.writeFileSync(TICKET_NOTICES_PATH, JSON.stringify(Array.isArray(list) ? list : [], null, 2));
+}
+
+/** Remove closed tickets older than 24 hours. */
+function purgeExpiredClosedTickets() {
+  const now = Date.now();
+  const tickets = loadTickets();
+  const kept = tickets.filter((t) => {
+    if (!t || t.status !== "closed") return true;
+    const closedAt = Number(t.closedAt || t.updatedAt || t.createdAt || 0);
+    return now - closedAt < CLOSED_TICKET_TTL_MS;
+  });
+  if (kept.length !== tickets.length) saveTickets(kept);
+  return kept;
+}
+
+function addTicketNotice({ playerId, ticketId, subject, status, resolution }) {
+  const pid = String(playerId || "").trim();
+  if (!pid) return null;
+  const notices = loadTicketNotices().filter((n) => n && !n.read);
+  const notice = {
+    id: `n_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`,
+    playerId: pid,
+    ticketId: String(ticketId || ""),
+    subject: String(subject || "Ticket").slice(0, 80),
+    status: String(status || "closed"),
+    resolution: String(resolution || "No action taken").slice(0, 200),
+    createdAt: Date.now(),
+    read: false,
+  };
+  notices.unshift(notice);
+  if (notices.length > 300) notices.length = 300;
+  saveTicketNotices(notices);
+  return notice;
+}
+
+function getUnreadTicketNotices(playerId) {
+  const pid = String(playerId || "").trim();
+  if (!pid) return [];
+  return loadTicketNotices().filter((n) => n && !n.read && String(n.playerId) === pid);
+}
+
+function ackTicketNotice(playerId, noticeId) {
+  const pid = String(playerId || "").trim();
+  const id = String(noticeId || "");
+  const notices = loadTicketNotices();
+  let found = false;
+  for (const n of notices) {
+    if (n && n.id === id && String(n.playerId) === pid) {
+      n.read = true;
+      n.readAt = Date.now();
+      found = true;
+      break;
+    }
+  }
+  if (found) saveTicketNotices(notices.filter((n) => n && (!n.read || Date.now() - (n.readAt || 0) < 7 * 24 * 60 * 60 * 1000)));
+  return found;
+}
+
+function createTicket({
+  username,
+  playerId,
+  category,
+  subject,
+  message,
+  reportedPlayer,
+  reason,
+  source,
+  reporterKey,
+  reportedKey,
+  threadId,
+}) {
+  const cats = new Set(["bug", "report", "other", "feedback", "password"]);
   const cat = cats.has(String(category || "").toLowerCase()) ? String(category).toLowerCase() : "other";
   const sub = String(subject || "").trim().slice(0, 80);
   const msg = String(message || "").trim().slice(0, 2000);
+  const why = String(reason || "").trim().slice(0, 40);
+  const minMsg = cat === "password" ? 3 : cat === "report" && why ? 3 : 10;
   if (sub.length < 3) return { ok: false, error: "Subject must be at least 3 characters" };
-  if (msg.length < 10) return { ok: false, error: "Message must be at least 10 characters" };
-  const tickets = loadTickets();
+  if (msg.length < minMsg) return { ok: false, error: "Message is too short" };
+  const tickets = purgeExpiredClosedTickets();
+  const reporter = authDb.sanitizeUsername(reporterKey || username);
+  const reported = authDb.sanitizeUsername(reportedKey || reportedPlayer);
+  let chatThreadId = String(threadId || "").trim().slice(0, 80);
+  if (!chatThreadId && String(source || "").toLowerCase() === "chat" && reporter && reported) {
+    chatThreadId = threadIdForUsers(reporter, reported);
+  }
   const ticket = {
     id: `t_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`,
     createdAt: Date.now(),
@@ -92,13 +201,322 @@ function createTicket({ username, playerId, category, subject, message, reported
     subject: sub,
     message: msg,
     reportedPlayer: String(reportedPlayer || "").trim().slice(0, 24),
+    reason: why,
+    source: String(source || "").trim().slice(0, 24),
+    reporterKey: reporter || "",
+    reportedKey: reported || "",
+    threadId: chatThreadId,
     status: "open",
+    resolution: "",
+    resetCode: "",
   };
   tickets.unshift(ticket);
-  // Keep a reasonable history
   if (tickets.length > 500) tickets.length = 500;
   saveTickets(tickets);
   return { ok: true, ticket };
+}
+
+function updateTicketStatus({ ticketId, status, resolution }) {
+  const id = String(ticketId || "");
+  const nextStatus = String(status || "").toLowerCase();
+  if (!["open", "resolved", "closed"].includes(nextStatus)) {
+    return { ok: false, error: "Status must be open, resolved, or closed" };
+  }
+  const tickets = purgeExpiredClosedTickets();
+  const idx = tickets.findIndex((t) => t && t.id === id);
+  if (idx < 0) return { ok: false, error: "Ticket not found" };
+  const prev = tickets[idx];
+  let note = String(resolution || prev.resolution || "").trim().slice(0, 200);
+  if ((nextStatus === "resolved" || nextStatus === "closed") && !note) {
+    note = "No action taken";
+  }
+  if (nextStatus === "open") note = "";
+  const ticket = {
+    ...prev,
+    status: nextStatus,
+    resolution: note,
+    updatedAt: Date.now(),
+  };
+  if (nextStatus === "closed") ticket.closedAt = Date.now();
+  if (nextStatus === "resolved") ticket.resolvedAt = Date.now();
+  if (nextStatus === "open") {
+    delete ticket.closedAt;
+    delete ticket.resolvedAt;
+  }
+  tickets[idx] = ticket;
+  saveTickets(tickets);
+
+  if (
+    (nextStatus === "resolved" || nextStatus === "closed") &&
+    prev.status !== nextStatus
+  ) {
+    addTicketNotice({
+      playerId: ticket.playerId,
+      ticketId: ticket.id,
+      subject: ticket.subject,
+      status: nextStatus,
+      resolution: note,
+    });
+  }
+  return { ok: true, ticket };
+}
+
+function loadMessagesStore() {
+  try {
+    if (fs.existsSync(MESSAGES_PATH)) {
+      const data = JSON.parse(fs.readFileSync(MESSAGES_PATH, "utf8"));
+      if (Array.isArray(data)) return { messages: data };
+      if (data && Array.isArray(data.messages)) return { messages: data.messages };
+    }
+  } catch {
+    /* ignore */
+  }
+  return { messages: [] };
+}
+
+function saveMessagesStore(store) {
+  const messages = Array.isArray(store?.messages) ? store.messages : [];
+  if (messages.length > MAX_MESSAGES_LOG) messages.length = MAX_MESSAGES_LOG;
+  fs.writeFileSync(MESSAGES_PATH, JSON.stringify({ messages }, null, 2));
+}
+
+function threadIdForUsers(a, b) {
+  const left = authDb.sanitizeUsername(a);
+  const right = authDb.sanitizeUsername(b);
+  return [left, right].sort().join("|");
+}
+
+function displayNameForKey(key) {
+  const acc = authDb.getAccount(key);
+  return (acc && (acc.displayName || acc.username)) || key;
+}
+
+function listInboxThreads(session) {
+  const me = authDb.sanitizeUsername(session.username);
+  const store = loadMessagesStore();
+  const byThread = new Map();
+  for (const msg of store.messages) {
+    if (!msg || !msg.threadId) continue;
+    const from = authDb.sanitizeUsername(msg.fromKey || msg.from);
+    const to = authDb.sanitizeUsername(msg.toKey || msg.to);
+    if (from !== me && to !== me) continue;
+    const prev = byThread.get(msg.threadId);
+    if (!prev || Number(msg.createdAt || 0) > Number(prev.createdAt || 0)) {
+      byThread.set(msg.threadId, msg);
+    }
+  }
+  const threads = [];
+  for (const [threadId, last] of byThread.entries()) {
+    const from = authDb.sanitizeUsername(last.fromKey || last.from);
+    const to = authDb.sanitizeUsername(last.toKey || last.to);
+    const otherKey = from === me ? to : from;
+    let unread = 0;
+    for (const msg of store.messages) {
+      if (!msg || msg.threadId !== threadId) continue;
+      if (authDb.sanitizeUsername(msg.toKey || msg.to) !== me) continue;
+      if (!msg.readAt) unread += 1;
+    }
+    threads.push({
+      threadId,
+      withUsername: displayNameForKey(otherKey),
+      withUsernameKey: otherKey,
+      lastMessage: String(last.body || "").slice(0, 120),
+      lastAt: last.createdAt || 0,
+      unread,
+    });
+  }
+  threads.sort((a, b) => (b.lastAt || 0) - (a.lastAt || 0));
+  const unreadTotal = threads.reduce((n, t) => n + (t.unread || 0), 0);
+  return { ok: true, threads, unreadTotal };
+}
+
+function getInboxThread(session, withUsername) {
+  const me = authDb.sanitizeUsername(session.username);
+  const otherLookup = authDb.usernameExists(withUsername);
+  if (!otherLookup.exists) return { ok: false, error: "Username not found" };
+  const other = otherLookup.usernameKey;
+  if (other === me) return { ok: false, error: "Cannot open a chat with yourself" };
+  const threadId = threadIdForUsers(me, other);
+  const store = loadMessagesStore();
+  let dirty = false;
+  const messages = [];
+  for (const msg of store.messages) {
+    if (!msg || msg.threadId !== threadId) continue;
+    if (authDb.sanitizeUsername(msg.toKey || msg.to) === me && !msg.readAt) {
+      msg.readAt = Date.now();
+      dirty = true;
+    }
+    messages.push({
+      id: msg.id,
+      from: msg.from,
+      to: msg.to,
+      body: msg.body,
+      createdAt: msg.createdAt,
+      readAt: msg.readAt || 0,
+      mine: authDb.sanitizeUsername(msg.fromKey || msg.from) === me,
+    });
+  }
+  messages.sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0));
+  const trimmed = messages.length > MAX_THREAD_MESSAGES ? messages.slice(-MAX_THREAD_MESSAGES) : messages;
+  if (dirty) saveMessagesStore(store);
+  return {
+    ok: true,
+    threadId,
+    withUsername: otherLookup.username,
+    withUsernameKey: other,
+    messages: trimmed,
+  };
+}
+
+function sendInboxMessage(session, { toUsername, body }) {
+  const me = authDb.sanitizeUsername(session.username);
+  const meAcc = authDb.getAccount(me);
+  const otherLookup = authDb.usernameExists(toUsername);
+  if (!otherLookup.exists) return { ok: false, error: "Username not found" };
+  if (otherLookup.banned) return { ok: false, error: "Cannot message a banned account" };
+  const other = otherLookup.usernameKey;
+  if (other === me) return { ok: false, error: "Cannot message yourself" };
+  const text = String(body || "").trim().slice(0, MAX_MESSAGE_BODY);
+  if (text.length < 1) return { ok: false, error: "Message cannot be empty" };
+  const safety = scanChatMessage(text);
+  if (!safety.ok) return safety;
+  const otherAcc = authDb.getAccount(other);
+  const threadId = threadIdForUsers(me, other);
+  const store = loadMessagesStore();
+  const message = {
+    id: `m_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`,
+    threadId,
+    from: meAcc?.displayName || me,
+    to: otherLookup.username,
+    fromKey: me,
+    toKey: other,
+    fromPlayerId: session.playerId,
+    toPlayerId: otherAcc?.playerId || "",
+    body: text,
+    createdAt: Date.now(),
+    readAt: 0,
+  };
+  store.messages.unshift(message);
+  // Keep per-thread cap in the flat log
+  const threadMsgs = store.messages.filter((m) => m && m.threadId === threadId);
+  if (threadMsgs.length > MAX_THREAD_MESSAGES) {
+    const keep = new Set(threadMsgs.slice(0, MAX_THREAD_MESSAGES).map((m) => m.id));
+    store.messages = store.messages.filter((m) => !m || m.threadId !== threadId || keep.has(m.id));
+  }
+  saveMessagesStore(store);
+  return {
+    ok: true,
+    threadId,
+    message: {
+      id: message.id,
+      from: message.from,
+      to: message.to,
+      body: message.body,
+      createdAt: message.createdAt,
+      readAt: 0,
+      mine: true,
+    },
+    withUsername: otherLookup.username,
+    withUsernameKey: other,
+  };
+}
+
+/** Block emails, passwords/scams, addresses, and age sharing in DMs. */
+function scanChatMessage(raw) {
+  const text = String(raw || "");
+
+  if (/[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}/i.test(text)) {
+    return { ok: false, error: "Emails are not allowed in chat.", code: "email" };
+  }
+
+  const scamPatterns = [
+    /\bpassword\b/i,
+    /\bpasswd\b/i,
+    /\bpasscode\b/i,
+    /\blog[\s-]?in\s+(with|using|details|info)\b/i,
+    /\baccount\s+(password|details|info|login)\b/i,
+    /\bsend\s+(me\s+)?(your\s+)?(password|pass|login|credentials)\b/i,
+    /\bgive\s+(me\s+)?(your\s+)?(password|pass|login|credentials)\b/i,
+    /\bwhat('?s| is)\s+your\s+(password|pass|login)\b/i,
+    /\bverify\s+(your\s+)?(account|password|login)\b/i,
+    /\bfree\s+(points|xp|admin|skin)s?\b.*\b(click|link|http|www)\b/i,
+    /\b(click|open)\s+(this|the)\s+link\b/i,
+    /\bhttps?:\/\//i,
+    /\bwww\.[a-z0-9.-]+\.[a-z]{2,}/i,
+    /\bnitro\s+gift\b/i,
+    /\bsteam\s+(gift|login|trade)\b/i,
+  ];
+  for (const re of scamPatterns) {
+    if (re.test(text)) {
+      return {
+        ok: false,
+        error: "That message looks like a scam or password request. It was blocked.",
+        code: "scam",
+      };
+    }
+  }
+
+  const addressPatterns = [
+    /\b\d{1,5}\s+[a-z][a-z0-9.'-]*(?:\s+[a-z][a-z0-9.']*){0,4}\s+(street|st\.?|road|rd\.?|avenue|ave\.?|boulevard|blvd\.?|lane|ln\.?|drive|dr\.?|court|ct\.?|way|place|pl\.?)\b/i,
+    /\b(my|our|home|house)\s+address\b/i,
+    /\b(live|living)\s+at\b/i,
+    /\b(zip|post)\s*code\b/i,
+    /\bsend\s+(me\s+)?(your\s+)?address\b/i,
+  ];
+  for (const re of addressPatterns) {
+    if (re.test(text)) {
+      return { ok: false, error: "Addresses are not allowed in chat.", code: "address" };
+    }
+  }
+
+  const agePatterns = [
+    /\b(?:i\s*(?:'|a)?m|i\s+am)\s*(?:only\s*)?\d{1,2}\s*(?:years?\s*old|yo|yrs?)\b/i,
+    /\bmy\s+age\s*(?:is|=|:)?\s*\d{1,2}\b/i,
+    /\bhow\s+old\s+(?:are\s+you|r\s+u)\b/i,
+    /\bage\s*[:=]\s*\d{1,2}\b/i,
+    /\b\d{1,2}\s*(?:years?|yrs?)\s*old\b/i,
+    /\b(?:tell|share|ask)\s+(?:me\s+)?(?:your\s+)?age\b/i,
+  ];
+  for (const re of agePatterns) {
+    if (re.test(text)) {
+      return { ok: false, error: "Sharing or asking about age is not allowed in chat.", code: "age" };
+    }
+  }
+
+  return { ok: true };
+}
+
+function getAdminChatHistory({ userA, userB, threadId }) {
+  let tid = String(threadId || "").trim();
+  const a = authDb.sanitizeUsername(userA);
+  const b = authDb.sanitizeUsername(userB);
+  if (!tid) {
+    if (!a || !b) return { ok: false, error: "Need both players to load chat history" };
+    tid = threadIdForUsers(a, b);
+  }
+  const store = loadMessagesStore();
+  const messages = [];
+  for (const msg of store.messages) {
+    if (!msg || msg.threadId !== tid) continue;
+    messages.push({
+      id: msg.id,
+      from: msg.from,
+      to: msg.to,
+      fromKey: msg.fromKey || authDb.sanitizeUsername(msg.from),
+      toKey: msg.toKey || authDb.sanitizeUsername(msg.to),
+      body: msg.body,
+      createdAt: msg.createdAt,
+    });
+  }
+  messages.sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0));
+  const trimmed = messages.length > MAX_THREAD_MESSAGES ? messages.slice(-MAX_THREAD_MESSAGES) : messages;
+  return {
+    ok: true,
+    threadId: tid,
+    withA: a ? displayNameForKey(a) : "",
+    withB: b ? displayNameForKey(b) : "",
+    messages: trimmed,
+  };
 }
 
 function kickPlayerConnections(playerId, reason = "Kicked by admin") {
@@ -131,15 +549,49 @@ function adminAdjustProfile(playerId, action, amount = 0) {
   const prev = db[pid] || defaultProfile();
   const next = { ...prev, owned: { ...(prev.owned || {}) }, equipped: { ...(prev.equipped || {}) } };
   const n = Math.max(0, Math.floor(Number(amount) || 0));
-  if (action === "givePoints") next.points = Math.max(0, Math.floor(prev.points || 0) + Math.max(1, n || 1));
-  else if (action === "removePoints") next.points = Math.max(0, Math.floor(prev.points || 0) - Math.max(1, n || 1));
-  else if (action === "giveXp") next.xp = Math.max(0, Math.floor(prev.xp || 0) + Math.max(1, n || 1));
-  else if (action === "removeXp") next.xp = Math.max(0, Math.floor(prev.xp || 0) - Math.max(1, n || 1));
+  const delta = Math.max(1, n || 1);
+  if (action === "givePoints") next.points = Math.max(0, Math.floor(prev.points || 0) + delta);
+  else if (action === "removePoints") next.points = Math.max(0, Math.floor(prev.points || 0) - delta);
+  else if (action === "giveXp") next.xp = Math.max(0, Math.floor(prev.xp || 0) + delta);
+  else if (action === "removeXp") next.xp = Math.max(0, Math.floor(prev.xp || 0) - delta);
   else return { ok: false, error: "Unknown action" };
+  next.adminSyncedAt = Date.now();
   next.updatedAt = Date.now();
   db[pid] = next;
   saveProfiles(db);
+  notifyPlayerProfileForce(pid, next);
   return { ok: true, profile: next };
+}
+
+function getXpLevelFromTotal(xpTotal) {
+  let xp = Math.max(0, Math.floor(Number(xpTotal) || 0));
+  let level = 1;
+  let need = 100;
+  while (xp >= need && level < 99) {
+    xp -= need;
+    level += 1;
+    need = Math.floor(100 * Math.pow(1.14, level - 1));
+  }
+  return level;
+}
+
+function notifyPlayerProfileForce(playerId, profile) {
+  const pid = String(playerId || "").trim();
+  if (!pid) return;
+  const payload = JSON.stringify({
+    type: "profileForce",
+    profile,
+    adminSyncedAt: profile?.adminSyncedAt || Date.now(),
+  });
+  for (const ws of [...connectedClients]) {
+    if (!ws || ws.readyState !== 1) continue;
+    if (String(ws.playerId || "") !== pid) continue;
+    try {
+      ws.send(payload);
+    } catch {
+      /* ignore */
+    }
+  }
 }
 
 function buildAdminPlayerRow(acc) {
@@ -149,18 +601,32 @@ function buildAdminPlayerRow(acc) {
   );
   const isOwner = !!acc.isOwner;
   const isAdmin = !!(acc.isAdmin || isOwner);
+  const banned = !!acc.banned;
+  const bannedUntil = banned ? Number(acc.bannedUntil || 0) : 0;
+  const banDuration = banned ? acc.banDuration || (bannedUntil ? "" : "permanent") : "";
+  let banLabel = "";
+  if (banned) {
+    banLabel = bannedUntil
+      ? `Banned until ${new Date(bannedUntil).toLocaleString()}`
+      : "Permanently banned";
+  }
+  const xp = Math.max(0, Math.floor(Number(profile.xp) || 0));
   return {
     username: acc.username,
     usernameKey: acc.usernameKey,
     playerId: acc.playerId,
     isOwner,
     isAdmin,
-    banned: !!acc.banned,
+    banned,
+    bannedUntil,
+    banDuration,
+    banLabel,
     createdAt: acc.createdAt || 0,
     online,
     name: profile.name || acc.username,
     points: profile.points || 0,
-    xp: profile.xp || 0,
+    xp,
+    xpLevel: getXpLevelFromTotal(xp),
     avatar: profile.avatar || "default",
     customAvatarUrl: profile.customAvatarUrl || "",
     maxBotCleared: profile.maxBotCleared || 0,
@@ -493,6 +959,7 @@ function defaultProfile() {
     ownedAvatars: ["default"],
     customAvatarUrl: "",
     title: "",
+    adminSyncedAt: 0,
   };
 }
 
@@ -529,10 +996,15 @@ function mergeProfileRecord(existing, incoming, { force = false } = {}) {
   const prevPoints = Math.max(0, Math.floor(Number(prev.points) || 0));
   const incomingXp = Math.max(0, Math.floor(Number(p.xp) || 0));
   const prevXp = Math.max(0, Math.floor(Number(prev.xp) || 0));
+  const prevAdminSynced = Math.max(0, Number(prev.adminSyncedAt) || 0);
+  const incomingAdminSynced = Math.max(0, Number(p.adminSyncedAt) || 0);
+  const adminSyncedAt = Math.max(prevAdminSynced, incomingAdminSynced);
+  // Until the client acknowledges an admin sync, keep server points/xp so removals stick.
+  const holdAdminEconomy = !force && prevAdminSynced > 0 && incomingAdminSynced < prevAdminSynced;
   return {
     name: sanitizeName(p.name || prev.name || ""),
-    points: force ? incomingPoints : Math.max(prevPoints, incomingPoints),
-    xp: force ? incomingXp : Math.max(prevXp, incomingXp),
+    points: force ? incomingPoints : holdAdminEconomy ? prevPoints : Math.max(prevPoints, incomingPoints),
+    xp: force ? incomingXp : holdAdminEconomy ? prevXp : Math.max(prevXp, incomingXp),
     maxBotCleared: force ? incomingLevel : Math.max(prevLevel, incomingLevel),
     maxChaosCleared: force ? incomingChaos : Math.max(prevChaos, incomingChaos),
     maxSurvivalCleared: force ? incomingSurvival : Math.max(prevSurvival, incomingSurvival),
@@ -556,6 +1028,7 @@ function mergeProfileRecord(existing, incoming, { force = false } = {}) {
     ownedAvatars: mergeAvatarList(prev.ownedAvatars, p.ownedAvatars, force),
     customAvatarUrl: String(p.customAvatarUrl || prev.customAvatarUrl || "").slice(0, 200),
     title: String(p.title || prev.title || "").slice(0, 32),
+    adminSyncedAt,
     updatedAt: Date.now(),
   };
 }
@@ -735,6 +1208,207 @@ async function handleApi(req, res, urlPath) {
     return true;
   }
 
+  if (urlPath === "api/auth/forgot") {
+    const result = authDb.requestPasswordReset(body.username);
+    if (!result.ok) {
+      res.writeHead(400, { "Content-Type": "application/json" });
+      res.end(JSON.stringify(result));
+      return true;
+    }
+    const tickets = purgeExpiredClosedTickets();
+    const existing = tickets.find(
+      (t) =>
+        t &&
+        t.category === "password" &&
+        t.status === "open" &&
+        authDb.sanitizeUsername(t.username) === result.username
+    );
+    if (existing) {
+      res.writeHead(200, { "Content-Type": "application/json" });
+      res.end(
+        JSON.stringify({
+          ok: true,
+          message:
+            "A password reset request is already pending. Keep the game open — a password window will appear when an admin approves it.",
+        })
+      );
+      return true;
+    }
+    const ticketResult = createTicket({
+      username: result.displayName || result.username,
+      playerId: result.playerId,
+      category: "password",
+      subject: "Forgot password",
+      message: `${result.displayName || result.username} requested a password reset. Approve so they can set a new password on their screen.`,
+    });
+    res.writeHead(ticketResult.ok ? 200 : 400, { "Content-Type": "application/json" });
+    res.end(
+      JSON.stringify(
+        ticketResult.ok
+          ? {
+              ok: true,
+              message:
+                "Request sent. Keep the game open — when an admin approves, a window will pop up so you can set a new password.",
+            }
+          : ticketResult
+      )
+    );
+    return true;
+  }
+
+  if (urlPath === "api/auth/reset-password") {
+    const result = authDb.resetPasswordApproved({
+      username: body.username,
+      newPassword: body.newPassword || body.password,
+    });
+    res.writeHead(result.ok ? 200 : 400, { "Content-Type": "application/json" });
+    res.end(JSON.stringify(result));
+    return true;
+  }
+
+  if (urlPath === "api/auth/forgot-status") {
+    const result = authDb.getPasswordResetStatus(body.username);
+    // #region agent log
+    try {
+      const fs = require("fs");
+      const path = require("path");
+      fs.appendFileSync(
+        path.join(__dirname, "..", "debug-38eb5e.log"),
+        JSON.stringify({
+          sessionId: "38eb5e",
+          runId: "pre-fix",
+          hypothesisId: "D",
+          location: "server.js:forgot-status",
+          message: "forgot-status checked",
+          data: {
+            reqUser: String(body.username || "").slice(0, 24),
+            ok: !!result.ok,
+            pending: !!result.pending,
+            approved: !!result.approved,
+          },
+          timestamp: Date.now(),
+        }) + "\n"
+      );
+    } catch {
+      /* ignore */
+    }
+    // #endregion
+    res.writeHead(result.ok ? 200 : 400, { "Content-Type": "application/json" });
+    res.end(JSON.stringify(result));
+    return true;
+  }
+
+  if (urlPath === "api/admin/password-reset/approve") {
+    const session = requireAdmin(body.token);
+    if (!session) {
+      res.writeHead(403, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ ok: false, error: "Admin account required" }));
+      return true;
+    }
+    const tickets = purgeExpiredClosedTickets();
+    let ticket = null;
+    if (body.ticketId) {
+      ticket = tickets.find((t) => t && t.id === String(body.ticketId)) || null;
+    }
+    const username = ticket?.username || body.username;
+    // #region agent log
+    try {
+      const fs = require("fs");
+      const path = require("path");
+      fs.appendFileSync(
+        path.join(__dirname, "..", "debug-38eb5e.log"),
+        JSON.stringify({
+          sessionId: "38eb5e",
+          runId: "pre-fix",
+          hypothesisId: "E",
+          location: "server.js:password-reset/approve",
+          message: "admin approve called",
+          data: {
+            ticketUser: String(username || "").slice(0, 24),
+            adminUser: String(session.username || "").slice(0, 24),
+            ticketId: String(body.ticketId || "").slice(0, 40),
+          },
+          timestamp: Date.now(),
+        }) + "\n"
+      );
+    } catch {
+      /* ignore */
+    }
+    // #endregion
+    const result = authDb.approvePasswordReset(username);
+    if (!result.ok) {
+      res.writeHead(400, { "Content-Type": "application/json" });
+      res.end(JSON.stringify(result));
+      return true;
+    }
+    if (ticket) {
+      const idx = tickets.findIndex((t) => t && t.id === ticket.id);
+      if (idx >= 0) {
+        const note = "Password reset approved. Player can set a new password now.";
+        tickets[idx] = {
+          ...tickets[idx],
+          status: "resolved",
+          resolution: note,
+          resetCode: "",
+          resetExpiresAt: result.expiresAt,
+          updatedAt: Date.now(),
+          resolvedAt: Date.now(),
+        };
+        saveTickets(tickets);
+        ticket = tickets[idx];
+      }
+    }
+    res.writeHead(200, { "Content-Type": "application/json" });
+    res.end(
+      JSON.stringify({
+        ok: true,
+        expiresAt: result.expiresAt,
+        username: result.username,
+        ticket,
+        message: result.message,
+      })
+    );
+    return true;
+  }
+
+  if (urlPath === "api/admin/password-reset/deny") {
+    const session = requireAdmin(body.token);
+    if (!session) {
+      res.writeHead(403, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ ok: false, error: "Admin account required" }));
+      return true;
+    }
+    const tickets = purgeExpiredClosedTickets();
+    let ticket = null;
+    if (body.ticketId) {
+      ticket = tickets.find((t) => t && t.id === String(body.ticketId)) || null;
+    }
+    const username = ticket?.username || body.username;
+    const result = authDb.denyPasswordReset(username);
+    if (!result.ok) {
+      res.writeHead(400, { "Content-Type": "application/json" });
+      res.end(JSON.stringify(result));
+      return true;
+    }
+    if (ticket) {
+      const idx = tickets.findIndex((t) => t && t.id === ticket.id);
+      if (idx >= 0) {
+        tickets[idx] = {
+          ...tickets[idx],
+          status: "closed",
+          resolution: "Password reset denied",
+          updatedAt: Date.now(),
+          closedAt: Date.now(),
+        };
+        saveTickets(tickets);
+        ticket = tickets[idx];
+      }
+    }
+    res.writeHead(200, { "Content-Type": "application/json" });
+    res.end(JSON.stringify({ ok: true, ticket, message: result.message }));
+    return true;
+  }
+
   if (urlPath === "api/avatar/upload") {
     const session = authDb.getSession(body.token);
     const playerId = session?.playerId || String(body.playerId || "").trim();
@@ -863,14 +1537,26 @@ async function handleApi(req, res, urlPath) {
       username: acc.displayName || acc.username,
       usernameKey: acc.username,
       playerId: acc.playerId,
-      isOwner: !!acc.isOwner,
-      isAdmin: !!acc.isAdmin,
-      banned: !!acc.banned,
+      isOwner: !!acc.isOwner || authDb.accountIsOwner(acc, acc.username),
+      isAdmin: authDb.accountIsAdmin(acc, acc.username),
+      banned: authDb.isAccountCurrentlyBanned(acc),
+      bannedUntil: acc.bannedUntil || 0,
+      banDuration: acc.banDuration || "",
       createdAt: acc.createdAt || 0,
     });
     const profile = loadProfiles()[acc.playerId] || defaultProfile();
+    const actorIsOwner = !!(session.isOwner || authDb.accountIsOwner(authDb.getAccount(session.username), session.username));
+    const viewOnlyOwner = row.isOwner && !actorIsOwner;
     res.writeHead(200, { "Content-Type": "application/json" });
-    res.end(JSON.stringify({ ok: true, player: row, profile }));
+    res.end(
+      JSON.stringify({
+        ok: true,
+        player: row,
+        profile,
+        viewOnly: viewOnlyOwner,
+        viewOnlyMessage: viewOnlyOwner ? "No messing around with daddy" : "",
+      })
+    );
     return true;
   }
 
@@ -893,6 +1579,12 @@ async function handleApi(req, res, urlPath) {
     const actorIsOwner = !!(session.isOwner || authDb.accountIsOwner(authDb.getAccount(session.username), session.username));
     const targetIsOwner = authDb.accountIsOwner(acc, acc.username);
 
+    if (targetIsOwner && !actorIsOwner) {
+      res.writeHead(403, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ ok: false, error: "No messing around with daddy" }));
+      return true;
+    }
+
     if (action === "grantAdmin" || action === "revokeAdmin") {
       if (!actorIsOwner) {
         res.writeHead(403, { "Content-Type": "application/json" });
@@ -911,7 +1603,9 @@ async function handleApi(req, res, urlPath) {
         playerId: acc.playerId,
         isOwner: false,
         isAdmin: action === "grantAdmin",
-        banned: !!acc.banned,
+        banned: authDb.isAccountCurrentlyBanned(acc),
+        bannedUntil: acc.bannedUntil || 0,
+        banDuration: acc.banDuration || "",
         createdAt: acc.createdAt || 0,
       });
       res.writeHead(200, { "Content-Type": "application/json" });
@@ -919,40 +1613,51 @@ async function handleApi(req, res, urlPath) {
       return true;
     }
 
-    if (targetIsOwner && !actorIsOwner) {
-      res.writeHead(403, { "Content-Type": "application/json" });
-      res.end(JSON.stringify({ ok: false, error: "Cannot moderate the owner account" }));
-      return true;
-    }
-
     if (action === "ban" || action === "unban") {
-      const result = authDb.setAccountBanned(acc.username, action === "ban");
+      const duration = String(body.duration || body.banDuration || "permanent");
+      const result = authDb.setAccountBanned(acc.username, action === "ban", duration);
       if (!result.ok) {
         res.writeHead(400, { "Content-Type": "application/json" });
         res.end(JSON.stringify(result));
         return true;
       }
-      if (action === "ban") kickPlayerConnections(acc.playerId, "Banned by admin");
+      if (action === "ban") {
+        const label = authDb.BAN_DURATION_LABELS[duration] || "permanent";
+        kickPlayerConnections(acc.playerId, `Banned by admin (${label})`);
+      }
+      const fresh = authDb.getAccount(acc.username) || acc;
       const player = buildAdminPlayerRow({
-        username: acc.displayName || acc.username,
-        usernameKey: acc.username,
-        playerId: acc.playerId,
-        isOwner: !!acc.isOwner,
-        isAdmin: !!acc.isAdmin,
-        banned: action === "ban",
-        createdAt: acc.createdAt || 0,
+        username: fresh.displayName || fresh.username,
+        usernameKey: fresh.username,
+        playerId: fresh.playerId,
+        isOwner: !!fresh.isOwner,
+        isAdmin: !!fresh.isAdmin,
+        banned: authDb.isAccountCurrentlyBanned(fresh),
+        bannedUntil: fresh.bannedUntil || 0,
+        banDuration: fresh.banDuration || "",
+        createdAt: fresh.createdAt || 0,
       });
       res.writeHead(200, { "Content-Type": "application/json" });
-      res.end(JSON.stringify({ ok: true, player, action }));
+      res.end(JSON.stringify({ ok: true, player, action, banLabel: result.banLabel }));
       return true;
     }
     if (action === "kick") {
+      if (targetIsOwner) {
+        res.writeHead(403, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ ok: false, error: "Cannot kick the owner account" }));
+        return true;
+      }
       const kicked = kickPlayerConnections(acc.playerId, String(body.reason || "Kicked by admin").slice(0, 120));
       res.writeHead(200, { "Content-Type": "application/json" });
       res.end(JSON.stringify({ ok: true, kicked, playerId: acc.playerId, action }));
       return true;
     }
     if (["givePoints", "removePoints", "giveXp", "removeXp"].includes(action)) {
+      if (targetIsOwner && !actorIsOwner) {
+        res.writeHead(403, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ ok: false, error: "No messing around with daddy" }));
+        return true;
+      }
       const result = adminAdjustProfile(acc.playerId, action, body.amount);
       if (!result.ok) {
         res.writeHead(400, { "Content-Type": "application/json" });
@@ -965,7 +1670,9 @@ async function handleApi(req, res, urlPath) {
         playerId: acc.playerId,
         isOwner: !!acc.isOwner,
         isAdmin: !!acc.isAdmin,
-        banned: !!acc.banned,
+        banned: authDb.isAccountCurrentlyBanned(acc),
+        bannedUntil: acc.bannedUntil || 0,
+        banDuration: acc.banDuration || "",
         createdAt: acc.createdAt || 0,
       });
       res.writeHead(200, { "Content-Type": "application/json" });
@@ -974,6 +1681,70 @@ async function handleApi(req, res, urlPath) {
     }
     res.writeHead(400, { "Content-Type": "application/json" });
     res.end(JSON.stringify({ ok: false, error: "Unknown action" }));
+    return true;
+  }
+
+  if (urlPath === "api/users/lookup") {
+    const session = authDb.getSession(body.token);
+    if (!session) {
+      res.writeHead(401, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ ok: false, error: "Sign in required" }));
+      return true;
+    }
+    const result = authDb.usernameExists(body.username);
+    res.writeHead(200, { "Content-Type": "application/json" });
+    res.end(
+      JSON.stringify({
+        ok: true,
+        exists: !!result.exists,
+        username: result.exists ? result.username : "",
+        usernameKey: result.exists ? result.usernameKey : "",
+        banned: !!result.banned,
+        error: result.exists ? "" : "Username not found",
+      })
+    );
+    return true;
+  }
+
+  if (urlPath === "api/inbox/threads") {
+    const session = authDb.getSession(body.token);
+    if (!session) {
+      res.writeHead(401, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ ok: false, error: "Sign in required" }));
+      return true;
+    }
+    const result = listInboxThreads(session);
+    res.writeHead(200, { "Content-Type": "application/json" });
+    res.end(JSON.stringify(result));
+    return true;
+  }
+
+  if (urlPath === "api/inbox/thread") {
+    const session = authDb.getSession(body.token);
+    if (!session) {
+      res.writeHead(401, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ ok: false, error: "Sign in required" }));
+      return true;
+    }
+    const result = getInboxThread(session, body.withUsername || body.username);
+    res.writeHead(result.ok ? 200 : 404, { "Content-Type": "application/json" });
+    res.end(JSON.stringify(result));
+    return true;
+  }
+
+  if (urlPath === "api/inbox/send") {
+    const session = authDb.getSession(body.token);
+    if (!session) {
+      res.writeHead(401, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ ok: false, error: "Sign in required" }));
+      return true;
+    }
+    const result = sendInboxMessage(session, {
+      toUsername: body.toUsername || body.username,
+      body: body.body || body.message,
+    });
+    res.writeHead(result.ok ? 200 : 400, { "Content-Type": "application/json" });
+    res.end(JSON.stringify(result));
     return true;
   }
 
@@ -991,9 +1762,51 @@ async function handleApi(req, res, urlPath) {
       subject: body.subject,
       message: body.message,
       reportedPlayer: body.reportedPlayer,
+      reason: body.reason,
+      source: body.source,
+      reporterKey: body.reporterKey || session.username,
+      reportedKey: body.reportedKey || body.reportedPlayer,
+      threadId: body.threadId,
     });
     res.writeHead(result.ok ? 200 : 400, { "Content-Type": "application/json" });
-    res.end(JSON.stringify(result));
+    res.end(
+      JSON.stringify(
+        result.ok
+          ? {
+              ...result,
+              message:
+                "Ticket submitted. Please be patient — one of our admins will look into it.",
+            }
+          : result
+      )
+    );
+    return true;
+  }
+
+  if (urlPath === "api/tickets/notices") {
+    const session = authDb.getSession(body.token);
+    if (!session) {
+      res.writeHead(401, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ ok: false, error: "Sign in required" }));
+      return true;
+    }
+    purgeExpiredClosedTickets();
+    const notices = getUnreadTicketNotices(session.playerId);
+    res.writeHead(200, { "Content-Type": "application/json" });
+    res.end(JSON.stringify({ ok: true, notices }));
+    return true;
+  }
+
+  if (urlPath === "api/tickets/ack") {
+    const session = authDb.getSession(body.token);
+    if (!session) {
+      res.writeHead(401, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ ok: false, error: "Sign in required" }));
+      return true;
+    }
+    const ok = ackTicketNotice(session.playerId, body.noticeId || body.id);
+    res.writeHead(200, { "Content-Type": "application/json" });
+    res.end(JSON.stringify({ ok }));
     return true;
   }
 
@@ -1004,9 +1817,34 @@ async function handleApi(req, res, urlPath) {
       res.end(JSON.stringify({ ok: false, error: "Admin account required" }));
       return true;
     }
-    const tickets = loadTickets();
+    const tickets = purgeExpiredClosedTickets();
     res.writeHead(200, { "Content-Type": "application/json" });
-    res.end(JSON.stringify({ ok: true, tickets }));
+    res.end(JSON.stringify({ ok: true, tickets, resolutions: TICKET_RESOLUTIONS }));
+    return true;
+  }
+
+  if (urlPath === "api/admin/chat-history") {
+    const session = requireAdmin(body.token);
+    if (!session) {
+      res.writeHead(403, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ ok: false, error: "Admin account required" }));
+      return true;
+    }
+    let userA = body.userA || body.reporterKey || "";
+    let userB = body.userB || body.reportedKey || "";
+    let threadId = body.threadId || "";
+    if (body.ticketId) {
+      const tickets = purgeExpiredClosedTickets();
+      const ticket = tickets.find((t) => t && t.id === String(body.ticketId));
+      if (ticket) {
+        userA = ticket.reporterKey || ticket.username || userA;
+        userB = ticket.reportedKey || ticket.reportedPlayer || userB;
+        threadId = ticket.threadId || threadId;
+      }
+    }
+    const result = getAdminChatHistory({ userA, userB, threadId });
+    res.writeHead(result.ok ? 200 : 400, { "Content-Type": "application/json" });
+    res.end(JSON.stringify(result));
     return true;
   }
 
@@ -1017,24 +1855,15 @@ async function handleApi(req, res, urlPath) {
       res.end(JSON.stringify({ ok: false, error: "Admin account required" }));
       return true;
     }
-    const id = String(body.ticketId || body.id || "");
-    const status = String(body.status || "").toLowerCase();
-    if (!["open", "resolved", "closed"].includes(status)) {
-      res.writeHead(400, { "Content-Type": "application/json" });
-      res.end(JSON.stringify({ ok: false, error: "Status must be open, resolved, or closed" }));
-      return true;
-    }
-    const tickets = loadTickets();
-    const idx = tickets.findIndex((t) => t && t.id === id);
-    if (idx < 0) {
-      res.writeHead(404, { "Content-Type": "application/json" });
-      res.end(JSON.stringify({ ok: false, error: "Ticket not found" }));
-      return true;
-    }
-    tickets[idx] = { ...tickets[idx], status, updatedAt: Date.now() };
-    saveTickets(tickets);
-    res.writeHead(200, { "Content-Type": "application/json" });
-    res.end(JSON.stringify({ ok: true, ticket: tickets[idx] }));
+    const result = updateTicketStatus({
+      ticketId: body.ticketId || body.id,
+      status: body.status,
+      resolution: body.resolution,
+    });
+    res.writeHead(result.ok ? 200 : result.error === "Ticket not found" ? 404 : 400, {
+      "Content-Type": "application/json",
+    });
+    res.end(JSON.stringify(result));
     return true;
   }
 

@@ -1,0 +1,30 @@
+{
+  "messages": [
+    {
+      "id": "m_mrfismal_8syvub",
+      "threadId": "mikloit|nobody",
+      "from": "nobody",
+      "to": "MikLoit",
+      "fromKey": "nobody",
+      "toKey": "mikloit",
+      "fromPlayerId": "abcdef12-3456-7890-abcd-ef1234567890",
+      "toPlayerId": "dccb8911-4688-419e-869e-cc2c2c00217d",
+      "body": "hellohellohellohellohellohellohellohellohellohellohellohellohellohellohellohellohellohellohellohellohellohellohellohellohellohellohellohello",
+      "createdAt": 1783723294173,
+      "readAt": 1783723555692
+    },
+    {
+      "id": "m_mrfirlfc_h4wzot",
+      "threadId": "mikloit|nobody",
+      "from": "MikLoit",
+      "to": "nobody",
+      "fromKey": "mikloit",
+      "toKey": "nobody",
+      "fromPlayerId": "dccb8911-4688-419e-869e-cc2c2c00217d",
+      "toPlayerId": "abcdef12-3456-7890-abcd-ef1234567890",
+      "body": "hi how are ya?",
+      "createdAt": 1783723246392,
+      "readAt": 1783723284857
+    }
+  ]
+}

@@ -65,15 +65,61 @@ const BOSS_SHOP = [
 
 const AVATAR_DEFS = [
   { id: "default", label: "P", emoji: "P", unlock: { type: "free" } },
-  { id: "smile", label: "Smile", emoji: "☺", unlock: { type: "xp", level: 2 } },
-  { id: "cool", label: "Cool", emoji: "◆", unlock: { type: "xp", level: 4 } },
+  { id: "smile", label: "Smile", emoji: "😄", unlock: { type: "xp", level: 2 } },
+  { id: "fox", label: "Fox", emoji: "🦊", unlock: { type: "xp", level: 3 } },
+  { id: "cool", label: "Cool", emoji: "😎", unlock: { type: "xp", level: 4 } },
+  { id: "rocket", label: "Rocket", emoji: "🚀", unlock: { type: "xp", level: 5 } },
+  { id: "pizza", label: "Pizza", emoji: "🍕", unlock: { type: "xp", level: 6 } },
   { id: "bolt", label: "Bolt", emoji: "⚡", unlock: { type: "xp", level: 7 } },
-  { id: "robot", label: "Bot", emoji: "▣", unlock: { type: "xp", level: 10 } },
-  { id: "flame", label: "Flame", emoji: "▲", unlock: { type: "chaos", level: 10 } },
-  { id: "crown", label: "Crown", emoji: "♛", unlock: { type: "classic", level: 50 } },
-  { id: "rift", label: "Rift", emoji: "◈", unlock: { type: "chaos", level: 25 } },
-  { id: "endurance", label: "Endurance", emoji: "∞", unlock: { type: "survival", level: 25 } },
-  { id: "overlord", label: "Overlord", emoji: "👁", unlock: { type: "boss", level: 10 } },
+  { id: "dragon", label: "Dragon", emoji: "🐉", unlock: { type: "xp", level: 8 } },
+  { id: "ghost", label: "Ghost", emoji: "👻", unlock: { type: "xp", level: 9 } },
+  { id: "robot", label: "Bot", emoji: "🤖", unlock: { type: "xp", level: 10 } },
+  { id: "alien", label: "Alien", emoji: "👽", unlock: { type: "xp", level: 12 } },
+  { id: "panda", label: "Panda", emoji: "🐼", unlock: { type: "xp", level: 13 } },
+  { id: "unicorn", label: "Unicorn", emoji: "🦄", unlock: { type: "xp", level: 14 } },
+  { id: "ninja", label: "Ninja", emoji: "🥷", unlock: { type: "xp", level: 16 } },
+  { id: "wizard", label: "Wizard", emoji: "🧙", unlock: { type: "xp", level: 17 } },
+  { id: "octopus", label: "Octopus", emoji: "🐙", unlock: { type: "xp", level: 18 } },
+  { id: "eagle", label: "Eagle", emoji: "🦅", unlock: { type: "xp", level: 19 } },
+  { id: "sports_car", label: "Sports Car", emoji: "🏎️", image: "/avatar-pack/sports-car.jpg", unlock: { type: "xp", level: 20 } },
+  { id: "gem", label: "Gem", emoji: "💎", unlock: { type: "xp", level: 22 } },
+  { id: "cactus", label: "Cactus", emoji: "🌵", unlock: { type: "xp", level: 23 } },
+  { id: "galaxy", label: "Galaxy", emoji: "🌌", unlock: { type: "xp", level: 25 } },
+  { id: "classic_car", label: "Classic Car", emoji: "🚗", image: "/avatar-pack/classic-car.jpg", unlock: { type: "xp", level: 26 } },
+  { id: "koala", label: "Koala", emoji: "🐨", unlock: { type: "xp", level: 27 } },
+  { id: "trophy", label: "Trophy", emoji: "🏆", unlock: { type: "xp", level: 28 } },
+  { id: "owl", label: "Owl", emoji: "🦉", unlock: { type: "xp", level: 29 } },
+  { id: "motorcycle", label: "Motorcycle", emoji: "🏍️", image: "/avatar-pack/motorcycle.jpg", unlock: { type: "xp", level: 32 } },
+  { id: "medal", label: "Gold Medal", emoji: "🥇", unlock: { type: "xp", level: 33 } },
+  { id: "star", label: "Star", emoji: "🌟", unlock: { type: "xp", level: 36 } },
+  { id: "eiffel", label: "Eiffel", emoji: "🗼", image: "/avatar-pack/eiffel.jpg", unlock: { type: "xp", level: 38 } },
+  { id: "wolf", label: "Wolf", emoji: "🐺", unlock: { type: "xp", level: 39 } },
+  { id: "comet", label: "Comet", emoji: "☄️", unlock: { type: "xp", level: 40 } },
+  { id: "tokyo", label: "Tokyo", emoji: "🌃", image: "/avatar-pack/tokyo.jpg", unlock: { type: "xp", level: 44 } },
+  { id: "moon", label: "Moon", emoji: "🌙", unlock: { type: "xp", level: 45 } },
+  { id: "sun", label: "Sun", emoji: "☀️", unlock: { type: "xp", level: 48 } },
+  { id: "beach", label: "Beach", emoji: "🏖️", image: "/avatar-pack/beach.jpg", unlock: { type: "xp", level: 50 } },
+  { id: "rainbow", label: "Rainbow", emoji: "🌈", unlock: { type: "xp", level: 55 } },
+  { id: "mountains", label: "Mountains", emoji: "🏔️", image: "/avatar-pack/mountains.jpg", unlock: { type: "xp", level: 56 } },
+  { id: "volcano", label: "Volcano", emoji: "🌋", unlock: { type: "xp", level: 60 } },
+  { id: "nyc", label: "New York", emoji: "🗽", image: "/avatar-pack/nyc.jpg", unlock: { type: "xp", level: 62 } },
+  { id: "ocean", label: "Ocean", emoji: "🌊", unlock: { type: "xp", level: 65 } },
+  { id: "train", label: "Steam Train", emoji: "🚂", image: "/avatar-pack/train.jpg", unlock: { type: "xp", level: 68 } },
+  { id: "forest", label: "Forest", emoji: "🌲", unlock: { type: "xp", level: 70 } },
+  { id: "balloon", label: "Hot Air Balloon", emoji: "🎈", image: "/avatar-pack/balloon.jpg", unlock: { type: "xp", level: 74 } },
+  { id: "castle", label: "Castle", emoji: "🏰", unlock: { type: "xp", level: 75 } },
+  { id: "yacht", label: "Yacht", emoji: "🛥️", image: "/avatar-pack/yacht.jpg", unlock: { type: "xp", level: 80 } },
+  { id: "sparkle", label: "Sparkle", emoji: "✨", unlock: { type: "xp", level: 82 } },
+  { id: "desert", label: "Desert", emoji: "🏜️", image: "/avatar-pack/desert.jpg", unlock: { type: "xp", level: 86 } },
+  { id: "aurora", label: "Aurora", emoji: "🌌", image: "/avatar-pack/aurora.jpg", unlock: { type: "xp", level: 92 } },
+  { id: "planet", label: "Planet", emoji: "🪐", unlock: { type: "xp", level: 95 } },
+  { id: "island", label: "Island", emoji: "🏝️", image: "/avatar-pack/island.jpg", unlock: { type: "xp", level: 100 } },
+
+  { id: "flame", label: "Flame", emoji: "🔥", unlock: { type: "chaos", level: 10 } },
+  { id: "crown", label: "Crown", emoji: "👑", unlock: { type: "classic", level: 50 } },
+  { id: "rift", label: "Rift", emoji: "🌀", unlock: { type: "chaos", level: 25 } },
+  { id: "endurance", label: "Endurance", emoji: "♾️", unlock: { type: "survival", level: 25 } },
+  { id: "overlord", label: "Overlord", emoji: "👁️", unlock: { type: "boss", level: 10 } },
   { id: "custom", label: "Upload", emoji: "+", unlock: { type: "upload" } },
 ];
 
@@ -342,6 +388,7 @@ const save = {
   ownedAvatars: ["default"],
   customAvatarUrl: "",
   title: "",
+  adminSyncedAt: 0,
   abilities: { megaPaddle: false, freeShop: false, slowBot: false, pauseBot: false, bonusPts: false },
 };
 
@@ -412,14 +459,24 @@ function applyProfile(data, { replace = false } = {}) {
   if (!data || typeof data !== "object") return;
   if (typeof data.name === "string" && sanitizeName(data.name)) save.name = sanitizeName(data.name);
 
+  const incomingAdminSynced =
+    typeof data.adminSyncedAt === "number" && Number.isFinite(data.adminSyncedAt)
+      ? Math.floor(data.adminSyncedAt)
+      : 0;
+  const forceEconomy = replace || incomingAdminSynced > (save.adminSyncedAt || 0);
+
   if (typeof data.points === "number" && Number.isFinite(data.points)) {
     const incoming = Math.max(0, Math.floor(data.points));
-    save.points = replace ? incoming : Math.max(save.points || 0, incoming);
+    save.points = forceEconomy ? incoming : Math.max(save.points || 0, incoming);
   }
 
   if (typeof data.xp === "number" && Number.isFinite(data.xp)) {
     const incoming = Math.max(0, Math.floor(data.xp));
-    save.xp = replace ? incoming : Math.max(save.xp || 0, incoming);
+    save.xp = forceEconomy ? incoming : Math.max(save.xp || 0, incoming);
+  }
+
+  if (incomingAdminSynced) {
+    save.adminSyncedAt = Math.max(save.adminSyncedAt || 0, incomingAdminSynced);
   }
 
   if (typeof data.maxBotCleared === "number" && Number.isFinite(data.maxBotCleared)) {
@@ -489,7 +546,7 @@ function getXpProgress(xpTotal = save.xp || 0) {
   let xp = Math.max(0, Math.floor(xpTotal));
   let level = 1;
   let need = 100;
-  while (xp >= need && level < 99) {
+  while (xp >= need && level < 100) {
     xp -= need;
     level += 1;
     need = Math.floor(100 * Math.pow(1.14, level - 1));
@@ -586,9 +643,8 @@ function paintLevelUpUnlocks(unlocks) {
     li.style.animationDelay = `${0.12 + i * 0.08}s`;
     const icon = document.createElement("div");
     icon.className = "level-up-unlock-icon profile-avatar";
-    icon.textContent = item.emoji || "?";
     const def = AVATAR_DEFS.find((a) => a.id === item.id);
-    if (def) icon.style.background = avatarCssBackground(def);
+    applyAvatarToElement(icon, def, { emoji: item.emoji || def?.emoji || "?" });
     const text = document.createElement("div");
     text.className = "level-up-unlock-text";
     const label = document.createElement("div");
@@ -793,7 +849,7 @@ function playerLevelStyle(level) {
 function canvasLevelColor(level) {
   if (level == null) return "#ffffff";
   const lv = Math.max(0, Math.min(100, level || 0));
-  const t = performance.now() * 0.001;
+  const t = cosmeticTime();
   if (lv <= 0) return "#9ca3af";
   if (lv < 5) return "#d1d5db";
   if (lv < 10) return "#86efac";
@@ -912,6 +968,7 @@ function profilePayload() {
     ownedAvatars: Array.isArray(save.ownedAvatars) ? save.ownedAvatars : ["default"],
     customAvatarUrl: save.customAvatarUrl || "",
     title: save.title || "",
+    adminSyncedAt: save.adminSyncedAt || 0,
   };
 }
 
@@ -1104,8 +1161,17 @@ function safeColorStop(g, offset, color) {
   g.addColorStop(clamp01(offset), color);
 }
 
+let cosmeticSmoothT = 0;
+
+function cosmeticTime() {
+  const raw = performance.now() * 0.001;
+  if (!cosmeticSmoothT) cosmeticSmoothT = raw;
+  cosmeticSmoothT += (raw - cosmeticSmoothT) * 0.2;
+  return cosmeticSmoothT;
+}
+
 function applyFillStyle(c, item, x, y, w, h, alpha) {
-  const t = performance.now() * 0.001;
+  const t = cosmeticTime();
   if (item.style === "solid") {
     c.globalAlpha = alpha;
     c.fillStyle = item.color;
@@ -1968,7 +2034,7 @@ function drawSkywyrmDragon(c, ox, oy, unit, wingPhase, pitch, alpha, mouthOpen =
 
 function drawEpicOverlay(c, item, x, y, w, h, alpha) {
   if (!item.epic && !item.legendary && !item.chaos && !item.survival && !item.boss && !item.secret) return;
-  const t = performance.now() * 0.001;
+  const t = cosmeticTime();
   c.save();
   c.beginPath();
   c.rect(x, y, w, h);
@@ -1979,7 +2045,7 @@ function drawEpicOverlay(c, item, x, y, w, h, alpha) {
       const px = x + ((Math.sin(t * 0.7 + i * 1.7) * 0.5 + 0.5) * w);
       const py = y + ((Math.cos(t * 0.9 + i * 2.1) * 0.5 + 0.5) * h);
       const r = 0.6 + (i % 3) * 0.5;
-      c.globalAlpha = alpha * (0.35 + (Math.sin(t * 3 + i) * 0.5 + 0.5) * 0.45);
+      c.globalAlpha = alpha * (0.35 + (Math.sin(t * 2.1 + i) * 0.5 + 0.5) * 0.45);
       c.fillStyle = i % 2 === 0 ? "#ffffff" : "#a5f3fc";
       c.beginPath();
       c.arc(px, py, r, 0, Math.PI * 2);
@@ -2050,7 +2116,7 @@ function drawEpicOverlay(c, item, x, y, w, h, alpha) {
     for (let i = 0; i < 7; i++) {
       const sx = x + ((Math.sin(t * 0.45 + i * 1.8) * 0.5 + 0.5) * w);
       const sy = y + ((Math.cos(t * 0.55 + i * 2.4) * 0.5 + 0.5) * h);
-      const pulse = 0.55 + Math.sin(t * 3.2 + i) * 0.35;
+      const pulse = 0.55 + Math.sin(t * 2.2 + i) * 0.35;
       c.globalAlpha = alpha * (0.35 + pulse * 0.45);
       c.fillStyle = i % 2 === 0 ? "#fff7ed" : "#fecdd3";
       drawStar(c, sx, sy, 4, 2.2 + pulse * 1.6, 0.9 + pulse * 0.5);
@@ -2091,7 +2157,7 @@ function drawEpicOverlay(c, item, x, y, w, h, alpha) {
       const atBottom = progress >= 1;
       const holdAge = Math.max(0, age - travelDur);
       const fade = atBottom ? Math.max(0, 1 - holdAge / holdDur) : 1;
-      const flicker = 0.9 + hashNoise(Math.floor(t * 28) + s * 19) * 0.1;
+      const flicker = 0.94 + hashNoise(Math.floor(t * 16) + s * 19) * 0.06;
       const flash = Math.min(1, (0.55 + progress * 0.45) * fade * flicker);
       if (flash < 0.04) continue;
 
@@ -2508,7 +2574,7 @@ function drawEpicOverlay(c, item, x, y, w, h, alpha) {
         const phase = (bLocal - 0.35) / 1.2;
         mouthOpen = phase < 0.2 ? phase / 0.2 : phase > 0.75 ? (1 - phase) / 0.25 : 1;
         fireAmt = phase < 0.15 ? 0 : phase < 0.35 ? (phase - 0.15) / 0.2 : phase > 0.7 ? Math.max(0, (1 - phase) / 0.3) : 1;
-        fireAmt *= 0.55 + Math.sin(t * 28) * 0.2;
+        fireAmt *= 0.55 + Math.sin(t * 16) * 0.15;
       }
 
       // Warm aura when breathing
@@ -3401,15 +3467,55 @@ function setAuthMsg(msg) {
   if (ui.profileAuthMsg) ui.profileAuthMsg.textContent = msg || "";
 }
 
-function avatarCssBackground(def) {
+function avatarImageUrl(def, customUrl = "") {
+  if (customUrl) return customUrl;
   if (!def) return "";
-  if (def.id === "custom" && save.customAvatarUrl) return `url("${save.customAvatarUrl}")`;
+  if (def.id === "custom" && save.customAvatarUrl) return save.customAvatarUrl;
+  if (def.image) return def.image;
+  return "";
+}
+
+function avatarCssBackground(def) {
+  if (!def) return "#222";
+  const img = avatarImageUrl(def);
+  if (img) return `center / cover no-repeat url("${img}")`;
   const colors = {
     default: "#14532d",
     smile: "#1d4ed8",
+    fox: "#c2410c",
     cool: "#6d28d9",
-    bolt: "#b45309",
+    rocket: "#0f766e",
+    pizza: "#b45309",
+    bolt: "#ca8a04",
+    dragon: "#7c3aed",
+    ghost: "#475569",
     robot: "#334155",
+    alien: "#15803d",
+    panda: "#1f2937",
+    unicorn: "#db2777",
+    ninja: "#111827",
+    wizard: "#5b21b6",
+    octopus: "#9d174d",
+    eagle: "#92400e",
+    gem: "#0369a1",
+    cactus: "#166534",
+    galaxy: "#312e81",
+    koala: "#57534e",
+    trophy: "#a16207",
+    owl: "#44403c",
+    medal: "#ca8a04",
+    star: "#b45309",
+    wolf: "#3f3f46",
+    comet: "#1e3a8a",
+    moon: "#1e293b",
+    sun: "#ea580c",
+    rainbow: "#7c3aed",
+    volcano: "#9a3412",
+    ocean: "#0e7490",
+    forest: "#14532d",
+    castle: "#4c1d95",
+    sparkle: "#a21caf",
+    planet: "#1e40af",
     flame: "#9a3412",
     crown: "#a16207",
     rift: "#9d174d",
@@ -3419,19 +3525,37 @@ function avatarCssBackground(def) {
   return colors[def.id] || "#222";
 }
 
+function applyAvatarToElement(el, def, { customUrl = "", emoji = "", color = "" } = {}) {
+  if (!el) return;
+  el.textContent = "";
+  el.style.background = "";
+  el.style.backgroundImage = "";
+  el.style.backgroundSize = "";
+  el.style.backgroundPosition = "";
+  if (color) {
+    el.style.background = color;
+    el.textContent = emoji || "?";
+    return;
+  }
+  const img = avatarImageUrl(def, customUrl);
+  if (img) {
+    el.style.backgroundImage = `url("${img}")`;
+    el.style.backgroundSize = "cover";
+    el.style.backgroundPosition = "center";
+    return;
+  }
+  const d = def || AVATAR_DEFS[0];
+  el.style.background = avatarCssBackground(d);
+  el.textContent = emoji || d.emoji || "?";
+}
+
 function paintAvatarPreview() {
   const el = ui.profileAvatarPreview;
   if (!el) return;
   const def = AVATAR_DEFS.find((a) => a.id === save.avatar) || AVATAR_DEFS[0];
-  el.textContent = "";
-  el.style.backgroundImage = "";
-  if (def.id === "custom" && save.customAvatarUrl) {
-    el.style.backgroundImage = `url("${save.customAvatarUrl}")`;
-    el.textContent = "";
-  } else {
-    el.style.background = avatarCssBackground(def);
-    el.textContent = def.emoji || "P";
-  }
+  applyAvatarToElement(el, def, {
+    customUrl: def.id === "custom" ? save.customAvatarUrl : "",
+  });
 }
 
 function renderProfileAvatarGrid() {
@@ -3458,12 +3582,9 @@ function renderProfileAvatarGrid() {
                 : def.unlock?.type === "upload"
                   ? "Upload an image (account recommended)"
                   : "Locked";
-    if (def.id === "custom" && save.customAvatarUrl) {
-      btn.style.backgroundImage = `url("${save.customAvatarUrl}")`;
-    } else {
-      btn.style.background = avatarCssBackground(def);
-      btn.textContent = def.emoji || "?";
-    }
+    applyAvatarToElement(btn, def, {
+      customUrl: def.id === "custom" ? save.customAvatarUrl : "",
+    });
     if (!unlocked) {
       const lock = document.createElement("span");
       lock.className = "lock-dot";
@@ -3520,6 +3641,8 @@ function openProfile() {
   hideOverlay(ui.botModesOverlay);
   hideOverlay(ui.adminOverlay);
   hideOverlay(ui.contactOverlay);
+  hideOverlay(ui.inboxOverlay);
+  hideOverlay(ui.forgotPasswordOverlay);
   hideOverlay(ui.profileViewOverlay);
   showOverlay(ui.profileOverlay);
   setStagePlaying(false);
@@ -3690,7 +3813,7 @@ function buildBotProfileView() {
   let bio = "Training bot for Classic Levels.";
   let rankLabel = `Classic bot L${level}`;
   let avatarId = "robot";
-  let avatarEmoji = "▣";
+  let avatarEmoji = "🤖";
   let avatarColor = "";
   const feats = [];
   if (mode === "chaos") {
@@ -3699,7 +3822,7 @@ function buildBotProfileView() {
     bio = "High-speed multi-ball chaos opponent.";
     rankLabel = `Chaos bot L${level}`;
     avatarId = level >= 25 ? "rift" : "flame";
-    avatarEmoji = level >= 25 ? "◈" : "▲";
+    avatarEmoji = level >= 25 ? "🌀" : "🔥";
     feats.push(`Chaos intensity L${level}`);
     if (level >= 10) feats.push("Fog of war enabled");
     if (level >= 25) feats.push("Rift-tier chaos");
@@ -3709,7 +3832,7 @@ function buildBotProfileView() {
     bio = "Two-minute endurance opponent. Highest score wins.";
     rankLabel = `Survival bot R${level}`;
     avatarId = "endurance";
-    avatarEmoji = "∞";
+    avatarEmoji = "♾️";
     feats.push(`Survival round ${level}`);
     if (level >= 25) feats.push("Endurance apex");
   } else {
@@ -3736,27 +3859,13 @@ function buildBotProfileView() {
 
 function paintProfileViewAvatar(profile) {
   const el = ui.profileViewAvatar;
-  if (!el) return;
-  el.textContent = "";
-  el.style.backgroundImage = "";
-  el.style.background = "";
-  if (profile.customAvatarUrl) {
-    el.style.backgroundImage = `url("${profile.customAvatarUrl}")`;
-    return;
-  }
-  if (profile.avatarColor) {
-    el.style.background = profile.avatarColor;
-    el.textContent = profile.avatarEmoji || "?";
-    return;
-  }
+  if (!el || !profile) return;
   const def = AVATAR_DEFS.find((a) => a.id === profile.avatarId) || AVATAR_DEFS[0];
-  if (def.id === "custom") {
-    el.style.background = "#222";
-    el.textContent = "+";
-    return;
-  }
-  el.style.background = avatarCssBackground(def);
-  el.textContent = profile.avatarEmoji || def.emoji || "?";
+  applyAvatarToElement(el, def, {
+    customUrl: profile.customAvatarUrl || "",
+    emoji: profile.avatarEmoji || "",
+    color: profile.avatarColor || "",
+  });
 }
 
 function paintProfileView(profile) {
@@ -3857,6 +3966,7 @@ async function authRegister() {
     setAuthMsg("Account created — you're signed in.");
     refreshProfileUI();
     updateAdminVisibility();
+    startTicketNoticePolling();
   } catch {
     setAuthMsg("Network error — try again.");
   }
@@ -3902,6 +4012,7 @@ async function authLogin() {
     );
     refreshProfileUI();
     updateAdminVisibility();
+    startTicketNoticePolling();
   } catch {
     setAuthMsg("Network error — try again.");
   }
@@ -3954,6 +4065,7 @@ async function restoreAuthSession() {
     authState.isAdmin = !!(data.isAdmin || data.isOwner);
     persistAuthState();
     updateAdminVisibility();
+    startTicketNoticePolling();
     if (data.playerId) {
       try {
         localStorage.setItem(PLAYER_ID_KEY, data.playerId);
@@ -4361,15 +4473,15 @@ async function adminApi(path, body = {}) {
 function paintAdminPlayerAvatar(player) {
   const el = ui.adminPlayerAvatar;
   if (!el) return;
-  el.textContent = "";
-  el.style.backgroundImage = "";
-  if (player?.customAvatarUrl) {
-    el.style.backgroundImage = `url("${player.customAvatarUrl}")`;
-    return;
-  }
   const def = AVATAR_DEFS.find((a) => a.id === (player?.avatar || "default")) || AVATAR_DEFS[0];
-  el.style.background = avatarCssBackground(def);
-  el.textContent = def.emoji || "P";
+  applyAvatarToElement(el, def, { customUrl: player?.customAvatarUrl || "" });
+}
+
+function formatBanMeta(player) {
+  if (!player?.banned) return null;
+  if (player.banLabel) return player.banLabel;
+  if (player.bannedUntil) return `Banned until ${new Date(player.bannedUntil).toLocaleString()}`;
+  return "Permanently banned";
 }
 
 function renderAdminPlayersList(players) {
@@ -4394,14 +4506,23 @@ function renderAdminPlayersList(players) {
     title.textContent = p.username || p.name || "Player";
     const meta = document.createElement("div");
     meta.className = "admin-list-meta";
-    const bits = [
-      p.online ? "Online" : "Offline",
-      p.banned ? "Banned" : null,
-      p.isOwner ? "Owner" : p.isAdmin ? "Admin" : null,
-      `${p.points || 0} pts`,
-      `XP ${p.xp || 0}`,
-    ].filter(Boolean);
-    meta.textContent = bits.join(" · ");
+    const parts = [];
+    parts.push(document.createTextNode(p.online ? "Online" : "Offline"));
+    if (p.banned) {
+      parts.push(document.createTextNode(" · "));
+      const ban = document.createElement("span");
+      ban.className = "ban-label";
+      ban.textContent = "Banned";
+      parts.push(ban);
+    }
+    if (p.isOwner) parts.push(document.createTextNode(" · Owner"));
+    else if (p.isAdmin) parts.push(document.createTextNode(" · Admin"));
+    parts.push(
+      document.createTextNode(
+        ` · ${p.points || 0} pts · XP L${p.xpLevel || getXpProgress(p.xp || 0).level} (${p.xp || 0})`
+      )
+    );
+    parts.forEach((node) => meta.appendChild(node));
     btn.append(title, meta);
     btn.addEventListener("click", () => {
       playMenuClick();
@@ -4442,13 +4563,14 @@ function openAdminPlayerDetail(player) {
   adminSelectedPlayer = player;
   hideOverlay(ui.adminPlayersOverlay);
   showOverlay(ui.adminPlayerDetailOverlay);
+  const viewOnlyOwner = !!player.isOwner && !isOwner();
   if (ui.adminPlayerTitle) ui.adminPlayerTitle.textContent = (player.username || "PLAYER").toUpperCase();
   if (ui.adminPlayerSub) {
-    ui.adminPlayerSub.textContent = player.banned
-      ? "Banned account"
-      : player.online
-        ? "Currently online"
-        : "Registered account";
+    if (player.banned) {
+      ui.adminPlayerSub.innerHTML = `<span class="ban-label">${formatBanMeta(player) || "Banned"}</span>`;
+    } else {
+      ui.adminPlayerSub.textContent = player.online ? "Currently online" : "Registered account";
+    }
   }
   if (ui.adminPlayerName) ui.adminPlayerName.textContent = player.name || player.username || "Player";
   if (ui.adminPlayerKind) {
@@ -4459,18 +4581,32 @@ function openAdminPlayerDetail(player) {
         : `Account · ${player.usernameKey || player.username || ""}`;
   }
   if (ui.adminPlayerStats) {
-    ui.adminPlayerStats.textContent = `${player.points || 0} pts · ${player.xp || 0} XP · Classic L${player.maxBotCleared || 0}`;
+    const lvl = player.xpLevel || getXpProgress(player.xp || 0).level;
+    ui.adminPlayerStats.textContent = `${player.points || 0} pts · XP Level ${lvl} · ${player.xp || 0} XP · Classic L${
+      player.maxBotCleared || 0
+    }`;
   }
   paintAdminPlayerAvatar(player);
-  if (ui.btnAdminBanPlayer) ui.btnAdminBanPlayer.classList.toggle("hidden", !!player.banned || !!player.isOwner);
-  if (ui.btnAdminUnbanPlayer) ui.btnAdminUnbanPlayer.classList.toggle("hidden", !player.banned);
-  if (ui.btnAdminKickPlayer) ui.btnAdminKickPlayer.classList.toggle("hidden", !!player.isOwner);
-  const canManageRole = isOwner() && !player.isOwner;
-  if (ui.adminRoleSection) ui.adminRoleSection.classList.toggle("hidden", !canManageRole);
-  if (ui.adminRoleActions) ui.adminRoleActions.classList.toggle("hidden", !canManageRole);
-  if (ui.btnAdminGrantAdmin) ui.btnAdminGrantAdmin.classList.toggle("hidden", !canManageRole || !!player.isAdmin);
-  if (ui.btnAdminRevokeAdmin) ui.btnAdminRevokeAdmin.classList.toggle("hidden", !canManageRole || !player.isAdmin);
-  if (ui.adminPlayerMsg) ui.adminPlayerMsg.textContent = "";
+
+  if (ui.adminPlayerControls) ui.adminPlayerControls.classList.toggle("hidden", viewOnlyOwner);
+  if (ui.adminDaddyMsg) {
+    ui.adminDaddyMsg.classList.toggle("hidden", !viewOnlyOwner);
+    if (viewOnlyOwner) ui.adminDaddyMsg.textContent = "No messing around with daddy";
+  }
+
+  if (!viewOnlyOwner) {
+    if (ui.btnAdminBanPlayer) ui.btnAdminBanPlayer.classList.toggle("hidden", !!player.banned || !!player.isOwner);
+    if (ui.adminBanDuration) ui.adminBanDuration.classList.toggle("hidden", !!player.banned || !!player.isOwner);
+    if (ui.adminBanDurationLabel) ui.adminBanDurationLabel.classList.toggle("hidden", !!player.banned || !!player.isOwner);
+    if (ui.btnAdminUnbanPlayer) ui.btnAdminUnbanPlayer.classList.toggle("hidden", !player.banned || !!player.isOwner);
+    if (ui.btnAdminKickPlayer) ui.btnAdminKickPlayer.classList.toggle("hidden", !!player.isOwner);
+    const canManageRole = isOwner() && !player.isOwner;
+    if (ui.adminRoleSection) ui.adminRoleSection.classList.toggle("hidden", !canManageRole);
+    if (ui.adminRoleActions) ui.adminRoleActions.classList.toggle("hidden", !canManageRole);
+    if (ui.btnAdminGrantAdmin) ui.btnAdminGrantAdmin.classList.toggle("hidden", !canManageRole || !!player.isAdmin);
+    if (ui.btnAdminRevokeAdmin) ui.btnAdminRevokeAdmin.classList.toggle("hidden", !canManageRole || !player.isAdmin);
+  }
+  if (ui.adminPlayerMsg) ui.adminPlayerMsg.textContent = viewOnlyOwner ? "" : "";
 }
 
 function closeAdminPlayerDetail() {
@@ -4481,28 +4617,41 @@ function closeAdminPlayerDetail() {
 
 async function adminPlayerAction(action, amount) {
   if (!isAdmin() || !adminSelectedPlayer) return;
+  if (adminSelectedPlayer.isOwner && !isOwner()) {
+    if (ui.adminPlayerMsg) ui.adminPlayerMsg.textContent = "No messing around with daddy";
+    return;
+  }
   if (ui.adminPlayerMsg) ui.adminPlayerMsg.textContent = "Working…";
   try {
-    const data = await adminApi("/api/admin/player/action", {
+    const payload = {
       playerId: adminSelectedPlayer.playerId,
       username: adminSelectedPlayer.usernameKey || adminSelectedPlayer.username,
       action,
       amount,
-    });
+    };
+    if (action === "ban") {
+      payload.duration = ui.adminBanDuration?.value || "permanent";
+    }
+    const data = await adminApi("/api/admin/player/action", payload);
     if (!data?.ok) {
       if (ui.adminPlayerMsg) ui.adminPlayerMsg.textContent = data?.error || "Action failed.";
       return;
     }
     if (data.player) {
       adminSelectedPlayer = { ...adminSelectedPlayer, ...data.player };
+      if (data.profile) {
+        adminSelectedPlayer.points = data.profile.points ?? adminSelectedPlayer.points;
+        adminSelectedPlayer.xp = data.profile.xp ?? adminSelectedPlayer.xp;
+        adminSelectedPlayer.xpLevel = getXpProgress(adminSelectedPlayer.xp || 0).level;
+      }
       openAdminPlayerDetail(adminSelectedPlayer);
     }
     const labels = {
-      givePoints: "Points added.",
-      removePoints: "Points removed.",
-      giveXp: "XP added.",
-      removeXp: "XP removed.",
-      ban: "Player banned.",
+      givePoints: `Points added → ${adminSelectedPlayer?.points ?? "?"} pts.`,
+      removePoints: `Points removed → ${adminSelectedPlayer?.points ?? "?"} pts.`,
+      giveXp: `XP added → Level ${adminSelectedPlayer?.xpLevel ?? "?"} (${adminSelectedPlayer?.xp ?? "?"} XP).`,
+      removeXp: `XP removed → Level ${adminSelectedPlayer?.xpLevel ?? "?"} (${adminSelectedPlayer?.xp ?? "?"} XP).`,
+      ban: data.banLabel || "Player banned.",
       unban: "Player unbanned.",
       kick: `Kicked ${data.kicked || 0} connection(s).`,
       grantAdmin: "Admin granted. They must refresh or re-login if already signed in.",
@@ -4537,7 +4686,9 @@ function renderAdminReportsList(tickets) {
     title.textContent = t.subject || "Ticket";
     const meta = document.createElement("div");
     meta.className = "admin-list-meta";
-    meta.textContent = `${(t.category || "other").toUpperCase()} · ${t.status || "open"} · ${t.username || "player"}`;
+    meta.textContent = `${(t.category || "other").toUpperCase()} · ${t.status || "open"} · ${t.username || "player"}${
+      t.reason ? ` · ${String(t.reason).replace(/_/g, " ")}` : ""
+    }`;
     btn.append(title, meta);
     btn.addEventListener("click", () => {
       playMenuClick();
@@ -4581,12 +4732,164 @@ function openAdminReportDetail(ticket) {
   if (ui.adminReportTitle) ui.adminReportTitle.textContent = (ticket.subject || "TICKET").toUpperCase();
   if (ui.adminReportMeta) {
     const when = ticket.createdAt ? new Date(ticket.createdAt).toLocaleString() : "";
+    const reasonBit = ticket.reason ? ` · ${String(ticket.reason).replace(/_/g, " ")}` : "";
     ui.adminReportMeta.textContent = `${(ticket.category || "other").toUpperCase()} · ${ticket.status || "open"} · ${
       ticket.username || "player"
-    }${ticket.reportedPlayer ? ` · vs ${ticket.reportedPlayer}` : ""}${when ? ` · ${when}` : ""}`;
+    }${ticket.reportedPlayer ? ` · vs ${ticket.reportedPlayer}` : ""}${reasonBit}${when ? ` · ${when}` : ""}`;
   }
   if (ui.adminReportBody) ui.adminReportBody.textContent = ticket.message || "";
+  if (ui.adminReportResolution) {
+    if (ticket.resolution) {
+      ui.adminReportResolution.textContent = `Outcome: ${ticket.resolution}`;
+      ui.adminReportResolution.classList.remove("hidden");
+    } else {
+      ui.adminReportResolution.textContent = "";
+      ui.adminReportResolution.classList.add("hidden");
+    }
+  }
+  if (ui.adminReportOutcome && ticket.resolution) {
+    const opt = [...ui.adminReportOutcome.options].find((o) => o.value === ticket.resolution);
+    if (opt) ui.adminReportOutcome.value = ticket.resolution;
+    else if (String(ticket.resolution).startsWith("Password reset approved")) {
+      ui.adminReportOutcome.value = "Password reset approved";
+    }
+  }
+  const isPassword = String(ticket.category || "").toLowerCase() === "password";
+  if (ui.adminPasswordResetBox) ui.adminPasswordResetBox.classList.toggle("hidden", !isPassword);
+  if (ui.adminResetCodeMsg) {
+    ui.adminResetCodeMsg.textContent =
+      isPassword && ticket.status === "resolved" && String(ticket.resolution || "").includes("approved")
+        ? "Approved — player can set a new password on their screen."
+        : isPassword && ticket.status === "closed"
+          ? "Denied."
+          : "";
+  }
+  const isChatReport =
+    String(ticket.source || "").toLowerCase() === "chat" ||
+    String(ticket.subject || "").toLowerCase().startsWith("chat report");
+  if (ui.adminChatHistoryBox) ui.adminChatHistoryBox.classList.toggle("hidden", !isChatReport);
+  if (ui.adminChatLog) {
+    ui.adminChatLog.innerHTML = "";
+    ui.adminChatLog.classList.add("hidden");
+  }
+  if (ui.adminChatHistoryMsg) ui.adminChatHistoryMsg.textContent = "";
   if (ui.adminReportMsg) ui.adminReportMsg.textContent = "";
+}
+
+function renderAdminChatHistory(messages, ticket) {
+  const box = ui.adminChatLog;
+  if (!box) return;
+  box.innerHTML = "";
+  const rows = Array.isArray(messages) ? messages : [];
+  if (!rows.length) {
+    box.classList.remove("hidden");
+    const empty = document.createElement("p");
+    empty.className = "lobby-text";
+    empty.textContent = "No messages found for this conversation.";
+    box.appendChild(empty);
+    return;
+  }
+  const reporterKey = String(ticket.reporterKey || ticket.username || "").toLowerCase();
+  const reportedKey = String(ticket.reportedKey || ticket.reportedPlayer || "").toLowerCase();
+  rows.forEach((m) => {
+    const fromKey = String(m.fromKey || m.from || "").toLowerCase();
+    const div = document.createElement("div");
+    const fromReported = reportedKey && fromKey === reportedKey;
+    div.className = `admin-chat-bubble ${fromReported ? "from-reported" : "from-reporter"}`;
+    const who = document.createElement("span");
+    who.className = "admin-chat-bubble-who";
+    who.textContent = m.from || (fromReported ? "Reported" : "Reporter");
+    const text = document.createElement("div");
+    text.textContent = m.body || "";
+    const meta = document.createElement("span");
+    meta.className = "admin-chat-bubble-meta";
+    meta.textContent = m.createdAt ? new Date(m.createdAt).toLocaleString() : "";
+    div.append(who, text, meta);
+    box.appendChild(div);
+  });
+  box.classList.remove("hidden");
+  box.scrollTop = box.scrollHeight;
+}
+
+async function adminCheckChatHistory() {
+  if (!isAdmin() || !adminSelectedTicket) return;
+  if (ui.adminChatHistoryMsg) ui.adminChatHistoryMsg.textContent = "Loading chat…";
+  if (ui.adminChatLog) {
+    ui.adminChatLog.innerHTML = "";
+    ui.adminChatLog.classList.add("hidden");
+  }
+  try {
+    const data = await adminApi("/api/admin/chat-history", {
+      ticketId: adminSelectedTicket.id,
+      reporterKey: adminSelectedTicket.reporterKey || adminSelectedTicket.username,
+      reportedKey: adminSelectedTicket.reportedKey || adminSelectedTicket.reportedPlayer,
+      threadId: adminSelectedTicket.threadId || "",
+    });
+    if (!data?.ok) {
+      if (ui.adminChatHistoryMsg) ui.adminChatHistoryMsg.textContent = data?.error || "Could not load chat.";
+      return;
+    }
+    renderAdminChatHistory(data.messages, adminSelectedTicket);
+    if (ui.adminChatHistoryMsg) {
+      ui.adminChatHistoryMsg.textContent = data.messages?.length
+        ? `${data.messages.length} message${data.messages.length === 1 ? "" : "s"} loaded.`
+        : "No messages in this thread.";
+    }
+  } catch {
+    if (ui.adminChatHistoryMsg) ui.adminChatHistoryMsg.textContent = "Network error.";
+  }
+}
+
+async function adminApprovePasswordReset() {
+  if (!isAdmin() || !adminSelectedTicket) return;
+  // #region agent log
+  fetch('http://127.0.0.1:7263/ingest/7b680789-6fbf-44a7-9704-6ddeb5cf3ed6',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'38eb5e'},body:JSON.stringify({sessionId:'38eb5e',runId:'post-fix',hypothesisId:'B',location:'game.js:adminApprovePasswordReset',message:'admin approving password reset',data:{ticketUser:adminSelectedTicket.username||'',authUser:authState.username||'',isAdmin:isAdmin(),pendingLocal:getPendingResetUsername(),adminOverlay:!ui.adminReportDetailOverlay?.classList.contains('hidden')},timestamp:Date.now()})}).catch(()=>{});
+  fetch('/api/debug-log',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({sessionId:'38eb5e',runId:'post-fix',hypothesisId:'B',location:'game.js:adminApprovePasswordReset',message:'admin approving password reset',data:{ticketUser:adminSelectedTicket.username||'',authUser:authState.username||'',isAdmin:isAdmin(),pendingLocal:getPendingResetUsername()},timestamp:Date.now()})}).catch(()=>{});
+  // #endregion
+  if (ui.adminReportMsg) ui.adminReportMsg.textContent = "Approving…";
+  if (ui.adminResetCodeMsg) ui.adminResetCodeMsg.textContent = "";
+  try {
+    const data = await adminApi("/api/admin/password-reset/approve", {
+      ticketId: adminSelectedTicket.id,
+      username: adminSelectedTicket.username,
+    });
+    if (!data?.ok) {
+      if (ui.adminReportMsg) ui.adminReportMsg.textContent = data?.error || "Approve failed.";
+      return;
+    }
+    if (data.ticket) adminSelectedTicket = data.ticket;
+    openAdminReportDetail(adminSelectedTicket);
+    if (ui.adminResetCodeMsg) {
+      ui.adminResetCodeMsg.textContent = "Approved — the player will get a popup to set their new password.";
+    }
+    if (ui.adminReportMsg) ui.adminReportMsg.textContent = "Reset approved.";
+    // #region agent log
+    fetch('http://127.0.0.1:7263/ingest/7b680789-6fbf-44a7-9704-6ddeb5cf3ed6',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'38eb5e'},body:JSON.stringify({sessionId:'38eb5e',runId:'post-fix',hypothesisId:'A',location:'game.js:adminApprovePasswordReset:after',message:'approve ok; checking if admin will also poll',data:{pendingLocal:getPendingResetUsername(),pollActive:!!passwordResetPollTimer,approvedUser:data.username||''},timestamp:Date.now()})}).catch(()=>{});
+    fetch('/api/debug-log',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({sessionId:'38eb5e',runId:'post-fix',hypothesisId:'A',location:'game.js:adminApprovePasswordReset:after',message:'approve ok',data:{pendingLocal:getPendingResetUsername(),pollActive:!!passwordResetPollTimer,approvedUser:data.username||''},timestamp:Date.now()})}).catch(()=>{});
+    // #endregion
+  } catch {
+    if (ui.adminReportMsg) ui.adminReportMsg.textContent = "Network error.";
+  }
+}
+
+async function adminDenyPasswordReset() {
+  if (!isAdmin() || !adminSelectedTicket) return;
+  if (ui.adminReportMsg) ui.adminReportMsg.textContent = "Denying…";
+  try {
+    const data = await adminApi("/api/admin/password-reset/deny", {
+      ticketId: adminSelectedTicket.id,
+      username: adminSelectedTicket.username,
+    });
+    if (!data?.ok) {
+      if (ui.adminReportMsg) ui.adminReportMsg.textContent = data?.error || "Deny failed.";
+      return;
+    }
+    if (data.ticket) adminSelectedTicket = data.ticket;
+    openAdminReportDetail(adminSelectedTicket);
+    if (ui.adminReportMsg) ui.adminReportMsg.textContent = "Reset denied.";
+  } catch {
+    if (ui.adminReportMsg) ui.adminReportMsg.textContent = "Network error.";
+  }
 }
 
 function closeAdminReportDetail() {
@@ -4598,17 +4901,292 @@ function closeAdminReportDetail() {
 async function adminSetTicketStatus(status) {
   if (!isAdmin() || !adminSelectedTicket) return;
   if (ui.adminReportMsg) ui.adminReportMsg.textContent = "Updating…";
+  const resolution =
+    status === "open" ? "" : ui.adminReportOutcome?.value || "No action taken";
   try {
-    const data = await adminApi("/api/admin/ticket", { ticketId: adminSelectedTicket.id, status });
+    const data = await adminApi("/api/admin/ticket", {
+      ticketId: adminSelectedTicket.id,
+      status,
+      resolution,
+    });
     if (!data?.ok) {
       if (ui.adminReportMsg) ui.adminReportMsg.textContent = data?.error || "Update failed.";
       return;
     }
     adminSelectedTicket = data.ticket;
     openAdminReportDetail(adminSelectedTicket);
-    if (ui.adminReportMsg) ui.adminReportMsg.textContent = `Marked ${status}.`;
+    if (ui.adminReportMsg) {
+      ui.adminReportMsg.textContent =
+        status === "open"
+          ? "Marked open."
+          : `Marked ${status}. Player will get a notice: “${resolution}”.`;
+    }
   } catch {
     if (ui.adminReportMsg) ui.adminReportMsg.textContent = "Network error.";
+  }
+}
+
+const PENDING_RESET_KEY = "pong-bw-pending-reset";
+let passwordResetPollTimer = null;
+let passwordResetPopupShownFor = "";
+
+function dbgReset(hypothesisId, location, message, data) {
+  // #region agent log
+  const payload = {
+    sessionId: "38eb5e",
+    runId: "post-fix",
+    hypothesisId,
+    location,
+    message,
+    data: data || {},
+    timestamp: Date.now(),
+  };
+  fetch("http://127.0.0.1:7263/ingest/7b680789-6fbf-44a7-9704-6ddeb5cf3ed6", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "38eb5e" },
+    body: JSON.stringify(payload),
+  }).catch(() => {});
+  fetch("/api/debug-log", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  }).catch(() => {});
+  // #endregion
+}
+
+function getPendingResetUsername() {
+  try {
+    // sessionStorage is per-tab so an admin tab won't inherit the player's pending request.
+    const fromSession = String(sessionStorage.getItem(PENDING_RESET_KEY) || "").trim();
+    if (fromSession) return fromSession;
+    // One-time migrate away from shared localStorage (caused admin to see the popup).
+    const legacy = String(localStorage.getItem(PENDING_RESET_KEY) || "").trim();
+    if (legacy) {
+      localStorage.removeItem(PENDING_RESET_KEY);
+    }
+    return "";
+  } catch {
+    return "";
+  }
+}
+
+function setPendingResetUsername(username) {
+  try {
+    const u = String(username || "").trim();
+    localStorage.removeItem(PENDING_RESET_KEY);
+    if (u) sessionStorage.setItem(PENDING_RESET_KEY, u);
+    else sessionStorage.removeItem(PENDING_RESET_KEY);
+  } catch {
+    /* ignore */
+  }
+}
+
+function stopPasswordResetPoll() {
+  if (passwordResetPollTimer) {
+    clearInterval(passwordResetPollTimer);
+    passwordResetPollTimer = null;
+  }
+}
+
+function normalizeAuthUser(name) {
+  return String(name || "")
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9_]/g, "")
+    .slice(0, 16);
+}
+
+function isPasswordResetRequester(pendingUser) {
+  const pending = normalizeAuthUser(pendingUser);
+  if (!pending) return false;
+  const signed = normalizeAuthUser(authState.username);
+  // Admin/owner UI must never take over another player's reset form.
+  if (isAdmin() || isOwner()) {
+    return !!signed && signed === pending;
+  }
+  if (!authState.token) return true;
+  if (!signed) return true;
+  return signed === pending;
+}
+
+function startPasswordResetPoll(username) {
+  const user = String(username || "").trim();
+  if (!user) return;
+  dbgReset("C", "game.js:startPasswordResetPoll", "starting reset poll", {
+    user,
+    authUser: authState.username || "",
+    isAdmin: isAdmin(),
+    isOwner: isOwner(),
+  });
+  setPendingResetUsername(user);
+  stopPasswordResetPoll();
+  pollPasswordResetStatus();
+  passwordResetPollTimer = setInterval(pollPasswordResetStatus, 2500);
+}
+
+async function pollPasswordResetStatus() {
+  const username = getPendingResetUsername();
+  if (!username) {
+    stopPasswordResetPoll();
+    return;
+  }
+  try {
+    const res = await fetch("/api/auth/forgot-status", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ username }),
+    });
+    const data = await res.json().catch(() => null);
+    if (!data?.ok) return;
+    if (data.approved || data.pending) {
+      dbgReset("A", "game.js:pollPasswordResetStatus", "poll status", {
+        username,
+        pending: !!data.pending,
+        approved: !!data.approved,
+        authUser: authState.username || "",
+        isAdmin: isAdmin(),
+        isRequester: isPasswordResetRequester(username),
+      });
+    }
+    if (data.pending && ui.forgotPasswordMsg && !ui.forgotPasswordOverlay?.classList.contains("hidden")) {
+      ui.forgotPasswordMsg.textContent = "Waiting for an admin to approve…";
+    }
+    if (data.approved) {
+      openResetPasswordPopup(username);
+    }
+  } catch {
+    /* ignore */
+  }
+}
+
+function openForgotPassword() {
+  hideOverlay(ui.profileOverlay);
+  showOverlay(ui.forgotPasswordOverlay);
+  setStagePlaying(false);
+  if (ui.forgotUsername) {
+    ui.forgotUsername.value = getPendingResetUsername() || ui.authUsername?.value || "";
+  }
+  if (ui.forgotPasswordMsg) {
+    ui.forgotPasswordMsg.textContent = getPendingResetUsername()
+      ? "Request pending — waiting for admin approval…"
+      : "";
+  }
+  if (getPendingResetUsername()) startPasswordResetPoll(getPendingResetUsername());
+}
+
+function closeForgotPassword() {
+  hideOverlay(ui.forgotPasswordOverlay);
+  showOverlay(ui.profileOverlay);
+  refreshProfileUI();
+}
+
+function openResetPasswordPopup(username) {
+  const user = String(username || getPendingResetUsername() || "").trim();
+  if (!user) return;
+  const requester = isPasswordResetRequester(user);
+  const adminUiOpen =
+    !ui.adminOverlay?.classList.contains("hidden") ||
+    !ui.adminReportsOverlay?.classList.contains("hidden") ||
+    !ui.adminReportDetailOverlay?.classList.contains("hidden") ||
+    !ui.adminPlayersOverlay?.classList.contains("hidden") ||
+    !ui.adminPlayerDetailOverlay?.classList.contains("hidden") ||
+    !ui.adminToolsOverlay?.classList.contains("hidden");
+  dbgReset("A", "game.js:openResetPasswordPopup", requester && !adminUiOpen ? "opening set-password popup" : "blocked set-password popup", {
+    user,
+    authUser: authState.username || "",
+    isAdmin: isAdmin(),
+    isOwner: isOwner(),
+    requester,
+    adminUiOpen,
+    hasToken: !!authState.token,
+  });
+  if (!requester || adminUiOpen) return;
+  if (passwordResetPopupShownFor === user && ui.resetPasswordOverlay && !ui.resetPasswordOverlay.classList.contains("hidden")) {
+    return;
+  }
+  passwordResetPopupShownFor = user;
+  setPendingResetUsername(user);
+  hideOverlay(ui.forgotPasswordOverlay);
+  if (ui.resetPasswordLead) {
+    ui.resetPasswordLead.textContent = `Reset approved for ${user}. Choose a new password, then save.`;
+  }
+  if (ui.resetNewPassword) ui.resetNewPassword.value = "";
+  if (ui.resetConfirmPassword) ui.resetConfirmPassword.value = "";
+  if (ui.resetPasswordMsg) ui.resetPasswordMsg.textContent = "";
+  showOverlay(ui.resetPasswordOverlay);
+  setStagePlaying(false);
+}
+
+function closeResetPasswordPopup({ keepPending = true } = {}) {
+  hideOverlay(ui.resetPasswordOverlay);
+  if (!keepPending) {
+    setPendingResetUsername("");
+    passwordResetPopupShownFor = "";
+    stopPasswordResetPoll();
+  }
+}
+
+async function submitForgotRequest() {
+  const username = String(ui.forgotUsername?.value || "").trim();
+  if (ui.forgotPasswordMsg) ui.forgotPasswordMsg.textContent = "Sending…";
+  try {
+    const res = await fetch("/api/auth/forgot", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ username }),
+    });
+    const data = await res.json().catch(() => null);
+    if (!data?.ok) {
+      if (ui.forgotPasswordMsg) ui.forgotPasswordMsg.textContent = data?.error || "Could not send request.";
+      return;
+    }
+    if (ui.forgotPasswordMsg) {
+      ui.forgotPasswordMsg.textContent =
+        data.message || "Request sent. Keep this page open — a password window will appear when approved.";
+    }
+    startPasswordResetPoll(username);
+  } catch {
+    if (ui.forgotPasswordMsg) ui.forgotPasswordMsg.textContent = "Network error.";
+  }
+}
+
+async function submitForgotNewPassword() {
+  const username = getPendingResetUsername() || String(ui.forgotUsername?.value || "").trim();
+  const newPassword = String(ui.resetNewPassword?.value || "");
+  const confirm = String(ui.resetConfirmPassword?.value || "");
+  if (newPassword.length < 6) {
+    if (ui.resetPasswordMsg) ui.resetPasswordMsg.textContent = "Password must be at least 6 characters.";
+    return;
+  }
+  if (newPassword !== confirm) {
+    if (ui.resetPasswordMsg) ui.resetPasswordMsg.textContent = "Passwords do not match.";
+    return;
+  }
+  if (ui.resetPasswordMsg) ui.resetPasswordMsg.textContent = "Saving…";
+  try {
+    const res = await fetch("/api/auth/reset-password", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ username, newPassword }),
+    });
+    const data = await res.json().catch(() => null);
+    if (!data?.ok) {
+      if (ui.resetPasswordMsg) ui.resetPasswordMsg.textContent = data?.error || "Reset failed.";
+      return;
+    }
+    if (ui.resetPasswordMsg) ui.resetPasswordMsg.textContent = data.message || "Password saved. You can log in now.";
+    setPendingResetUsername("");
+    passwordResetPopupShownFor = "";
+    stopPasswordResetPoll();
+    if (ui.authUsername && username) ui.authUsername.value = username;
+    setTimeout(() => {
+      closeResetPasswordPopup({ keepPending: false });
+      showOverlay(ui.profileOverlay);
+      refreshProfileUI();
+      setAuthMsg("Password updated — log in with your new password.");
+    }, 700);
+  } catch {
+    if (ui.resetPasswordMsg) ui.resetPasswordMsg.textContent = "Network error.";
   }
 }
 
@@ -4651,10 +5229,524 @@ async function submitContactTicket() {
     if (ui.contactSubject) ui.contactSubject.value = "";
     if (ui.contactMessage) ui.contactMessage.value = "";
     if (ui.contactReported) ui.contactReported.value = "";
-    if (ui.contactMsg) ui.contactMsg.textContent = "Ticket sent — the owner can review it in Admin → Reports.";
+    if (ui.contactMsg) {
+      ui.contactMsg.textContent =
+        data.message ||
+        "Ticket submitted. Please be patient — one of our admins will look into it.";
+    }
   } catch {
     if (ui.contactMsg) ui.contactMsg.textContent = "Network error — try again.";
   }
+}
+
+const REPORT_REASON_LABELS = {
+  abusive_name: "Abusive name",
+  cheating: "Cheating",
+  harassment: "Harassment",
+  other: "Other",
+};
+
+function openReportPlayer() {
+  const name = String(net.opponentName || "").trim();
+  if (!name) return;
+  if (ui.reportPlayerName) ui.reportPlayerName.value = name;
+  if (ui.reportPlayerDetails) ui.reportPlayerDetails.value = "";
+  if (ui.reportPlayerReason) ui.reportPlayerReason.value = "abusive_name";
+  if (ui.reportPlayerMsg) ui.reportPlayerMsg.textContent = "";
+  if (ui.reportPlayerLead) {
+    ui.reportPlayerLead.textContent = authState.token
+      ? `Report ${name} to admins.`
+      : "Sign in from Profile to submit a report.";
+  }
+  hideOverlay(ui.gameOver);
+  showOverlay(ui.reportPlayerOverlay);
+  setStagePlaying(false);
+}
+
+function closeReportPlayer() {
+  hideOverlay(ui.reportPlayerOverlay);
+  showOverlay(ui.gameOver);
+}
+
+async function submitReportPlayer() {
+  if (!authState.token) {
+    if (ui.reportPlayerMsg) ui.reportPlayerMsg.textContent = "Sign in from Profile first.";
+    return;
+  }
+  const reported = String(ui.reportPlayerName?.value || net.opponentName || "").trim();
+  const reason = ui.reportPlayerReason?.value || "other";
+  const details = String(ui.reportPlayerDetails?.value || "").trim();
+  const label = REPORT_REASON_LABELS[reason] || reason;
+  if (ui.reportPlayerMsg) ui.reportPlayerMsg.textContent = "Sending…";
+  try {
+    const data = await adminApi("/api/tickets", {
+      category: "report",
+      reason,
+      reportedPlayer: reported,
+      subject: `Report: ${label}`,
+      message: details || `Reported ${reported} for ${label} after an online match.`,
+    });
+    if (!data?.ok) {
+      if (ui.reportPlayerMsg) ui.reportPlayerMsg.textContent = data?.error || "Could not send report.";
+      return;
+    }
+    if (ui.reportPlayerMsg) {
+      ui.reportPlayerMsg.textContent =
+        data.message || "Report submitted. An admin will review it.";
+    }
+    setTimeout(() => {
+      hideOverlay(ui.reportPlayerOverlay);
+      showOverlay(ui.gameOver);
+    }, 700);
+  } catch {
+    if (ui.reportPlayerMsg) ui.reportPlayerMsg.textContent = "Network error — try again.";
+  }
+}
+
+let inboxSelectedUser = "";
+let inboxSelectedDisplay = "";
+let inboxPollTimer = null;
+
+function inboxInitials(name) {
+  const s = String(name || "?").trim();
+  if (!s) return "?";
+  const parts = s.split(/[\s_]+/).filter(Boolean);
+  if (parts.length >= 2) return (parts[0][0] + parts[1][0]).toUpperCase().slice(0, 2);
+  return s.slice(0, 2).toUpperCase();
+}
+
+function formatInboxTime(ts) {
+  const n = Number(ts) || 0;
+  if (!n) return "";
+  const d = new Date(n);
+  const now = new Date();
+  const sameDay =
+    d.getFullYear() === now.getFullYear() &&
+    d.getMonth() === now.getMonth() &&
+    d.getDate() === now.getDate();
+  if (sameDay) {
+    return d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  }
+  return d.toLocaleDateString([], { month: "short", day: "numeric" });
+}
+
+/** Client-side mirror of server chat safety (server still enforces). */
+function scanChatMessageClient(raw) {
+  const text = String(raw || "");
+  if (/[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}/i.test(text)) {
+    return { ok: false, error: "Emails are not allowed in chat." };
+  }
+  if (
+    /\bpassword\b/i.test(text) ||
+    /\bhttps?:\/\//i.test(text) ||
+    /\bwww\.[a-z0-9.-]+\.[a-z]{2,}/i.test(text) ||
+    /\bsend\s+(me\s+)?(your\s+)?(password|pass|login|credentials)\b/i.test(text) ||
+    /\b(click|open)\s+(this|the)\s+link\b/i.test(text)
+  ) {
+    return { ok: false, error: "That message looks like a scam or password request. It was blocked." };
+  }
+  if (
+    /\b(my|our|home|house)\s+address\b/i.test(text) ||
+    /\b(live|living)\s+at\b/i.test(text) ||
+    /\b\d{1,5}\s+[a-z].{0,40}\b(street|st\.?|road|rd\.?|avenue|ave\.?)\b/i.test(text)
+  ) {
+    return { ok: false, error: "Addresses are not allowed in chat." };
+  }
+  if (
+    /\bhow\s+old\s+(?:are\s+you|r\s+u)\b/i.test(text) ||
+    /\b\d{1,2}\s*(?:years?|yrs?)\s*old\b/i.test(text) ||
+    /\bmy\s+age\b/i.test(text) ||
+    /\b(?:tell|share|ask)\s+(?:me\s+)?(?:your\s+)?age\b/i.test(text)
+  ) {
+    return { ok: false, error: "Sharing or asking about age is not allowed in chat." };
+  }
+  return { ok: true };
+}
+
+function stopInboxPoll() {
+  if (inboxPollTimer) {
+    clearInterval(inboxPollTimer);
+    inboxPollTimer = null;
+  }
+}
+
+function showInboxPane(which) {
+  if (ui.inboxListView) ui.inboxListView.classList.toggle("hidden", which !== "list");
+  if (ui.inboxComposeView) ui.inboxComposeView.classList.toggle("hidden", which !== "compose");
+  if (ui.inboxThreadView) ui.inboxThreadView.classList.toggle("hidden", which !== "thread");
+}
+
+function refreshInboxUI() {
+  const signedIn = !!authState.token;
+  if (ui.inboxGuest) ui.inboxGuest.classList.toggle("hidden", signedIn);
+  if (ui.inboxSignedIn) ui.inboxSignedIn.classList.toggle("hidden", !signedIn);
+}
+
+function toggleInboxRules() {
+  const open = ui.inboxRulesList && ui.inboxRulesList.classList.contains("hidden");
+  if (ui.inboxRulesList) ui.inboxRulesList.classList.toggle("hidden", !open);
+  if (ui.btnInboxRulesToggle) ui.btnInboxRulesToggle.setAttribute("aria-expanded", open ? "true" : "false");
+}
+
+async function refreshInboxBadge() {
+  if (!authState.token || !location.host) {
+    if (ui.inboxBadge) {
+      ui.inboxBadge.textContent = "0";
+      ui.inboxBadge.classList.add("hidden");
+    }
+    return;
+  }
+  try {
+    const data = await adminApi("/api/inbox/threads");
+    const n = Math.max(0, Math.floor(Number(data?.unreadTotal) || 0));
+    if (ui.inboxBadge) {
+      ui.inboxBadge.textContent = String(n);
+      ui.inboxBadge.classList.toggle("hidden", n < 1);
+    }
+  } catch {
+    /* ignore */
+  }
+}
+
+function openInbox() {
+  hideOverlay(ui.menuOverlay);
+  showOverlay(ui.inboxOverlay);
+  setStagePlaying(false);
+  refreshInboxUI();
+  if (authState.token) {
+    showInboxPane("list");
+    refreshInboxThreads();
+    stopInboxPoll();
+    inboxPollTimer = setInterval(() => {
+      if (ui.inboxOverlay && !ui.inboxOverlay.classList.contains("hidden")) {
+        if (ui.inboxListView && !ui.inboxListView.classList.contains("hidden")) refreshInboxThreads({ quiet: true });
+        else if (inboxSelectedUser) openInboxThread(inboxSelectedUser, { quiet: true });
+      }
+    }, 5000);
+  }
+  refreshInboxBadge();
+}
+
+function closeInbox() {
+  stopInboxPoll();
+  hideOverlay(ui.inboxOverlay);
+  showOverlay(ui.menuOverlay);
+  refreshInboxBadge();
+}
+
+function renderInboxThreads(threads) {
+  const list = ui.inboxThreadList;
+  if (!list) return;
+  list.innerHTML = "";
+  const rows = Array.isArray(threads) ? threads : [];
+  if (!rows.length) {
+    if (ui.inboxListMsg) ui.inboxListMsg.textContent = "No chats yet. Tap New chat to start one.";
+    return;
+  }
+  if (ui.inboxListMsg) ui.inboxListMsg.textContent = "";
+  rows.forEach((t) => {
+    const name = t.withUsername || t.withUsernameKey || "Player";
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "inbox-conv";
+    btn.setAttribute("role", "listitem");
+
+    const avatar = document.createElement("div");
+    avatar.className = "inbox-conv-avatar";
+    avatar.textContent = inboxInitials(name);
+
+    const main = document.createElement("div");
+    main.className = "inbox-conv-main";
+    const title = document.createElement("div");
+    title.className = "inbox-conv-name";
+    title.textContent = name;
+    const preview = document.createElement("div");
+    preview.className = "inbox-conv-preview";
+    preview.textContent = t.lastMessage || "Say hello";
+    main.append(title, preview);
+
+    const side = document.createElement("div");
+    side.className = "inbox-conv-side";
+    const time = document.createElement("div");
+    time.className = "inbox-conv-time";
+    time.textContent = formatInboxTime(t.lastAt);
+    side.appendChild(time);
+    if (t.unread) {
+      const badge = document.createElement("span");
+      badge.className = "inbox-badge";
+      badge.textContent = String(t.unread);
+      side.appendChild(badge);
+    }
+
+    btn.append(avatar, main, side);
+    btn.addEventListener("click", () => {
+      playMenuClick();
+      openInboxThread(t.withUsernameKey || t.withUsername, { displayName: name });
+    });
+    list.appendChild(btn);
+  });
+}
+
+async function refreshInboxThreads({ quiet = false } = {}) {
+  if (!authState.token) return;
+  if (!quiet && ui.inboxListMsg) ui.inboxListMsg.textContent = "Loading…";
+  try {
+    const data = await adminApi("/api/inbox/threads");
+    if (!data?.ok) {
+      if (ui.inboxListMsg) ui.inboxListMsg.textContent = data?.error || "Could not load inbox.";
+      return;
+    }
+    renderInboxThreads(data.threads);
+    const n = Math.max(0, Math.floor(Number(data.unreadTotal) || 0));
+    if (ui.inboxBadge) {
+      ui.inboxBadge.textContent = String(n);
+      ui.inboxBadge.classList.toggle("hidden", n < 1);
+    }
+  } catch {
+    if (ui.inboxListMsg) ui.inboxListMsg.textContent = "Network error.";
+  }
+}
+
+function openInboxCompose() {
+  inboxSelectedUser = "";
+  inboxSelectedDisplay = "";
+  showInboxPane("compose");
+  if (ui.inboxLookupUser) ui.inboxLookupUser.value = "";
+  if (ui.inboxComposeBody) ui.inboxComposeBody.value = "";
+  if (ui.inboxLookupMsg) ui.inboxLookupMsg.textContent = "";
+  if (ui.inboxComposeMsg) ui.inboxComposeMsg.textContent = "";
+}
+
+async function lookupInboxUser() {
+  const username = String(ui.inboxLookupUser?.value || "").trim();
+  if (!username) {
+    if (ui.inboxLookupMsg) ui.inboxLookupMsg.textContent = "Enter a username.";
+    return null;
+  }
+  if (ui.inboxLookupMsg) ui.inboxLookupMsg.textContent = "Checking…";
+  try {
+    const data = await adminApi("/api/users/lookup", { username });
+    if (!data?.ok || !data.exists) {
+      if (ui.inboxLookupMsg) ui.inboxLookupMsg.textContent = data?.error || "Username not found.";
+      return null;
+    }
+    if (data.banned) {
+      if (ui.inboxLookupMsg) ui.inboxLookupMsg.textContent = "That account is banned.";
+      return null;
+    }
+    if (ui.inboxLookupMsg) ui.inboxLookupMsg.textContent = `Found: ${data.username}`;
+    return data;
+  } catch {
+    if (ui.inboxLookupMsg) ui.inboxLookupMsg.textContent = "Network error.";
+    return null;
+  }
+}
+
+async function sendInboxCompose() {
+  if (!authState.token) return;
+  const found = await lookupInboxUser();
+  if (!found) return;
+  const body = String(ui.inboxComposeBody?.value || "").trim();
+  if (!body) {
+    if (ui.inboxComposeMsg) ui.inboxComposeMsg.textContent = "Write a message first.";
+    return;
+  }
+  const safety = scanChatMessageClient(body);
+  if (!safety.ok) {
+    if (ui.inboxComposeMsg) ui.inboxComposeMsg.textContent = safety.error;
+    return;
+  }
+  if (ui.inboxComposeMsg) ui.inboxComposeMsg.textContent = "Sending…";
+  try {
+    const data = await adminApi("/api/inbox/send", {
+      toUsername: found.usernameKey || found.username,
+      body,
+    });
+    if (!data?.ok) {
+      if (ui.inboxComposeMsg) ui.inboxComposeMsg.textContent = data?.error || "Send failed.";
+      return;
+    }
+    if (ui.inboxComposeBody) ui.inboxComposeBody.value = "";
+    if (ui.inboxComposeMsg) ui.inboxComposeMsg.textContent = "Sent.";
+    openInboxThread(data.withUsernameKey || found.usernameKey || found.username, {
+      displayName: data.withUsername || found.username,
+    });
+  } catch {
+    if (ui.inboxComposeMsg) ui.inboxComposeMsg.textContent = "Network error.";
+  }
+}
+
+function renderInboxMessages(messages) {
+  const box = ui.inboxMessages;
+  if (!box) return;
+  box.innerHTML = "";
+  const rows = Array.isArray(messages) ? messages : [];
+  rows.forEach((m) => {
+    const div = document.createElement("div");
+    div.className = `inbox-bubble ${m.mine ? "mine" : "theirs"}`;
+    const text = document.createElement("div");
+    text.textContent = m.body || "";
+    const meta = document.createElement("span");
+    meta.className = "inbox-bubble-meta";
+    meta.textContent = formatInboxTime(m.createdAt);
+    div.append(text, meta);
+    box.appendChild(div);
+  });
+  box.scrollTop = box.scrollHeight;
+}
+
+async function openInboxThread(withUsername, { quiet = false, displayName = "" } = {}) {
+  if (!authState.token || !withUsername) return;
+  inboxSelectedUser = withUsername;
+  inboxSelectedDisplay = displayName || withUsername;
+  showInboxPane("thread");
+  if (ui.inboxThreadTitle) ui.inboxThreadTitle.textContent = inboxSelectedDisplay;
+  if (ui.inboxThreadAvatar) ui.inboxThreadAvatar.textContent = inboxInitials(inboxSelectedDisplay);
+  if (!quiet && ui.inboxThreadMsg) ui.inboxThreadMsg.textContent = "Loading…";
+  try {
+    const data = await adminApi("/api/inbox/thread", { withUsername });
+    if (!data?.ok) {
+      if (ui.inboxThreadMsg) ui.inboxThreadMsg.textContent = data?.error || "Could not load chat.";
+      return;
+    }
+    inboxSelectedDisplay = data.withUsername || inboxSelectedDisplay;
+    if (ui.inboxThreadTitle) ui.inboxThreadTitle.textContent = inboxSelectedDisplay;
+    if (ui.inboxThreadAvatar) ui.inboxThreadAvatar.textContent = inboxInitials(inboxSelectedDisplay);
+    renderInboxMessages(data.messages);
+    if (ui.inboxThreadMsg) ui.inboxThreadMsg.textContent = "";
+    refreshInboxBadge();
+  } catch {
+    if (ui.inboxThreadMsg) ui.inboxThreadMsg.textContent = "Network error.";
+  }
+}
+
+async function sendInboxReply() {
+  if (!authState.token || !inboxSelectedUser) return;
+  const body = String(ui.inboxReplyBody?.value || "").trim();
+  if (!body) {
+    if (ui.inboxThreadMsg) ui.inboxThreadMsg.textContent = "Write a reply first.";
+    return;
+  }
+  const safety = scanChatMessageClient(body);
+  if (!safety.ok) {
+    if (ui.inboxThreadMsg) ui.inboxThreadMsg.textContent = safety.error;
+    return;
+  }
+  if (ui.inboxThreadMsg) ui.inboxThreadMsg.textContent = "Sending…";
+  try {
+    const data = await adminApi("/api/inbox/send", {
+      toUsername: inboxSelectedUser,
+      body,
+    });
+    if (!data?.ok) {
+      if (ui.inboxThreadMsg) ui.inboxThreadMsg.textContent = data?.error || "Send failed.";
+      return;
+    }
+    if (ui.inboxReplyBody) ui.inboxReplyBody.value = "";
+    await openInboxThread(inboxSelectedUser, {
+      quiet: true,
+      displayName: inboxSelectedDisplay,
+    });
+    if (ui.inboxThreadMsg) ui.inboxThreadMsg.textContent = "";
+  } catch {
+    if (ui.inboxThreadMsg) ui.inboxThreadMsg.textContent = "Network error.";
+  }
+}
+
+async function reportInboxPlayer() {
+  if (!authState.token || !inboxSelectedUser) return;
+  const name = inboxSelectedDisplay || inboxSelectedUser;
+  if (!window.confirm(`Report ${name} for abusive chat?`)) return;
+  if (ui.inboxThreadMsg) ui.inboxThreadMsg.textContent = "Sending report…";
+  try {
+    const data = await adminApi("/api/tickets", {
+      category: "report",
+      reason: "harassment",
+      source: "chat",
+      reportedPlayer: name,
+      reportedKey: inboxSelectedUser,
+      reporterKey: authState.username,
+      subject: `Chat report: ${name}`,
+      message: `Reported ${name} from Inbox chat for abusive or unsafe messaging.`,
+    });
+    if (!data?.ok) {
+      if (ui.inboxThreadMsg) ui.inboxThreadMsg.textContent = data?.error || "Report failed.";
+      return;
+    }
+    if (ui.inboxThreadMsg) {
+      ui.inboxThreadMsg.textContent = "Report sent. An admin will review it.";
+    }
+  } catch {
+    if (ui.inboxThreadMsg) ui.inboxThreadMsg.textContent = "Network error.";
+  }
+}
+
+let ticketNoticeQueue = [];
+let ticketNoticeShowing = null;
+let ticketNoticeTimer = null;
+
+function showTicketNoticePopup(notice) {
+  if (!notice || !ui.ticketNoticeOverlay) return;
+  ticketNoticeShowing = notice;
+  if (ui.ticketNoticeTitle) {
+    ui.ticketNoticeTitle.textContent =
+      notice.status === "resolved" ? "TICKET RESOLVED" : "TICKET CLOSED";
+  }
+  if (ui.ticketNoticeSubject) {
+    ui.ticketNoticeSubject.textContent = notice.subject || "Your ticket";
+  }
+  if (ui.ticketNoticeBody) {
+    ui.ticketNoticeBody.textContent = `Update from admin: ${notice.resolution || "No action taken"}`;
+  }
+  showOverlay(ui.ticketNoticeOverlay);
+  setStagePlaying(false);
+}
+
+async function dismissTicketNotice() {
+  const notice = ticketNoticeShowing;
+  hideOverlay(ui.ticketNoticeOverlay);
+  ticketNoticeShowing = null;
+  if (notice?.id && authState.token) {
+    try {
+      await adminApi("/api/tickets/ack", { noticeId: notice.id });
+    } catch {
+      /* ignore */
+    }
+  }
+  if (ticketNoticeQueue.length) {
+    const next = ticketNoticeQueue.shift();
+    setTimeout(() => showTicketNoticePopup(next), 250);
+  }
+}
+
+async function pollTicketNotices() {
+  if (!authState.token || !location.host) return;
+  if (ticketNoticeShowing || (ui.ticketNoticeOverlay && !ui.ticketNoticeOverlay.classList.contains("hidden"))) {
+    return;
+  }
+  try {
+    const data = await adminApi("/api/tickets/notices");
+    if (!data?.ok || !Array.isArray(data.notices) || !data.notices.length) return;
+    const pendingIds = new Set([
+      ...(ticketNoticeShowing ? [ticketNoticeShowing.id] : []),
+      ...ticketNoticeQueue.map((n) => n.id),
+    ]);
+    const fresh = data.notices.filter((n) => n && n.id && !pendingIds.has(n.id));
+    if (!fresh.length) return;
+    ticketNoticeQueue.push(...fresh);
+    if (!ticketNoticeShowing) {
+      const next = ticketNoticeQueue.shift();
+      showTicketNoticePopup(next);
+    }
+  } catch {
+    /* ignore */
+  }
+}
+
+function startTicketNoticePolling() {
+  if (ticketNoticeTimer) return;
+  pollTicketNotices();
+  ticketNoticeTimer = setInterval(pollTicketNotices, 20000);
 }
 
 function updateAdminVisibility() {
@@ -4669,6 +5761,7 @@ function updateAdminVisibility() {
     hideOverlay(ui.adminOverlay);
     hideOverlay(ui.passkeyOverlay);
   }
+  refreshInboxBadge();
 }
 
 function initAdminUi() {
@@ -4717,7 +5810,7 @@ function drawPaddleRect(p, side) {
   }
   if (side === "p1" && isBossMode() && s.boss?.powers?.ironT > 0) {
     ctx.save();
-    ctx.globalAlpha = 0.55 + Math.sin(performance.now() * 0.008) * 0.15;
+    ctx.globalAlpha = 0.55 + Math.sin(cosmeticTime() * 8) * 0.15;
     ctx.strokeStyle = "#94a3b8";
     ctx.lineWidth = 2.5;
     ctx.strokeRect(p.x - 2, p.y - 2, paddle.w + 4, h + 4);
@@ -4729,11 +5822,11 @@ function drawPaddleRect(p, side) {
 }
 
 function drawFirePaddle(x, y, w, h) {
-  const t = performance.now() * 0.001;
+  const t = cosmeticTime();
   ctx.save();
   for (let i = 0; i < 10; i++) {
-    const flicker = Math.sin(t * 14 + i * 1.7) * 0.5 + 0.5;
-    const fx = x + w * 0.5 + (Math.sin(t * 9 + i) * w * 0.35);
+    const flicker = Math.sin(t * 10 + i * 1.7) * 0.5 + 0.5;
+    const fx = x + w * 0.5 + (Math.sin(t * 6.5 + i) * w * 0.35);
     const fy = y + h * (0.1 + (i / 10) * 0.8);
     const r = 4 + flicker * 7;
     const g = ctx.createRadialGradient(fx, fy, 0, fx, fy, r);
@@ -4745,7 +5838,7 @@ function drawFirePaddle(x, y, w, h) {
     ctx.arc(fx, fy, r, 0, Math.PI * 2);
     ctx.fill();
   }
-  ctx.globalAlpha = 0.55 + Math.sin(t * 10) * 0.2;
+  ctx.globalAlpha = 0.55 + Math.sin(t * 7) * 0.2;
   ctx.strokeStyle = "#fbbf24";
   ctx.lineWidth = 2;
   ctx.strokeRect(x - 2, y - 2, w + 4, h + 4);
@@ -5059,6 +6152,19 @@ const ui = {
   btnAuthRegister: document.getElementById("btnAuthRegister"),
   btnAuthLogin: document.getElementById("btnAuthLogin"),
   btnAuthLogout: document.getElementById("btnAuthLogout"),
+  btnForgotPassword: document.getElementById("btnForgotPassword"),
+  forgotPasswordOverlay: document.getElementById("forgotPasswordOverlay"),
+  forgotUsername: document.getElementById("forgotUsername"),
+  btnForgotRequest: document.getElementById("btnForgotRequest"),
+  resetPasswordOverlay: document.getElementById("resetPasswordOverlay"),
+  resetPasswordLead: document.getElementById("resetPasswordLead"),
+  resetNewPassword: document.getElementById("resetNewPassword"),
+  resetConfirmPassword: document.getElementById("resetConfirmPassword"),
+  btnForgotSubmitNew: document.getElementById("btnForgotSubmitNew"),
+  forgotPasswordMsg: document.getElementById("forgotPasswordMsg"),
+  resetPasswordMsg: document.getElementById("resetPasswordMsg"),
+  btnForgotPasswordBack: document.getElementById("btnForgotPasswordBack"),
+  btnResetPasswordLater: document.getElementById("btnResetPasswordLater"),
   profileAuthMsg: document.getElementById("profileAuthMsg"),
   profileAvatarGrid: document.getElementById("profileAvatarGrid"),
   profileAvatarFile: document.getElementById("profileAvatarFile"),
@@ -5214,6 +6320,10 @@ const ui = {
   adminPlayerStats: document.getElementById("adminPlayerStats"),
   adminPlayerAmount: document.getElementById("adminPlayerAmount"),
   adminPlayerMsg: document.getElementById("adminPlayerMsg"),
+  adminPlayerControls: document.getElementById("adminPlayerControls"),
+  adminDaddyMsg: document.getElementById("adminDaddyMsg"),
+  adminBanDuration: document.getElementById("adminBanDuration"),
+  adminBanDurationLabel: document.getElementById("adminBanDurationLabel"),
   btnAdminGivePts: document.getElementById("btnAdminGivePts"),
   btnAdminRemovePts: document.getElementById("btnAdminRemovePts"),
   btnAdminGiveXp: document.getElementById("btnAdminGiveXp"),
@@ -5235,11 +6345,26 @@ const ui = {
   adminReportTitle: document.getElementById("adminReportTitle"),
   adminReportMeta: document.getElementById("adminReportMeta"),
   adminReportBody: document.getElementById("adminReportBody"),
+  adminReportResolution: document.getElementById("adminReportResolution"),
+  adminReportOutcome: document.getElementById("adminReportOutcome"),
+  adminPasswordResetBox: document.getElementById("adminPasswordResetBox"),
+  btnApprovePasswordReset: document.getElementById("btnApprovePasswordReset"),
+  btnDenyPasswordReset: document.getElementById("btnDenyPasswordReset"),
+  adminResetCodeMsg: document.getElementById("adminResetCodeMsg"),
+  adminChatHistoryBox: document.getElementById("adminChatHistoryBox"),
+  btnAdminCheckChat: document.getElementById("btnAdminCheckChat"),
+  adminChatLog: document.getElementById("adminChatLog"),
+  adminChatHistoryMsg: document.getElementById("adminChatHistoryMsg"),
   adminReportMsg: document.getElementById("adminReportMsg"),
   btnReportOpen: document.getElementById("btnReportOpen"),
   btnReportResolved: document.getElementById("btnReportResolved"),
   btnReportClosed: document.getElementById("btnReportClosed"),
   btnAdminReportDetailBack: document.getElementById("btnAdminReportDetailBack"),
+  ticketNoticeOverlay: document.getElementById("ticketNoticeOverlay"),
+  ticketNoticeTitle: document.getElementById("ticketNoticeTitle"),
+  ticketNoticeSubject: document.getElementById("ticketNoticeSubject"),
+  ticketNoticeBody: document.getElementById("ticketNoticeBody"),
+  btnTicketNoticeOk: document.getElementById("btnTicketNoticeOk"),
   contactOverlay: document.getElementById("contactOverlay"),
   btnContact: document.getElementById("btnContact"),
   btnContactBack: document.getElementById("btnContactBack"),
@@ -5252,6 +6377,46 @@ const ui = {
   contactReported: document.getElementById("contactReported"),
   contactMessage: document.getElementById("contactMessage"),
   contactMsg: document.getElementById("contactMsg"),
+  btnInbox: document.getElementById("btnInbox"),
+  inboxOverlay: document.getElementById("inboxOverlay"),
+  inboxBadge: document.getElementById("inboxBadge"),
+  inboxGuest: document.getElementById("inboxGuest"),
+  inboxSignedIn: document.getElementById("inboxSignedIn"),
+  btnInboxGoProfile: document.getElementById("btnInboxGoProfile"),
+  btnInboxBack: document.getElementById("btnInboxBack"),
+  btnInboxRulesToggle: document.getElementById("btnInboxRulesToggle"),
+  inboxRulesList: document.getElementById("inboxRulesList"),
+  btnInboxNew: document.getElementById("btnInboxNew"),
+  btnInboxRefresh: document.getElementById("btnInboxRefresh"),
+  inboxListView: document.getElementById("inboxListView"),
+  inboxThreadList: document.getElementById("inboxThreadList"),
+  inboxListMsg: document.getElementById("inboxListMsg"),
+  inboxComposeView: document.getElementById("inboxComposeView"),
+  inboxLookupUser: document.getElementById("inboxLookupUser"),
+  btnInboxLookup: document.getElementById("btnInboxLookup"),
+  inboxLookupMsg: document.getElementById("inboxLookupMsg"),
+  inboxComposeBody: document.getElementById("inboxComposeBody"),
+  btnInboxSendNew: document.getElementById("btnInboxSendNew"),
+  btnInboxComposeBack: document.getElementById("btnInboxComposeBack"),
+  inboxComposeMsg: document.getElementById("inboxComposeMsg"),
+  inboxThreadView: document.getElementById("inboxThreadView"),
+  inboxThreadTitle: document.getElementById("inboxThreadTitle"),
+  inboxThreadAvatar: document.getElementById("inboxThreadAvatar"),
+  inboxMessages: document.getElementById("inboxMessages"),
+  inboxReplyBody: document.getElementById("inboxReplyBody"),
+  btnInboxReply: document.getElementById("btnInboxReply"),
+  btnInboxThreadBack: document.getElementById("btnInboxThreadBack"),
+  btnInboxReport: document.getElementById("btnInboxReport"),
+  inboxThreadMsg: document.getElementById("inboxThreadMsg"),
+  btnReportPlayer: document.getElementById("btnReportPlayer"),
+  reportPlayerOverlay: document.getElementById("reportPlayerOverlay"),
+  reportPlayerLead: document.getElementById("reportPlayerLead"),
+  reportPlayerName: document.getElementById("reportPlayerName"),
+  reportPlayerReason: document.getElementById("reportPlayerReason"),
+  reportPlayerDetails: document.getElementById("reportPlayerDetails"),
+  btnReportPlayerSubmit: document.getElementById("btnReportPlayerSubmit"),
+  reportPlayerMsg: document.getElementById("reportPlayerMsg"),
+  btnReportPlayerBack: document.getElementById("btnReportPlayerBack"),
   adminOverlay: document.getElementById("adminOverlay"),
   adminWelcome: document.getElementById("adminWelcome"),
   adminPoints: document.getElementById("adminPoints"),
@@ -5541,8 +6706,8 @@ function cancelMatchSearch() {
   setOnlineStatus("Search cancelled. Try again when ready.", "search");
 }
 
-const NET_INTERP_MS = 58;
-const NET_EXTRAP_MAX = 0.045;
+const NET_INTERP_MS = 72;
+const NET_EXTRAP_MAX = 0.055;
 
 function inCenterCourt(ballX) {
   const margin = 220;
@@ -8240,11 +9405,38 @@ function toggleRedeemPanel() {
 function updateResignButton() {
   if (!ui.btnResign) return;
   const inMatch = (s.mode === "local" || s.mode === "online") && !s.gameOver;
-  const lobbyOpen = ui.lobbyOverlay && !ui.lobbyOverlay.classList.contains("hidden");
-  const menuOpen = ui.menuOverlay && !ui.menuOverlay.classList.contains("hidden");
-  const botSelectOpen = ui.botLevelOverlay && !ui.botLevelOverlay.classList.contains("hidden");
-  const settingsOpen = ui.settingsOverlay && !ui.settingsOverlay.classList.contains("hidden");
-  ui.btnResign.classList.toggle("hidden", !(inMatch && !lobbyOpen && !menuOpen && !botSelectOpen && !settingsOpen));
+  const overlayBlocking = (el) =>
+    !!(el && !el.classList.contains("hidden") && !el.classList.contains("closing"));
+  const lobbyOpen = overlayBlocking(ui.lobbyOverlay);
+  const menuOpen = overlayBlocking(ui.menuOverlay);
+  const botSelectOpen =
+    overlayBlocking(ui.botLevelOverlay) ||
+    overlayBlocking(ui.chaosLevelOverlay) ||
+    overlayBlocking(ui.survivalLevelOverlay) ||
+    overlayBlocking(ui.bossLevelOverlay) ||
+    overlayBlocking(ui.botModesOverlay) ||
+    overlayBlocking(ui.bossHubOverlay);
+  const settingsOpen = overlayBlocking(ui.settingsOverlay);
+  const onlineMenuOpen =
+    overlayBlocking(ui.onlineHubOverlay) ||
+    overlayBlocking(ui.onlineSearchOverlay) ||
+    overlayBlocking(ui.scoreboardOverlay);
+  const otherMenuOpen =
+    overlayBlocking(ui.customizeOverlay) ||
+    overlayBlocking(ui.profileOverlay) ||
+    overlayBlocking(ui.updatesOverlay) ||
+    overlayBlocking(ui.inboxOverlay) ||
+    overlayBlocking(ui.contactOverlay) ||
+    overlayBlocking(ui.profileViewOverlay);
+  const show =
+    inMatch &&
+    !lobbyOpen &&
+    !menuOpen &&
+    !botSelectOpen &&
+    !settingsOpen &&
+    !onlineMenuOpen &&
+    !otherMenuOpen;
+  ui.btnResign.classList.toggle("hidden", !show);
 }
 
 function resignMatch() {
@@ -8327,20 +9519,101 @@ function requireName(action) {
   action();
 }
 
-function showOverlay(el) {
-  el.classList.remove("hidden");
-  el.setAttribute("aria-hidden", "false");
-  if (stageEl && (el === ui.nameOverlay || el === ui.menuOverlay || el === ui.botModesOverlay || el === ui.modeSoonOverlay || el === ui.botLevelOverlay || el === ui.chaosLevelOverlay || el === ui.survivalLevelOverlay || el === ui.bossHubOverlay || el === ui.bossShopOverlay || el === ui.bossLevelOverlay || el === ui.lobbyOverlay || el === ui.onlineHubOverlay || el === ui.onlineSearchOverlay || el === ui.scoreboardOverlay || el === ui.customizeOverlay || el === ui.profileOverlay || el === ui.settingsOverlay || el === ui.updatesOverlay || el === ui.adminOverlay || el === ui.adminToolsOverlay || el === ui.adminPlayersOverlay || el === ui.adminPlayerDetailOverlay || el === ui.adminReportsOverlay || el === ui.adminReportDetailOverlay || el === ui.contactOverlay || el === ui.passkeyOverlay || el === ui.masterClearOverlay)) {
-    stageEl.classList.add("menu-open");
-  }
+const OVERLAY_FADE_MS = 200;
+const overlayHideTimers = new WeakMap();
+
+const MENU_STAGE_OVERLAYS = () => [
+  ui.nameOverlay,
+  ui.menuOverlay,
+  ui.botModesOverlay,
+  ui.modeSoonOverlay,
+  ui.botLevelOverlay,
+  ui.chaosLevelOverlay,
+  ui.survivalLevelOverlay,
+  ui.bossHubOverlay,
+  ui.bossShopOverlay,
+  ui.bossLevelOverlay,
+  ui.lobbyOverlay,
+  ui.onlineHubOverlay,
+  ui.onlineSearchOverlay,
+  ui.scoreboardOverlay,
+  ui.customizeOverlay,
+  ui.profileOverlay,
+  ui.settingsOverlay,
+  ui.updatesOverlay,
+  ui.adminOverlay,
+  ui.adminToolsOverlay,
+  ui.adminPlayersOverlay,
+  ui.adminPlayerDetailOverlay,
+  ui.adminReportsOverlay,
+  ui.adminReportDetailOverlay,
+  ui.contactOverlay,
+  ui.inboxOverlay,
+  ui.reportPlayerOverlay,
+  ui.forgotPasswordOverlay,
+  ui.resetPasswordOverlay,
+  ui.ticketNoticeOverlay,
+  ui.passkeyOverlay,
+  ui.masterClearOverlay,
+];
+
+function isMenuStageOverlay(el) {
+  return MENU_STAGE_OVERLAYS().includes(el);
 }
 
-function hideOverlay(el) {
-  el.classList.add("hidden");
-  el.setAttribute("aria-hidden", "true");
-  if (stageEl && (el === ui.nameOverlay || el === ui.menuOverlay || el === ui.botModesOverlay || el === ui.modeSoonOverlay || el === ui.botLevelOverlay || el === ui.chaosLevelOverlay || el === ui.survivalLevelOverlay || el === ui.bossHubOverlay || el === ui.bossShopOverlay || el === ui.bossLevelOverlay || el === ui.lobbyOverlay || el === ui.onlineHubOverlay || el === ui.onlineSearchOverlay || el === ui.scoreboardOverlay || el === ui.customizeOverlay || el === ui.profileOverlay || el === ui.settingsOverlay || el === ui.updatesOverlay || el === ui.adminOverlay || el === ui.adminToolsOverlay || el === ui.adminPlayersOverlay || el === ui.adminPlayerDetailOverlay || el === ui.adminReportsOverlay || el === ui.adminReportDetailOverlay || el === ui.contactOverlay || el === ui.passkeyOverlay || el === ui.masterClearOverlay)) {
-    stageEl.classList.remove("menu-open");
+function shouldFadeOverlay(el) {
+  if (!el || !isMenuStageOverlay(el)) return false;
+  if (el === ui.levelUpOverlay || el === ui.gameOverOverlay) return false;
+  return true;
+}
+
+function showOverlay(el) {
+  if (!el) return;
+  const pending = overlayHideTimers.get(el);
+  if (pending) {
+    clearTimeout(pending);
+    overlayHideTimers.delete(el);
   }
+  el.classList.remove("closing");
+  if (shouldFadeOverlay(el)) el.classList.add("overlay-fade");
+  el.classList.remove("hidden");
+  el.setAttribute("aria-hidden", "false");
+  if (stageEl && isMenuStageOverlay(el)) {
+    stageEl.classList.add("menu-open");
+  }
+  updateResignButton();
+}
+
+function hideOverlay(el, { instant = false } = {}) {
+  if (!el) return;
+  const pending = overlayHideTimers.get(el);
+  if (pending) {
+    clearTimeout(pending);
+    overlayHideTimers.delete(el);
+  }
+
+  const finishHide = () => {
+    el.classList.add("hidden");
+    el.classList.remove("closing");
+    el.setAttribute("aria-hidden", "true");
+    overlayHideTimers.delete(el);
+    if (stageEl && isMenuStageOverlay(el)) {
+      const anyOpen = MENU_STAGE_OVERLAYS().some((o) => o && !o.classList.contains("hidden") && !o.classList.contains("closing"));
+      if (!anyOpen) stageEl.classList.remove("menu-open");
+    }
+    updateResignButton();
+  };
+
+  if (instant || !shouldFadeOverlay(el) || el.classList.contains("hidden")) {
+    finishHide();
+    return;
+  }
+
+  el.classList.add("overlay-fade", "closing");
+  el.setAttribute("aria-hidden", "true");
+  updateResignButton();
+  const timer = setTimeout(finishHide, OVERLAY_FADE_MS);
+  overlayHideTimers.set(el, timer);
 }
 
 function normalizedMouseY() {
@@ -8729,9 +10002,14 @@ function endGame(winner, opts = {}) {
   if (s.mode === "online") {
     if (justEnded) net.rematchReady = [false, false];
     updateOnlineRematchUI();
+    if (ui.btnReportPlayer) {
+      const canReport = !!(net.opponentName && String(net.opponentName).trim());
+      ui.btnReportPlayer.classList.toggle("hidden", !canReport);
+    }
   } else if (ui.gameOverRematchMsg) {
     ui.gameOverRematchMsg.textContent = "";
     ui.gameOverRematchMsg.classList.add("hidden");
+    if (ui.btnReportPlayer) ui.btnReportPlayer.classList.add("hidden");
   }
   if (ui.playAgain && s.mode !== "online") {
     ui.playAgain.disabled = false;
@@ -9239,7 +10517,8 @@ function updateOnline(dt) {
 
   if (net.remotePaddleY != null) {
     const remote = net.player === 1 ? s.p2 : s.p1;
-    remote.y = net.remotePaddleY;
+    const blend = 1 - Math.exp(-16 * Math.max(0.001, dt));
+    remote.y += (net.remotePaddleY - remote.y) * blend;
   }
 
   if (s.running && net.snap?.ball) {
@@ -9661,6 +10940,22 @@ function handleWsMessage(msg) {
     return;
   }
 
+  if (msg.type === "profileForce" && msg.profile) {
+    applyProfile(msg.profile, { replace: true });
+    if (typeof msg.adminSyncedAt === "number") {
+      save.adminSyncedAt = Math.max(save.adminSyncedAt || 0, Math.floor(msg.adminSyncedAt));
+    }
+    try {
+      localStorage.setItem(SAVE_CACHE_KEY, JSON.stringify(profilePayload()));
+    } catch {
+      /* ignore */
+    }
+    updatePointsUI();
+    refreshProfileUI();
+    refreshAdminPanel();
+    return;
+  }
+
   if (msg.type === "opponentLeft") {
     stopGameMusic();
     stopSearchUI();
@@ -9874,6 +11169,9 @@ function scoreboardAvatarStyle(entry) {
     return { backgroundImage: `url("${entry.customAvatarUrl}")`, text: "" };
   }
   const def = AVATAR_DEFS.find((a) => a.id === entry.avatar) || AVATAR_DEFS[0];
+  if (def.image) {
+    return { backgroundImage: `url("${def.image}")`, text: "" };
+  }
   return { background: avatarCssBackground(def), text: def.emoji || "P" };
 }
 
@@ -10019,6 +11317,10 @@ function backToMenu() {
   hideOverlay(ui.adminReportsOverlay);
   hideOverlay(ui.adminReportDetailOverlay);
   hideOverlay(ui.contactOverlay);
+  hideOverlay(ui.inboxOverlay);
+  hideOverlay(ui.reportPlayerOverlay);
+  hideOverlay(ui.forgotPasswordOverlay);
+  hideOverlay(ui.resetPasswordOverlay);
   hideOverlay(ui.passkeyOverlay);
   hideOverlay(ui.masterClearOverlay);
   hideOverlay(ui.profileOverlay);
@@ -10028,6 +11330,7 @@ function backToMenu() {
   setScoreboardLabels("LEFT", "RIGHT");
   ui.p1.textContent = "0";
   ui.p2.textContent = "0";
+  refreshInboxBadge();
   ui.status.textContent = "Ready";
   updateNameUI();
   if (!hasValidName()) ui.hint.textContent = "Enter your name to start.";
@@ -10102,7 +11405,17 @@ function bindAdminControls() {
   });
   bind(ui.btnAdminKickPlayer, () => adminPlayerAction("kick"));
   bind(ui.btnAdminBanPlayer, () => {
-    if (window.confirm("Ban this player? They will be kicked and cannot log in.")) {
+    const dur = ui.adminBanDuration?.value || "permanent";
+    const labels = {
+      "2h": "2 hours",
+      "7h": "7 hours",
+      "24h": "24 hours",
+      "2d": "2 days",
+      "7d": "7 days",
+      "30d": "30 days",
+      permanent: "permanently",
+    };
+    if (window.confirm(`Ban this player for ${labels[dur] || dur}? They will be kicked and cannot log in.`)) {
       adminPlayerAction("ban");
     }
   });
@@ -10123,6 +11436,39 @@ function bindAdminControls() {
   bind(ui.btnReportOpen, () => adminSetTicketStatus("open"));
   bind(ui.btnReportResolved, () => adminSetTicketStatus("resolved"));
   bind(ui.btnReportClosed, () => adminSetTicketStatus("closed"));
+  bind(ui.btnApprovePasswordReset, () => {
+    playMenuClick();
+    adminApprovePasswordReset();
+  });
+  bind(ui.btnDenyPasswordReset, () => {
+    playMenuClick();
+    adminDenyPasswordReset();
+  });
+  bind(ui.btnAdminCheckChat, () => {
+    playMenuClick();
+    adminCheckChatHistory();
+  });
+  bind(ui.btnForgotPassword, () => {
+    playMenuClick();
+    openForgotPassword();
+  });
+  bind(ui.btnForgotPasswordBack, () => {
+    playMenuClick();
+    closeForgotPassword();
+  });
+  bind(ui.btnForgotRequest, () => {
+    playMenuClick();
+    submitForgotRequest();
+  });
+  bind(ui.btnForgotSubmitNew, () => {
+    playMenuClick();
+    submitForgotNewPassword();
+  });
+  bind(ui.btnResetPasswordLater, () => {
+    playMenuClick();
+    closeResetPasswordPopup({ keepPending: true });
+    showOverlay(ui.menuOverlay);
+  });
   if (ui.adminLevelInput) {
     ui.adminLevelInput.addEventListener("keydown", (e) => {
       if (e.key === "Enter") {
@@ -10416,6 +11762,71 @@ function bindUi() {
     }
   });
   bind(ui.btnContactSubmit, submitContactTicket);
+  bind(ui.btnInbox, openInbox);
+  bind(ui.btnInboxBack, closeInbox);
+  bind(ui.btnInboxGoProfile, () => {
+    hideOverlay(ui.inboxOverlay);
+    openProfile();
+  });
+  bind(ui.btnInboxRulesToggle, () => {
+    playMenuClick();
+    toggleInboxRules();
+  });
+  bind(ui.btnInboxNew, () => {
+    playMenuClick();
+    openInboxCompose();
+  });
+  bind(ui.btnInboxRefresh, () => {
+    playMenuClick();
+    refreshInboxThreads();
+  });
+  bind(ui.btnInboxLookup, () => {
+    playMenuClick();
+    lookupInboxUser();
+  });
+  bind(ui.btnInboxSendNew, () => {
+    playMenuClick();
+    sendInboxCompose();
+  });
+  bind(ui.btnInboxComposeBack, () => {
+    playMenuClick();
+    showInboxPane("list");
+    refreshInboxThreads();
+  });
+  bind(ui.btnInboxReply, () => {
+    playMenuClick();
+    sendInboxReply();
+  });
+  bind(ui.btnInboxThreadBack, () => {
+    playMenuClick();
+    showInboxPane("list");
+    refreshInboxThreads();
+  });
+  bind(ui.btnInboxReport, () => {
+    playMenuClick();
+    reportInboxPlayer();
+  });
+  if (ui.inboxReplyBody) {
+    ui.inboxReplyBody.addEventListener("keydown", (e) => {
+      if (e.key === "Enter" && !e.shiftKey) {
+        e.preventDefault();
+        sendInboxReply();
+      }
+    });
+  }
+  bind(ui.btnReportPlayer, () => {
+    playMenuClick();
+    openReportPlayer();
+  });
+  bind(ui.btnReportPlayerBack, () => {
+    playMenuClick();
+    closeReportPlayer();
+  });
+  bind(ui.btnReportPlayerSubmit, () => {
+    playMenuClick();
+    submitReportPlayer();
+  });
+  bind(ui.btnTicketNoticeOk, dismissTicketNotice);
   bind(ui.backToMenu, backToMenu);
   bind(ui.btnCreateRoom, () => connectWs(() => sendWs({ type: "create" })));
   bind(ui.btnSearch, startMatchSearch);
@@ -10793,6 +12204,7 @@ async function boot() {
   }
   if (stageEl) stageEl.classList.add("menu-open");
   updatePhoneLayout();
+  if (getPendingResetUsername()) startPasswordResetPoll(getPendingResetUsername());
   requestAnimationFrame(frame);
 }
 
