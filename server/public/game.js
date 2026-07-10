@@ -2900,8 +2900,11 @@ function fitGameStage() {
   canvas.style.height = `${drawH}px`;
   canvas.style.maxWidth = "100%";
   canvas.style.maxHeight = "100%";
-  stageEl.style.width = `${drawW}px`;
-  stageEl.style.height = "auto";
+  // Keep stage full-bleed on phone so menus/overlays aren't clipped to the canvas band.
+  stageEl.style.width = "100%";
+  stageEl.style.height = "100%";
+  stageEl.style.maxWidth = "100%";
+  stageEl.style.maxHeight = "100%";
 }
 
 function applyPhoneUiTransform() {
@@ -3047,12 +3050,13 @@ function updatePhoneLayout() {
       const overlay = document.querySelector(".overlay:not(.hidden)");
       const card = overlay?.querySelector(".overlay-card");
       const wrap = document.querySelector(".wrap");
-      if (!overlay || !card || !wrap) return;
+      if (!overlay || !card || !wrap || !stageEl) return;
       const or = overlay.getBoundingClientRect();
       const cr = card.getBoundingClientRect();
+      const sr = stageEl.getBoundingClientRect();
       const wr = wrap.getBoundingClientRect();
       const cs = getComputedStyle(overlay);
-      agentLog("H1", "game.js:updatePhoneLayout", "phone portrait center check", {
+      agentLog("H-A", "game.js:updatePhoneLayout", "phone portrait center check", {
         vw: window.innerWidth,
         vh: window.innerHeight,
         portrait: window.innerHeight >= window.innerWidth,
@@ -3061,15 +3065,26 @@ function updatePhoneLayout() {
         panY: phonePanY,
         overlayAlign: cs.alignItems,
         overlayJustify: cs.justifyContent,
-        cardCenterX: Math.round(cr.left + cr.width / 2),
-        cardCenterY: Math.round(cr.top + cr.height / 2),
-        viewCenterX: Math.round(window.innerWidth / 2),
-        viewCenterY: Math.round(window.innerHeight / 2),
+        overlayOverflowY: cs.overflowY,
+        stageW: Math.round(sr.width),
+        stageH: Math.round(sr.height),
+        stageTop: Math.round(sr.top),
+        overlayW: Math.round(or.width),
+        overlayH: Math.round(or.height),
+        overlayScrollH: overlay.scrollHeight,
+        overlayClientH: overlay.clientHeight,
+        overlayScrollNeeded: overlay.scrollHeight > overlay.clientHeight + 1,
+        cardH: Math.round(cr.height),
+        cardScrollH: card.scrollHeight,
+        cardClientH: card.clientHeight,
+        cardScrollNeeded: card.scrollHeight > card.clientHeight + 1,
         cardOffsetX: Math.round(cr.left + cr.width / 2 - window.innerWidth / 2),
         cardOffsetY: Math.round(cr.top + cr.height / 2 - window.innerHeight / 2),
-        wrapTransform: getComputedStyle(wrap).transform,
+        stageFillsViewport: sr.height >= window.innerHeight * 0.55,
+        wrapH: Math.round(wr.height),
         uiScale: getComputedStyle(document.body).getPropertyValue("--phone-ui-scale").trim(),
-      });
+        runId: "post-fix",
+      }, "post-fix");
     });
   }
   // #endregion
