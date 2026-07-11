@@ -25,7 +25,7 @@
         display: none !important;
       }
     </style>
-    <link rel="stylesheet" href="style.css?v=20260711f" />
+    <link rel="stylesheet" href="style.css?v=20260711x" />
   </head>
   <body>
     <canvas id="menuBg" class="menu-bg" aria-hidden="true"></canvas>
@@ -288,9 +288,38 @@
                 <span class="menu-tile-label">Boss Battles</span>
                 <span class="menu-tile-hint">10 bosses · shop powers · Overlord</span>
               </button>
+              <button type="button" class="menu-tile" id="btnModeCupPong">
+                <span class="menu-tile-kicker">Party</span>
+                <span class="menu-tile-label">Cup Pong</span>
+                <span class="menu-tile-hint">Beer pong · hold & flick · 50 bots</span>
+              </button>
             </div>
             <div class="menu-panel-footer">
               <button type="button" class="link-btn" id="btnBotModesBack">Back</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="overlay hidden" id="cupPongLevelOverlay" aria-hidden="true">
+          <div class="overlay-card menu-card bot-level-card cuppong-level-card menu-panel">
+            <div class="bot-level-header menu-panel-header">
+              <div class="overlay-title">CUP PONG</div>
+              <p class="lobby-text">
+                1v1 beer pong vs bot · portrait table · hold & flick up · 10 cups · +2 score per cup · win for +4 pts and 50 XP. Clear L50 to unlock Beer Pong cosmetics.
+              </p>
+              <div class="bot-level-presets">
+                <button type="button" class="play-again secondary cuppong-preset" data-level="1">Cup 1</button>
+                <button type="button" class="play-again secondary cuppong-preset" data-level="10">Cup 10</button>
+                <button type="button" class="play-again secondary cuppong-preset" data-level="25">Cup 25</button>
+                <button type="button" class="play-again secondary cuppong-preset" data-level="50">Cup 50</button>
+              </div>
+            </div>
+            <div class="bot-level-body menu-panel-body">
+              <div class="bot-level-grid" id="cupPongLevelGrid"></div>
+            </div>
+            <div class="bot-level-footer menu-panel-footer">
+              <p class="shop-msg" id="cupPongLevelHint">Cup 1 — Soft toss</p>
+              <button type="button" class="link-btn" id="btnCupPongLevelBack">Back</button>
             </div>
           </div>
         </div>
@@ -433,6 +462,17 @@
               <p class="lobby-text">Changelog and roadmap for this build.</p>
             </div>
             <div class="updates-body menu-panel-body" id="updatesBody">
+              <article class="update-entry update-secret">
+                <div class="update-secret-badge">SECRET</div>
+                <h3 class="update-heading">Secret Update — Cup Pong</h3>
+                <p class="update-date">July 11, 2026 · You weren’t supposed to see this</p>
+                <ul class="update-list">
+                  <li>Hidden drop: Cup Pong — hold the ball, flick to throw into cups</li>
+                  <li>50 bot levels · flick speed sets distance · table bounces · lounge soundtrack</li>
+                  <li>+4 shop points and 50 XP every win · clear L50 for Beer Pong cosmetics</li>
+                  <li>Find it under Play vs Bot… if you know where to look</li>
+                </ul>
+              </article>
               <article class="update-entry">
                 <h3 class="update-heading">Update 1.0 — Live</h3>
                 <p class="update-date">July 11, 2026</p>
@@ -696,11 +736,12 @@
                 <button type="button" class="play-again secondary" id="btnAdminUnlockChaos">Unlock all Chaos levels</button>
                 <button type="button" class="play-again secondary" id="btnAdminUnlockSurvival">Unlock all Survival rounds</button>
                 <button type="button" class="play-again secondary" id="btnAdminUnlockBoss">Unlock all Boss battles</button>
+                <button type="button" class="play-again secondary" id="btnAdminUnlockCupPong">Unlock all Cup Pong levels</button>
               </div>
-              <p class="admin-section-label">Player level (0–100)</p>
-              <p class="shop-points">Level: <span id="adminLevel">0</span></p>
+              <p class="admin-section-label">Player level from XP (1–1000)</p>
+              <p class="shop-points">Level: <span id="adminLevel">1</span></p>
               <div class="admin-row">
-                <input id="adminLevelInput" class="room-input admin-input" type="number" min="0" max="100" placeholder="Level" />
+                <input id="adminLevelInput" class="room-input admin-input" type="number" min="1" max="1000" placeholder="Level" />
                 <button type="button" class="play-again secondary admin-btn" id="btnAdminSetLevel">Set level</button>
               </div>
               <p class="admin-section-label">Abilities (local games)</p>
@@ -1238,6 +1279,8 @@
       window.PONG_ADMIN = null;
     </script>
     <script src="admin.local.js"></script>
-    <script src="game.js?v=20260711f" defer></script>
+    <script src="sfx/cup-bounce-samples.js?v=20260711x" defer></script>
+    <script src="game.js?v=20260711x" defer></script>
+    <script src="cuppong.js?v=20260711x" defer></script>
   </body>
 </html>

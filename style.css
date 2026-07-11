@@ -652,20 +652,24 @@ body.menu-bg-active .overlay-card {
   background: linear-gradient(
     90deg,
     #ff4d6d,
+    #ff7a45,
     #ff9f1c,
     #ffd166,
+    #a3e635,
     #06d6a0,
+    #2dd4bf,
     #4cc9f0,
+    #818cf8,
     #7b2cbf,
     #f72585,
     #ff4d6d
   );
-  background-size: 220% 100%;
+  background-size: 300% 100%;
   -webkit-background-clip: text;
   background-clip: text;
   color: transparent;
   -webkit-text-fill-color: transparent;
-  animation: rainbow-shift 4s linear infinite;
+  animation: rainbow-shift 16s ease-in-out infinite alternate;
 }
 
 @keyframes rainbow-shift {
@@ -673,7 +677,7 @@ body.menu-bg-active .overlay-card {
     background-position: 0% 50%;
   }
   100% {
-    background-position: 220% 50%;
+    background-position: 100% 50%;
   }
 }
 
@@ -2323,25 +2327,25 @@ body.phone-mode .inbox-bubble {
   color: #86efac;
   border-color: rgba(220, 38, 38, 0.7);
   background: linear-gradient(90deg, rgba(127, 29, 29, 0.5), rgba(20, 83, 45, 0.45));
-  animation: titleBossPulse 1.8s ease-in-out infinite alternate;
+  animation: titleBossPulse 3.2s ease-in-out infinite alternate;
 }
 
 .title-chip-chaos {
   color: #fda4d5;
   border-color: rgba(236, 72, 153, 0.7);
   background: linear-gradient(110deg, rgba(131, 24, 67, 0.55), rgba(14, 116, 144, 0.4));
-  animation: titleChaosShine 2.2s linear infinite;
-  background-size: 200% 100%;
+  animation: titleChaosShine 7s ease-in-out infinite alternate;
+  background-size: 240% 100%;
 }
 
 @keyframes titleBossPulse {
   from { box-shadow: 0 0 0 rgba(74, 222, 128, 0); }
-  to { box-shadow: 0 0 12px rgba(74, 222, 128, 0.45); }
+  to { box-shadow: 0 0 10px rgba(74, 222, 128, 0.35); }
 }
 
 @keyframes titleChaosShine {
   0% { background-position: 0% 50%; }
-  100% { background-position: 200% 50%; }
+  100% { background-position: 100% 50%; }
 }
 
 body.phone-mode .profile-card,
@@ -2792,6 +2796,15 @@ body.phone-mode .boss-hud {
   border-color: rgba(245, 158, 11, 0.85);
 }
 
+.cuppong-level-card .overlay-title {
+  color: #fbbf24;
+  text-shadow: 0 0 18px rgba(251, 191, 36, 0.35);
+}
+
+.cuppong-level-card .cuppong-preset {
+  border-color: rgba(251, 191, 36, 0.85);
+}
+
 .boss-level-card .overlay-title {
   color: #fca5a5;
   text-shadow: 0 0 18px rgba(220, 38, 38, 0.45);
@@ -2925,61 +2938,408 @@ body.phone-mode .boss-hud {
 .lvl-15 { color: #c084fc; }
 
 .lvl-20 {
-  background: linear-gradient(90deg, #f472b6, #a78bfa, #f472b6);
-  background-size: 200% 100%;
-  -webkit-background-clip: text;
-  background-clip: text;
-  color: transparent;
-  -webkit-text-fill-color: transparent;
-  animation: lvl-shift 2.8s linear infinite;
-}
-
-.lvl-40 {
-  background: linear-gradient(90deg, #22d3ee, #fbbf24, #22d3ee);
-  background-size: 200% 100%;
-  -webkit-background-clip: text;
-  background-clip: text;
-  color: transparent;
-  -webkit-text-fill-color: transparent;
-  animation: lvl-shift 2.4s linear infinite;
-}
-
-.lvl-60 {
-  background: linear-gradient(90deg, #fb7185, #34d399, #818cf8, #fb7185);
+  background: linear-gradient(90deg, #f472b6, #c084fc, #a78bfa, #f472b6);
   background-size: 240% 100%;
   -webkit-background-clip: text;
   background-clip: text;
   color: transparent;
   -webkit-text-fill-color: transparent;
-  animation: lvl-shift 2s linear infinite;
-  text-shadow: 0 0 12px rgba(251, 113, 133, 0.35);
+  animation: lvl-shift 7s ease-in-out infinite alternate;
 }
 
-.lvl-80 {
-  background: linear-gradient(90deg, #ef4444, #f59e0b, #22c55e, #3b82f6, #a855f7, #ef4444);
+.lvl-40 {
+  background: linear-gradient(90deg, #22d3ee, #67e8f9, #fbbf24, #22d3ee);
+  background-size: 240% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  -webkit-text-fill-color: transparent;
+  animation: lvl-shift 6.5s ease-in-out infinite alternate;
+}
+
+.lvl-60 {
+  background: linear-gradient(90deg, #fb7185, #f9a8d4, #34d399, #818cf8, #fb7185);
   background-size: 280% 100%;
   -webkit-background-clip: text;
   background-clip: text;
   color: transparent;
   -webkit-text-fill-color: transparent;
-  animation: lvl-shift 1.6s linear infinite;
+  animation: lvl-shift 6s ease-in-out infinite alternate;
+  text-shadow: 0 0 12px rgba(251, 113, 133, 0.28);
 }
 
-.lvl-100 {
-  background: linear-gradient(90deg, #ff4d6d, #ff9f1c, #ffd166, #06d6a0, #4cc9f0, #7b2cbf, #ff4d6d);
+.lvl-80 {
+  background: linear-gradient(90deg, #ef4444, #f59e0b, #22c55e, #3b82f6, #a855f7, #ef4444);
   background-size: 320% 100%;
   -webkit-background-clip: text;
   background-clip: text;
   color: transparent;
   -webkit-text-fill-color: transparent;
-  animation: lvl-shift 1.2s linear infinite;
-  filter: drop-shadow(0 0 6px rgba(255, 215, 0, 0.45));
+  animation: lvl-shift 7.5s ease-in-out infinite alternate;
+}
+
+.lvl-100 {
+  background: linear-gradient(90deg, #ff4d6d, #ff9f1c, #ffd166, #06d6a0, #4cc9f0, #7b2cbf, #ff4d6d);
+  background-size: 360% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  -webkit-text-fill-color: transparent;
+  animation: lvl-shift 8s ease-in-out infinite alternate;
+  filter: drop-shadow(0 0 6px rgba(255, 215, 0, 0.35));
 }
 
 @keyframes lvl-shift {
   0% { background-position: 0% 50%; }
-  100% { background-position: 200% 50%; }
+  100% { background-position: 100% 50%; }
 }
+
+@keyframes lvl-pulse {
+  0%, 100% { filter: brightness(1) drop-shadow(0 0 2px rgba(255,255,255,0.15)); }
+  50% { filter: brightness(1.12) drop-shadow(0 0 6px rgba(255,255,255,0.32)); }
+}
+@keyframes lvl-shimmer {
+  0% { background-position: 0% 50%; filter: brightness(1); }
+  50% { background-position: 50% 50%; filter: brightness(1.08); }
+  100% { background-position: 100% 50%; filter: brightness(1); }
+}
+@keyframes lvl-glow {
+  0%, 100% { text-shadow: 0 0 4px rgba(255,255,255,0.2), 0 0 8px currentColor; }
+  50% { text-shadow: 0 0 8px rgba(255,255,255,0.4), 0 0 16px currentColor; }
+}
+@keyframes lvl-flicker {
+  0%, 100% { opacity: 1; filter: brightness(1); }
+  50% { opacity: 0.96; filter: brightness(1.08); }
+}
+@keyframes lvl-spinhue {
+  0% { filter: hue-rotate(0deg) drop-shadow(0 0 5px rgba(255,215,0,0.28)); }
+  100% { filter: hue-rotate(360deg) drop-shadow(0 0 5px rgba(255,215,0,0.28)); }
+}
+.lvl-125 {
+  background: linear-gradient(90deg, #ff4d6d, #ff9f1c, #ffd166, #06d6a0, #4cc9f0, #7b2cbf, #ff4d6d);
+  background-size: 200% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  -webkit-text-fill-color: transparent;
+  animation: lvl-shift 7.28s ease-in-out infinite alternate;
+}
+.lvl-150 {
+  background: linear-gradient(90deg, #38bdf8, #818cf8, #c084fc, #f472b6, #38bdf8);
+  background-size: 220% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  -webkit-text-fill-color: transparent;
+  animation: lvl-shift 6.81s ease-in-out infinite alternate, lvl-pulse 9.54s ease-in-out infinite;
+}
+.lvl-175 {
+  background: linear-gradient(90deg, #f97316, #ef4444, #fbbf24, #fb7185, #f97316);
+  background-size: 240% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  -webkit-text-fill-color: transparent;
+  animation: lvl-shimmer 6.34s ease-in-out infinite alternate;
+}
+.lvl-200 {
+  background: linear-gradient(90deg, #22d3ee, #2dd4bf, #34d399, #a3e635, #22d3ee);
+  background-size: 260% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  -webkit-text-fill-color: transparent;
+  animation: lvl-shift 5.88s ease-in-out infinite alternate, lvl-glow 8.22s ease-in-out infinite;
+}
+.lvl-225 {
+  background: linear-gradient(90deg, #e879f9, #a78bfa, #60a5fa, #22d3ee, #e879f9);
+  background-size: 280% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  -webkit-text-fill-color: transparent;
+  animation: lvl-shift 5.5s ease-in-out infinite alternate, lvl-flicker 7.57s ease-in-out infinite;
+}
+.lvl-250 {
+  background: linear-gradient(90deg, #facc15, #f59e0b, #fb923c, #f87171, #facc15);
+  background-size: 300% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  -webkit-text-fill-color: transparent;
+  animation: lvl-shift 5.5s ease-in-out infinite alternate, lvl-spinhue 19.76s linear infinite;
+}
+.lvl-275 {
+  background: linear-gradient(90deg, #94a3b8, #e2e8f0, #38bdf8, #a855f7, #94a3b8);
+  background-size: 200% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  -webkit-text-fill-color: transparent;
+  animation: lvl-shift 5.5s ease-in-out infinite alternate;
+}
+.lvl-300 {
+  background: linear-gradient(90deg, #f43f5e, #ec4899, #d946ef, #8b5cf6, #f43f5e);
+  background-size: 220% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  -webkit-text-fill-color: transparent;
+  animation: lvl-shift 5.5s ease-in-out infinite alternate, lvl-pulse 5.62s ease-in-out infinite;
+}
+.lvl-325 {
+  background: linear-gradient(90deg, #14b8a6, #06b6d4, #3b82f6, #6366f1, #14b8a6);
+  background-size: 240% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  -webkit-text-fill-color: transparent;
+  animation: lvl-shimmer 7.28s ease-in-out infinite alternate;
+}
+.lvl-350 {
+  background: linear-gradient(90deg, #fff7ed, #fdba74, #fb923c, #ea580c, #fff7ed);
+  background-size: 260% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  -webkit-text-fill-color: transparent;
+  animation: lvl-shift 6.81s ease-in-out infinite alternate, lvl-glow 9.54s ease-in-out infinite;
+}
+.lvl-375 {
+  background: linear-gradient(90deg, #bbf7d0, #4ade80, #22c55e, #166534, #bbf7d0);
+  background-size: 280% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  -webkit-text-fill-color: transparent;
+  animation: lvl-shift 6.34s ease-in-out infinite alternate, lvl-flicker 8.89s ease-in-out infinite;
+}
+.lvl-400 {
+  background: linear-gradient(90deg, #fecdd3, #fb7185, #e11d48, #881337, #fecdd3);
+  background-size: 300% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  -webkit-text-fill-color: transparent;
+  animation: lvl-shift 5.88s ease-in-out infinite alternate, lvl-spinhue 23.4s linear infinite;
+}
+.lvl-425 {
+  background: linear-gradient(90deg, #ff4d6d, #ff9f1c, #ffd166, #06d6a0, #4cc9f0, #7b2cbf, #ff4d6d);
+  background-size: 200% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  -webkit-text-fill-color: transparent;
+  animation: lvl-shift 5.5s ease-in-out infinite alternate;
+}
+.lvl-450 {
+  background: linear-gradient(90deg, #38bdf8, #818cf8, #c084fc, #f472b6, #38bdf8);
+  background-size: 220% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  -webkit-text-fill-color: transparent;
+  animation: lvl-shift 5.5s ease-in-out infinite alternate, lvl-pulse 6.92s ease-in-out infinite;
+}
+.lvl-475 {
+  background: linear-gradient(90deg, #f97316, #ef4444, #fbbf24, #fb7185, #f97316);
+  background-size: 240% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  -webkit-text-fill-color: transparent;
+  animation: lvl-shimmer 5.5s ease-in-out infinite alternate;
+}
+.lvl-500 {
+  background: linear-gradient(90deg, #22d3ee, #2dd4bf, #34d399, #a3e635, #22d3ee);
+  background-size: 260% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  -webkit-text-fill-color: transparent;
+  animation: lvl-shift 5.5s ease-in-out infinite alternate, lvl-glow 5.62s ease-in-out infinite;
+}
+.lvl-525 {
+  background: linear-gradient(90deg, #e879f9, #a78bfa, #60a5fa, #22d3ee, #e879f9);
+  background-size: 280% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  -webkit-text-fill-color: transparent;
+  animation: lvl-shift 7.28s ease-in-out infinite alternate, lvl-flicker 10.19s ease-in-out infinite;
+}
+.lvl-550 {
+  background: linear-gradient(90deg, #facc15, #f59e0b, #fb923c, #f87171, #facc15);
+  background-size: 300% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  -webkit-text-fill-color: transparent;
+  animation: lvl-shift 6.81s ease-in-out infinite alternate, lvl-spinhue 27.3s linear infinite;
+}
+.lvl-575 {
+  background: linear-gradient(90deg, #94a3b8, #e2e8f0, #38bdf8, #a855f7, #94a3b8);
+  background-size: 200% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  -webkit-text-fill-color: transparent;
+  animation: lvl-shift 6.34s ease-in-out infinite alternate;
+}
+.lvl-600 {
+  background: linear-gradient(90deg, #f43f5e, #ec4899, #d946ef, #8b5cf6, #f43f5e);
+  background-size: 220% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  -webkit-text-fill-color: transparent;
+  animation: lvl-shift 5.88s ease-in-out infinite alternate, lvl-pulse 8.22s ease-in-out infinite;
+}
+.lvl-625 {
+  background: linear-gradient(90deg, #14b8a6, #06b6d4, #3b82f6, #6366f1, #14b8a6);
+  background-size: 240% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  -webkit-text-fill-color: transparent;
+  animation: lvl-shimmer 5.5s ease-in-out infinite alternate;
+}
+.lvl-650 {
+  background: linear-gradient(90deg, #fff7ed, #fdba74, #fb923c, #ea580c, #fff7ed);
+  background-size: 260% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  -webkit-text-fill-color: transparent;
+  animation: lvl-shift 5.5s ease-in-out infinite alternate, lvl-glow 6.92s ease-in-out infinite;
+}
+.lvl-675 {
+  background: linear-gradient(90deg, #bbf7d0, #4ade80, #22c55e, #166534, #bbf7d0);
+  background-size: 280% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  -webkit-text-fill-color: transparent;
+  animation: lvl-shift 5.5s ease-in-out infinite alternate, lvl-flicker 6.27s ease-in-out infinite;
+}
+.lvl-700 {
+  background: linear-gradient(90deg, #fecdd3, #fb7185, #e11d48, #881337, #fecdd3);
+  background-size: 300% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  -webkit-text-fill-color: transparent;
+  animation: lvl-shift 5.5s ease-in-out infinite alternate, lvl-spinhue 16.12s linear infinite;
+}
+.lvl-725 {
+  background: linear-gradient(90deg, #ff4d6d, #ff9f1c, #ffd166, #06d6a0, #4cc9f0, #7b2cbf, #ff4d6d);
+  background-size: 200% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  -webkit-text-fill-color: transparent;
+  animation: lvl-shift 7.28s ease-in-out infinite alternate;
+}
+.lvl-750 {
+  background: linear-gradient(90deg, #38bdf8, #818cf8, #c084fc, #f472b6, #38bdf8);
+  background-size: 220% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  -webkit-text-fill-color: transparent;
+  animation: lvl-shift 6.81s ease-in-out infinite alternate, lvl-pulse 9.54s ease-in-out infinite;
+}
+.lvl-775 {
+  background: linear-gradient(90deg, #f97316, #ef4444, #fbbf24, #fb7185, #f97316);
+  background-size: 240% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  -webkit-text-fill-color: transparent;
+  animation: lvl-shimmer 6.34s ease-in-out infinite alternate;
+}
+.lvl-800 {
+  background: linear-gradient(90deg, #22d3ee, #2dd4bf, #34d399, #a3e635, #22d3ee);
+  background-size: 260% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  -webkit-text-fill-color: transparent;
+  animation: lvl-shift 5.88s ease-in-out infinite alternate, lvl-glow 8.22s ease-in-out infinite;
+}
+.lvl-825 {
+  background: linear-gradient(90deg, #e879f9, #a78bfa, #60a5fa, #22d3ee, #e879f9);
+  background-size: 280% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  -webkit-text-fill-color: transparent;
+  animation: lvl-shift 5.5s ease-in-out infinite alternate, lvl-flicker 7.57s ease-in-out infinite;
+}
+.lvl-850 {
+  background: linear-gradient(90deg, #facc15, #f59e0b, #fb923c, #f87171, #facc15);
+  background-size: 300% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  -webkit-text-fill-color: transparent;
+  animation: lvl-shift 5.5s ease-in-out infinite alternate, lvl-spinhue 19.76s linear infinite;
+}
+.lvl-875 {
+  background: linear-gradient(90deg, #94a3b8, #e2e8f0, #38bdf8, #a855f7, #94a3b8);
+  background-size: 200% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  -webkit-text-fill-color: transparent;
+  animation: lvl-shift 5.5s ease-in-out infinite alternate;
+}
+.lvl-900 {
+  background: linear-gradient(90deg, #f43f5e, #ec4899, #d946ef, #8b5cf6, #f43f5e);
+  background-size: 220% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  -webkit-text-fill-color: transparent;
+  animation: lvl-shift 5.5s ease-in-out infinite alternate, lvl-pulse 5.62s ease-in-out infinite;
+}
+.lvl-925 {
+  background: linear-gradient(90deg, #14b8a6, #06b6d4, #3b82f6, #6366f1, #14b8a6);
+  background-size: 240% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  -webkit-text-fill-color: transparent;
+  animation: lvl-shimmer 7.28s ease-in-out infinite alternate;
+}
+.lvl-950 {
+  background: linear-gradient(90deg, #fff7ed, #fdba74, #fb923c, #ea580c, #fff7ed);
+  background-size: 260% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  -webkit-text-fill-color: transparent;
+  animation: lvl-shift 6.81s ease-in-out infinite alternate, lvl-glow 9.54s ease-in-out infinite;
+}
+.lvl-975 {
+  background: linear-gradient(90deg, #bbf7d0, #4ade80, #22c55e, #166534, #bbf7d0);
+  background-size: 280% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  -webkit-text-fill-color: transparent;
+  animation: lvl-shift 6.34s ease-in-out infinite alternate, lvl-flicker 8.89s ease-in-out infinite;
+}
+.lvl-1000 {
+  background: linear-gradient(90deg, #fecdd3, #fb7185, #e11d48, #881337, #fecdd3);
+  background-size: 300% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  -webkit-text-fill-color: transparent;
+  animation: lvl-shift 5.88s ease-in-out infinite alternate, lvl-spinhue 23.4s linear infinite;
+}
+
 
 .shop-card {
   display: flex;
@@ -3473,6 +3833,16 @@ body.phone-mode .boss-hud {
   box-shadow: 0 0 10px rgba(236, 72, 153, 0.45);
 }
 
+.shop-cuppong-tag {
+  background: linear-gradient(110deg, #f59e0b 0%, #fde68a 40%, #ea580c 70%, #fbbf24 100%);
+  background-size: 200% 100%;
+  color: #431407;
+  font-size: 8px;
+  letter-spacing: 0.14em;
+  animation: chaosTagShine 1.8s linear infinite;
+  box-shadow: 0 0 10px rgba(245, 158, 11, 0.4);
+}
+
 .shop-survival-tag {
   background: linear-gradient(
     110deg,
@@ -3807,6 +4177,53 @@ body.phone-mode .boss-hud {
 .update-entry {
   border-bottom: 1px solid rgba(255, 255, 255, 0.18);
   padding: 14px 2px 16px;
+}
+
+.update-entry.update-secret {
+  position: relative;
+  margin: 4px 0 10px;
+  padding: 16px 14px 16px;
+  border: 1px solid rgba(251, 113, 133, 0.55);
+  border-radius: 12px;
+  background:
+    linear-gradient(145deg, rgba(76, 5, 25, 0.45), rgba(15, 10, 20, 0.55)),
+    radial-gradient(120% 80% at 10% 0%, rgba(244, 114, 182, 0.18), transparent 55%);
+  box-shadow:
+    0 0 18px rgba(244, 114, 182, 0.28),
+    inset 0 0 20px rgba(236, 72, 153, 0.08);
+  border-bottom: 1px solid rgba(251, 113, 133, 0.55);
+}
+
+.update-secret-badge {
+  display: inline-block;
+  margin-bottom: 8px;
+  padding: 3px 9px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: #fff;
+  background: linear-gradient(90deg, #fb7185, #ec4899, #a855f7);
+  box-shadow: 0 0 12px rgba(236, 72, 153, 0.45);
+}
+
+.update-entry.update-secret .update-heading {
+  background: linear-gradient(90deg, #fda4af, #f9a8d4, #e9d5ff, #fda4af);
+  background-size: 220% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  -webkit-text-fill-color: transparent;
+  animation: lvl-shift 9s ease-in-out infinite alternate;
+}
+
+.update-entry.update-secret .update-date {
+  color: rgba(251, 113, 133, 0.75);
+}
+
+.update-entry.update-secret .update-list li {
+  color: rgba(255, 228, 240, 0.9);
 }
 
 .update-entry:last-child {

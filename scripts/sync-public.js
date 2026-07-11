@@ -3,7 +3,7 @@ const path = require("path");
 
 const root = path.join(__dirname, "..");
 const dest = path.join(root, "server", "public");
-const files = ["index.html", "game.js", "style.css"];
+const files = ["index.html", "game.js", "style.css", "cuppong.js"];
 
 fs.mkdirSync(dest, { recursive: true });
 for (const file of files) {
@@ -16,6 +16,18 @@ if (fs.existsSync(packSrc)) {
   fs.mkdirSync(packDest, { recursive: true });
   for (const name of fs.readdirSync(packSrc)) {
     fs.copyFileSync(path.join(packSrc, name), path.join(packDest, name));
+  }
+}
+
+const sfxSrc = path.join(root, "sfx");
+const sfxDest = path.join(dest, "sfx");
+if (fs.existsSync(sfxSrc)) {
+  fs.mkdirSync(sfxDest, { recursive: true });
+  for (const name of fs.readdirSync(sfxSrc)) {
+    const from = path.join(sfxSrc, name);
+    if (fs.statSync(from).isFile()) {
+      fs.copyFileSync(from, path.join(sfxDest, name));
+    }
   }
 }
 
