@@ -22,14 +22,17 @@ const POINTS_PER_BOT_CLEAR = 5;
 const POINTS_PER_CHAOS_CLEAR = 3;
 const POINTS_PER_SURVIVAL_WIN = 5;
 const POINTS_PER_BOSS_WIN = 8;
+const POINTS_PER_CUP_PONG_WIN = 4;
 const XP_PER_CLASSIC_WIN = 18;
 const XP_PER_BOT_CLEAR = 45;
 const XP_PER_CHAOS_WIN = 22;
 const XP_PER_SURVIVAL_WIN = 28;
 const XP_PER_BOSS_WIN = 55;
+const XP_PER_CUP_PONG_WIN = 50;
 const CHAOS_MAX_LEVEL = 25;
 const SURVIVAL_MAX_ROUND = 25;
 const BOSS_MAX_LEVEL = 10;
+const CUP_PONG_MAX_LEVEL = 50;
 const BOSS_HP = 5;
 const SURVIVAL_MATCH_SECONDS = 120;
 const PARRY_CHARGE_NEED = 10;
@@ -215,6 +218,14 @@ const SHOP = {
       requireBossLevel: 10,
     },
     {
+      id: "beerpong",
+      name: "Beer Pong",
+      price: 0,
+      style: "beerpong",
+      cuppong: true,
+      requireCupPongLevel: 50,
+    },
+    {
       id: "heartbloom",
       name: "Heart Bloom",
       price: 0,
@@ -326,6 +337,14 @@ const SHOP = {
       requireBossLevel: 10,
     },
     {
+      id: "beerpong",
+      name: "Beer Pong",
+      price: 0,
+      style: "beerpong",
+      cuppong: true,
+      requireCupPongLevel: 50,
+    },
+    {
       id: "heartbloom",
       name: "Heart Bloom",
       price: 0,
@@ -379,6 +398,7 @@ const save = {
   maxChaosCleared: 0,
   maxSurvivalCleared: 0,
   maxBossCleared: 0,
+  maxCupPongCleared: 0,
   owned: { paddle: ["white"], table: ["classic"] },
   equipped: { paddle: "white", table: "classic" },
   redeemedCodes: [],
@@ -427,7 +447,7 @@ function setPlayerName(name) {
   } catch {
     /* ignore */
   }
-  persistSave();
+  persistSave({ force: true });
   updateNameUI();
   return true;
 }
@@ -457,7 +477,32 @@ function mergeOwned(localList, remoteList, fallback) {
 
 function applyProfile(data, { replace = false } = {}) {
   if (!data || typeof data !== "object") return;
-  if (typeof data.name === "string" && sanitizeName(data.name)) save.name = sanitizeName(data.name);
+  if (typeof data.name === "string") {
+    const incoming = sanitizeName(data.name);
+    const local = sanitizeName(save.name || "");
+    if (replace) {
+      if (incoming) {
+        save.name = incoming;
+        try {
+          localStorage.setItem(PLAYER_NAME_KEY, incoming);
+        } catch {
+          /* ignore */
+        }
+      }
+    } else if (local && incoming && local !== incoming) {
+      // Keep the local preferred name; syncProfileFromServer will push it.
+      save.name = local;
+    } else if (incoming) {
+      save.name = incoming;
+      try {
+        localStorage.setItem(PLAYER_NAME_KEY, incoming);
+      } catch {
+        /* ignore */
+      }
+    } else if (local) {
+      save.name = local;
+    }
+  }
 
   const incomingAdminSynced =
     typeof data.adminSyncedAt === "number" && Number.isFinite(data.adminSyncedAt)
@@ -499,6 +544,11 @@ function applyProfile(data, { replace = false } = {}) {
     save.maxBossCleared = replace ? incoming : Math.max(save.maxBossCleared || 0, incoming);
   }
 
+  if (typeof data.maxCupPongCleared === "number" && Number.isFinite(data.maxCupPongCleared)) {
+    const incoming = Math.max(0, Math.min(CUP_PONG_MAX_LEVEL, Math.floor(data.maxCupPongCleared)));
+    save.maxCupPongCleared = replace ? incoming : Math.max(save.maxCupPongCleared || 0, incoming);
+  }
+
   if (data.owned?.paddle || data.owned?.table) {
     save.owned.paddle = replace
       ? uniqIds(data.owned?.paddle, "white")
@@ -538,24 +588,45 @@ function applyProfile(data, { replace = false } = {}) {
   refreshAvatarUnlocks();
 }
 
+const XP_MAX_LEVEL = 1000;
+
+function xpNeedForLevel(level) {
+  const lv = Math.max(1, Math.floor(Number(level) || 1));
+  // Levels 1–100 keep the original curve so existing progress stays stable.
+  if (lv <= 100) return Math.floor(100 * Math.pow(1.14, lv - 1));
+  const at100 = Math.floor(100 * Math.pow(1.14, 99));
+  return Math.floor(at100 * Math.pow(1.015, lv - 100));
+}
+
 function getPlayerLevel() {
-  return Math.max(0, Math.min(100, save.maxBotCleared || 0));
+  // Display / unlock level is XP-based (not classic bot clear progress).
+  return getXpLevel();
 }
 
 function getXpProgress(xpTotal = save.xp || 0) {
   let xp = Math.max(0, Math.floor(xpTotal));
   let level = 1;
-  let need = 100;
-  while (xp >= need && level < 100) {
+  let need = xpNeedForLevel(1);
+  while (xp >= need && level < XP_MAX_LEVEL) {
     xp -= need;
     level += 1;
-    need = Math.floor(100 * Math.pow(1.14, level - 1));
+    need = xpNeedForLevel(level);
   }
   return { level, into: xp, need, total: Math.max(0, Math.floor(xpTotal)) };
 }
 
 function getXpLevel() {
   return getXpProgress().level;
+}
+
+/** Minimum total XP required to reach a given level (1–1000). */
+function xpTotalForLevel(level) {
+  const target = Math.max(1, Math.min(XP_MAX_LEVEL, Math.floor(level || 1)));
+  let total = 0;
+  for (let l = 1; l < target; l++) {
+    total += xpNeedForLevel(l);
+  }
+  return total;
 }
 
 function getXpLevelUnlocks(fromLevel, toLevel) {
@@ -752,6 +823,9 @@ function itemUnlocked(item) {
   if (item.requireBossLevel) {
     return (save.maxBossCleared || 0) >= item.requireBossLevel;
   }
+  if (item.requireCupPongLevel) {
+    return (save.maxCupPongCleared || 0) >= item.requireCupPongLevel;
+  }
   if (!item.requireLevel) return true;
   return getPlayerLevel() >= item.requireLevel;
 }
@@ -760,7 +834,13 @@ function sanitizeEquippedCosmetics() {
   let changed = false;
   for (const kind of ["paddle", "table"]) {
     for (const item of SHOP[kind]) {
-      const gated = !!(item.requireLevel || item.requireChaosLevel || item.requireSurvivalLevel || item.requireBossLevel);
+      const gated = !!(
+        item.requireLevel ||
+        item.requireChaosLevel ||
+        item.requireSurvivalLevel ||
+        item.requireBossLevel ||
+        item.requireCupPongLevel
+      );
       if (gated && itemUnlocked(item) && !save.owned[kind].includes(item.id)) {
         save.owned[kind].push(item.id);
         changed = true;
@@ -833,7 +913,7 @@ function grantOverlordIfEligible() {
 }
 
 function playerLevelStyle(level) {
-  const lv = Math.max(0, Math.min(100, level || 0));
+  const lv = Math.max(0, Math.min(XP_MAX_LEVEL, Math.floor(level || 0)));
   if (lv <= 0) return { color: "#9ca3af", animated: false, className: "lvl-0" };
   if (lv < 5) return { color: "#d1d5db", animated: false, className: "lvl-1" };
   if (lv < 10) return { color: "#86efac", animated: false, className: "lvl-5" };
@@ -843,50 +923,98 @@ function playerLevelStyle(level) {
   if (lv < 60) return { color: null, animated: true, className: "lvl-40" };
   if (lv < 80) return { color: null, animated: true, className: "lvl-60" };
   if (lv < 100) return { color: null, animated: true, className: "lvl-80" };
-  return { color: null, animated: true, className: "lvl-100" };
+  if (lv < 125) return { color: null, animated: true, className: "lvl-100" };
+  if (lv >= XP_MAX_LEVEL) return { color: null, animated: true, className: "lvl-1000" };
+  const band = Math.floor(lv / 25) * 25;
+  return { color: null, animated: true, className: `lvl-${band}` };
+}
+
+function hexToRgb(hex) {
+  const h = String(hex || "").replace("#", "").trim();
+  if (h.length === 3) {
+    return [
+      parseInt(h[0] + h[0], 16),
+      parseInt(h[1] + h[1], 16),
+      parseInt(h[2] + h[2], 16),
+    ];
+  }
+  if (h.length < 6) return [255, 255, 255];
+  return [parseInt(h.slice(0, 2), 16), parseInt(h.slice(2, 4), 16), parseInt(h.slice(4, 6), 16)];
+}
+
+function mixHex(a, b, t) {
+  const u = Math.max(0, Math.min(1, t));
+  const s = u * u * (3 - 2 * u); // smoothstep
+  const A = hexToRgb(a);
+  const B = hexToRgb(b);
+  const r = Math.round(A[0] + (B[0] - A[0]) * s);
+  const g = Math.round(A[1] + (B[1] - A[1]) * s);
+  const bl = Math.round(A[2] + (B[2] - A[2]) * s);
+  return `rgb(${r},${g},${bl})`;
+}
+
+/** Continuously blend through a palette (no hard color snaps). */
+function cyclePalette(colors, t, speed = 0.35) {
+  const list = Array.isArray(colors) && colors.length ? colors : ["#ffffff"];
+  if (list.length === 1) return list[0];
+  const n = list.length;
+  const phase = ((t * speed) % n + n) % n;
+  const i = Math.floor(phase);
+  const f = phase - i;
+  return mixHex(list[i], list[(i + 1) % n], f);
 }
 
 function canvasLevelColor(level) {
   if (level == null) return "#ffffff";
-  const lv = Math.max(0, Math.min(100, level || 0));
+  const lv = Math.max(0, Math.min(XP_MAX_LEVEL, Math.floor(level || 0)));
   const t = cosmeticTime();
   if (lv <= 0) return "#9ca3af";
   if (lv < 5) return "#d1d5db";
   if (lv < 10) return "#86efac";
   if (lv < 15) return "#67e8f9";
   if (lv < 20) return "#c084fc";
-  if (lv < 40) {
-    const a = (Math.sin(t * 2) * 0.5 + 0.5);
-    return a > 0.5 ? "#f472b6" : "#a78bfa";
-  }
-  if (lv < 60) {
-    const a = (Math.sin(t * 2.4) * 0.5 + 0.5);
-    return a > 0.5 ? "#22d3ee" : "#fbbf24";
-  }
-  if (lv < 80) {
-    const a = (Math.sin(t * 3) * 0.5 + 0.5);
-    return a > 0.5 ? "#fb7185" : "#34d399";
-  }
+  if (lv < 40) return cyclePalette(["#f472b6", "#a78bfa", "#f472b6"], t, 0.45);
+  if (lv < 60) return cyclePalette(["#22d3ee", "#fbbf24", "#22d3ee"], t, 0.5);
+  if (lv < 80) return cyclePalette(["#fb7185", "#34d399", "#818cf8", "#fb7185"], t, 0.55);
   if (lv < 100) {
-    const hues = ["#ef4444", "#f59e0b", "#22c55e", "#3b82f6", "#a855f7"];
-    return hues[Math.floor(t * 4) % hues.length];
+    return cyclePalette(["#ef4444", "#f59e0b", "#22c55e", "#3b82f6", "#a855f7", "#ef4444"], t, 0.4);
   }
-  const hues = ["#ff4d6d", "#ff9f1c", "#ffd166", "#06d6a0", "#4cc9f0", "#7b2cbf"];
-  return hues[Math.floor(t * 6) % hues.length];
+  const palettes = [
+    ["#ff4d6d", "#ff9f1c", "#ffd166", "#06d6a0", "#4cc9f0", "#7b2cbf", "#ff4d6d"],
+    ["#38bdf8", "#818cf8", "#c084fc", "#f472b6", "#38bdf8"],
+    ["#f97316", "#ef4444", "#fbbf24", "#fb7185", "#f97316"],
+    ["#22d3ee", "#2dd4bf", "#34d399", "#a3e635", "#22d3ee"],
+    ["#e879f9", "#a78bfa", "#60a5fa", "#22d3ee", "#e879f9"],
+    ["#facc15", "#f59e0b", "#fb923c", "#f87171", "#facc15"],
+    ["#94a3b8", "#e2e8f0", "#38bdf8", "#a855f7", "#94a3b8"],
+    ["#f43f5e", "#ec4899", "#d946ef", "#8b5cf6", "#f43f5e"],
+    ["#14b8a6", "#06b6d4", "#3b82f6", "#6366f1", "#14b8a6"],
+    ["#fff7ed", "#fdba74", "#fb923c", "#ea580c", "#fff7ed"],
+  ];
+  const bandIdx = Math.max(0, Math.floor((lv - 100) / 25) % palettes.length);
+  const speed = 0.28 + (bandIdx % 5) * 0.04;
+  return cyclePalette(palettes[bandIdx], t, speed);
 }
 
 function formatNameWithLevel(name, level) {
   const n = String(name || "Player");
-  const lv = Math.max(0, Math.min(100, level || 0));
+  const lv = Math.max(0, Math.min(XP_MAX_LEVEL, Math.floor(level || 0)));
   return `${n} · L${lv}`;
 }
 
+const LEVEL_STYLE_CLASSES = (() => {
+  const list = [
+    "lvl-0", "lvl-1", "lvl-5", "lvl-10", "lvl-15",
+    "lvl-20", "lvl-40", "lvl-60", "lvl-80", "lvl-100",
+  ];
+  for (let n = 125; n <= XP_MAX_LEVEL; n += 25) list.push(`lvl-${n}`);
+  list.push("player-level");
+  return list;
+})();
+
 function applyLevelClass(el, level) {
   if (!el) return;
-  el.classList.remove(
-    "lvl-0", "lvl-1", "lvl-5", "lvl-10", "lvl-15",
-    "lvl-20", "lvl-40", "lvl-60", "lvl-80", "lvl-100", "player-level"
-  );
+  el.classList.remove(...LEVEL_STYLE_CLASSES);
   el.style.color = "";
   if (level == null) return;
   const style = playerLevelStyle(level);
@@ -895,7 +1023,14 @@ function applyLevelClass(el, level) {
 }
 
 function awardBotClear(level) {
-  if (s.mode !== "local" || s.botMode === "chaos" || s.botMode === "survival" || s.botMode === "boss") return 0;
+  if (
+    s.mode !== "local" ||
+    s.botMode === "chaos" ||
+    s.botMode === "survival" ||
+    s.botMode === "boss" ||
+    s.botMode === "cuppong"
+  )
+    return 0;
   const lv = Math.max(1, Math.min(100, level || s.botLevel));
   if (lv <= save.maxBotCleared) return 0;
   save.maxBotCleared = lv;
@@ -960,6 +1095,7 @@ function profilePayload() {
     maxChaosCleared: save.maxChaosCleared || 0,
     maxSurvivalCleared: save.maxSurvivalCleared || 0,
     maxBossCleared: save.maxBossCleared || 0,
+    maxCupPongCleared: save.maxCupPongCleared || 0,
     owned: save.owned,
     equipped: save.equipped,
     redeemedCodes: Array.isArray(save.redeemedCodes) ? save.redeemedCodes : [],
@@ -995,11 +1131,13 @@ async function syncProfileFromServer() {
   if (!location.host) return;
   try {
     const before = {
+      name: sanitizeName(save.name || ""),
       points: save.points || 0,
       maxBotCleared: save.maxBotCleared || 0,
       maxChaosCleared: save.maxChaosCleared || 0,
       maxSurvivalCleared: save.maxSurvivalCleared || 0,
       maxBossCleared: save.maxBossCleared || 0,
+      maxCupPongCleared: save.maxCupPongCleared || 0,
       ownedPaddle: (save.owned.paddle || []).length,
       ownedTable: (save.owned.table || []).length,
     };
@@ -1012,23 +1150,37 @@ async function syncProfileFromServer() {
     const data = await res.json();
     if (data.profile) {
       applyProfile(data.profile);
+      // If local name was preferred over a stale server name, keep it.
+      if (before.name && before.name !== sanitizeName(data.profile.name || "")) {
+        save.name = before.name;
+        try {
+          localStorage.setItem(PLAYER_NAME_KEY, before.name);
+        } catch {
+          /* ignore */
+        }
+      }
       localStorage.setItem(SAVE_CACHE_KEY, JSON.stringify(profilePayload()));
       const after = {
+        name: sanitizeName(save.name || ""),
         points: save.points || 0,
         maxBotCleared: save.maxBotCleared || 0,
         maxChaosCleared: save.maxChaosCleared || 0,
         maxSurvivalCleared: save.maxSurvivalCleared || 0,
         maxBossCleared: save.maxBossCleared || 0,
+        maxCupPongCleared: save.maxCupPongCleared || 0,
         ownedPaddle: (save.owned.paddle || []).length,
         ownedTable: (save.owned.table || []).length,
       };
-      // If local progress was ahead of server, push the merged profile back up.
+      const remoteName = sanitizeName(data.profile.name || "");
+      // If local progress / name was ahead of server, push the merged profile back up.
       if (
+        (after.name && after.name !== remoteName) ||
         after.points > (Number(data.profile.points) || 0) ||
         after.maxBotCleared > (Number(data.profile.maxBotCleared) || 0) ||
         after.maxChaosCleared > (Number(data.profile.maxChaosCleared) || 0) ||
         after.maxSurvivalCleared > (Number(data.profile.maxSurvivalCleared) || 0) ||
         after.maxBossCleared > (Number(data.profile.maxBossCleared) || 0) ||
+        after.maxCupPongCleared > (Number(data.profile.maxCupPongCleared) || 0) ||
         after.ownedPaddle > (data.profile.owned?.paddle || []).length ||
         after.ownedTable > (data.profile.owned?.table || []).length ||
         before.points > (Number(data.profile.points) || 0) ||
@@ -1037,7 +1189,7 @@ async function syncProfileFromServer() {
         before.maxSurvivalCleared > (Number(data.profile.maxSurvivalCleared) || 0) ||
         before.maxBossCleared > (Number(data.profile.maxBossCleared) || 0)
       ) {
-        await syncProfileToServer();
+        await syncProfileToServer({ force: after.name && after.name !== remoteName });
       }
     }
   } catch {
@@ -1166,7 +1318,7 @@ let cosmeticSmoothT = 0;
 function cosmeticTime() {
   const raw = performance.now() * 0.001;
   if (!cosmeticSmoothT) cosmeticSmoothT = raw;
-  cosmeticSmoothT += (raw - cosmeticSmoothT) * 0.2;
+  cosmeticSmoothT += (raw - cosmeticSmoothT) * 0.12;
   return cosmeticSmoothT;
 }
 
@@ -1353,6 +1505,16 @@ function applyFillStyle(c, item, x, y, w, h, alpha) {
     safeColorStop(g, 0.5, "#14532d");
     safeColorStop(g, 0.72 - shift, "#7f1d1d");
     safeColorStop(g, 1, "#052e16");
+  } else if (item.style === "beerpong") {
+    // Pint-glass amber: dark body → golden mid → pale near the head
+    const sway = Math.sin(t * 0.65) * 0.03;
+    g = c.createLinearGradient(x, y + h, x, y);
+    safeColorStop(g, 0, "#2a1406");
+    safeColorStop(g, 0.18, "#5c2e0a");
+    safeColorStop(g, 0.42 + sway, "#a85c12");
+    safeColorStop(g, 0.68, "#d4a017");
+    safeColorStop(g, 0.88, "#e8c547");
+    safeColorStop(g, 1, "#f5e6a3");
   } else if (item.style === "heartbloom") {
     const ox = Math.sin(t * 0.7) * w * 0.18;
     g = c.createLinearGradient(x + ox, y, x + w - ox, y + h);
@@ -2033,7 +2195,7 @@ function drawSkywyrmDragon(c, ox, oy, unit, wingPhase, pitch, alpha, mouthOpen =
 }
 
 function drawEpicOverlay(c, item, x, y, w, h, alpha) {
-  if (!item.epic && !item.legendary && !item.chaos && !item.survival && !item.boss && !item.secret) return;
+  if (!item.epic && !item.legendary && !item.chaos && !item.survival && !item.boss && !item.secret && !item.cuppong) return;
   const t = cosmeticTime();
   c.save();
   c.beginPath();
@@ -3042,6 +3204,135 @@ function drawEpicOverlay(c, item, x, y, w, h, alpha) {
     }
   }
 
+  if (item.style === "beerpong") {
+    const flow = t * 1.15;
+    const foamH = Math.max(4, h * (0.16 + Math.sin(flow * 0.35) * 0.02));
+    const liquidTop = y + foamH * 0.72;
+    const scale = Math.max(0.55, Math.min(2.2, Math.min(w, h) / 36));
+
+    // Soft liquid depth wash (clearer near top, denser bottom)
+    const depth = c.createLinearGradient(x, liquidTop, x, y + h);
+    depth.addColorStop(0, "rgba(255, 236, 179, 0.18)");
+    depth.addColorStop(0.35, "rgba(212, 140, 30, 0.08)");
+    depth.addColorStop(0.75, "rgba(90, 40, 8, 0.22)");
+    depth.addColorStop(1, "rgba(30, 12, 4, 0.35)");
+    c.globalAlpha = alpha;
+    c.fillStyle = depth;
+    c.fillRect(x, liquidTop, w, Math.max(1, y + h - liquidTop));
+
+    // Glass-like vertical highlight
+    const sheen = c.createLinearGradient(x, y, x + w * 0.35, y);
+    sheen.addColorStop(0, "rgba(255,255,255,0.22)");
+    sheen.addColorStop(0.45, "rgba(255,255,255,0.05)");
+    sheen.addColorStop(1, "rgba(255,255,255,0)");
+    c.globalAlpha = alpha * 0.55;
+    c.fillStyle = sheen;
+    c.fillRect(x, y, w * 0.28, h);
+
+    // Rising carbonation bubbles in the liquid
+    const bubbleN = Math.min(70, Math.max(18, Math.floor((w * h) / 160)));
+    for (let i = 0; i < bubbleN; i++) {
+      const seed = i * 12.37 + 3.1;
+      const lane = (hashNoise(seed) + Math.sin(flow * 0.08 + i) * 0.02 + 1) % 1;
+      const rise = (hashNoise(seed + 1) + flow * (0.12 + hashNoise(seed + 2) * 0.22)) % 1;
+      // Bubbles travel from bottom toward foam, fade near head
+      const bx = x + 2 + lane * Math.max(1, w - 4);
+      const by = y + h - rise * (h - foamH * 0.5);
+      if (by < liquidTop + 1) continue;
+      const br = (0.55 + hashNoise(seed + 3) * 1.8) * scale;
+      const fade = Math.max(0, Math.min(1, (by - liquidTop) / Math.max(8, h * 0.55)));
+      c.globalAlpha = alpha * (0.2 + fade * 0.55) * (0.55 + hashNoise(seed + 4) * 0.45);
+
+      // Bubble body
+      const bg = c.createRadialGradient(bx - br * 0.25, by - br * 0.3, 0, bx, by, br * 1.4);
+      bg.addColorStop(0, "rgba(255, 255, 255, 0.95)");
+      bg.addColorStop(0.35, "rgba(255, 248, 220, 0.45)");
+      bg.addColorStop(0.7, "rgba(255, 220, 140, 0.12)");
+      bg.addColorStop(1, "rgba(255, 200, 100, 0)");
+      c.fillStyle = bg;
+      c.beginPath();
+      c.arc(bx, by, br * 1.35, 0, Math.PI * 2);
+      c.fill();
+
+      // Thin rim
+      c.globalAlpha = alpha * (0.25 + fade * 0.35);
+      c.strokeStyle = "rgba(255, 250, 235, 0.7)";
+      c.lineWidth = Math.max(0.6, 0.9 * scale);
+      c.beginPath();
+      c.arc(bx, by, br, 0, Math.PI * 2);
+      c.stroke();
+    }
+
+    // Thick pint foam head with irregular surface
+    c.save();
+    c.beginPath();
+    c.moveTo(x, y + foamH);
+    c.lineTo(x, y + 1);
+    const foamWaves = Math.max(4, Math.floor(w / 7));
+    for (let i = 0; i <= foamWaves; i++) {
+      const u = i / foamWaves;
+      const fx = x + u * w;
+      const bob =
+        Math.sin(flow * 1.6 + u * Math.PI * 3.2) * foamH * 0.12 +
+        Math.sin(flow * 2.3 + u * 9.1) * foamH * 0.06;
+      c.lineTo(fx, y + Math.max(0.5, 1.5 + bob));
+    }
+    c.lineTo(x + w, y + foamH);
+    // Soft underside of foam (beer/foam interface)
+    for (let i = foamWaves; i >= 0; i--) {
+      const u = i / foamWaves;
+      const fx = x + u * w;
+      const drip =
+        Math.sin(flow * 0.9 + u * Math.PI * 2.4) * foamH * 0.1 +
+        Math.cos(flow * 1.4 + u * 7) * foamH * 0.05;
+      c.lineTo(fx, liquidTop + foamH * 0.15 + drip);
+    }
+    c.closePath();
+
+    const foamGrad = c.createLinearGradient(x, y, x, y + foamH * 1.35);
+    foamGrad.addColorStop(0, "rgba(255, 255, 255, 0.98)");
+    foamGrad.addColorStop(0.35, "rgba(255, 250, 240, 0.95)");
+    foamGrad.addColorStop(0.7, "rgba(245, 230, 200, 0.88)");
+    foamGrad.addColorStop(1, "rgba(230, 200, 140, 0.55)");
+    c.globalAlpha = alpha * 0.95;
+    c.fillStyle = foamGrad;
+    c.fill();
+
+    // Foam bubble cluster texture
+    const foamBubbles = Math.min(55, Math.max(12, Math.floor(w * foamH / 28)));
+    for (let i = 0; i < foamBubbles; i++) {
+      const seed = i * 7.3 + 19;
+      const u = hashNoise(seed);
+      const v = hashNoise(seed + 1);
+      const fx = x + 2 + u * Math.max(1, w - 4);
+      const fy = y + 1 + v * foamH * 0.95;
+      const fr = (0.7 + hashNoise(seed + 2) * 2.4) * scale;
+      const pop = 0.55 + Math.sin(flow * 3 + i * 1.7) * 0.25;
+      c.globalAlpha = alpha * (0.25 + hashNoise(seed + 3) * 0.5) * pop;
+      c.fillStyle = i % 3 === 0 ? "rgba(255,255,255,0.95)" : "rgba(255, 245, 225, 0.75)";
+      c.beginPath();
+      c.arc(fx, fy, fr, 0, Math.PI * 2);
+      c.fill();
+      c.globalAlpha = alpha * 0.35;
+      c.strokeStyle = "rgba(210, 180, 120, 0.45)";
+      c.lineWidth = 0.7;
+      c.stroke();
+    }
+
+    // Occasional foam overflow drip down the sides
+    for (let i = 0; i < 3; i++) {
+      const side = i % 2 === 0 ? x + 1 + i * 0.5 : x + w - 2 - i * 0.4;
+      const dripY = liquidTop + ((flow * 0.25 + i * 0.37) % 1) * h * 0.35;
+      const dripH = 3 + (i % 3) * 2;
+      c.globalAlpha = alpha * 0.28;
+      c.fillStyle = "rgba(255, 248, 230, 0.7)";
+      c.beginPath();
+      c.ellipse(side, dripY, 1.2 * scale, dripH * 0.35 * scale, 0, 0, Math.PI * 2);
+      c.fill();
+    }
+    c.restore();
+  }
+
   if (item.style === "heartbloom") {
     const scale = Math.max(0.7, Math.min(2.4, Math.min(w, h) / 28));
     for (let i = 0; i < 22; i++) {
@@ -3308,10 +3599,13 @@ function renderShop() {
       if (item.requireChaosLevel) price.textContent = `CHAOS L${item.requireChaosLevel}`;
       else if (item.requireSurvivalLevel) price.textContent = `SURVIVAL L${item.requireSurvivalLevel}`;
       else if (item.requireBossLevel) price.textContent = `BOSS L${item.requireBossLevel}`;
+      else if (item.requireCupPongLevel) price.textContent = `CUP L${item.requireCupPongLevel}`;
       else price.textContent = `LVL ${item.requireLevel}`;
     } else if (item.limitedEdition) price.textContent = owned ? "Limited edition" : "Hidden";
     else if (item.secret) price.textContent = owned ? "Code unlock" : "Hidden";
-    else if (item.price === 0) price.textContent = owned || item.legendary || item.chaos || item.survival || item.boss ? "Unlocked" : "Free";
+    else if (item.price === 0)
+      price.textContent =
+        owned || item.legendary || item.chaos || item.survival || item.boss || item.cuppong ? "Unlocked" : "Free";
     else price.textContent = `${item.price} pts`;
 
     let rarityTag = null;
@@ -3323,6 +3617,10 @@ function renderShop() {
       rarityTag = document.createElement("span");
       rarityTag.className = "shop-rarity-tag shop-secret-tag";
       rarityTag.textContent = "SECRET";
+    } else if (item.cuppong) {
+      rarityTag = document.createElement("span");
+      rarityTag.className = "shop-rarity-tag shop-cuppong-tag";
+      rarityTag.textContent = "CUPPONG";
     } else if (item.chaos) {
       rarityTag = document.createElement("span");
       rarityTag.className = "shop-rarity-tag shop-chaos-tag";
@@ -3357,7 +3655,9 @@ function renderShop() {
           ? `LOCKED · SURVIVAL L${item.requireSurvivalLevel}`
           : item.requireBossLevel
             ? `LOCKED · BOSS L${item.requireBossLevel}`
-            : `LOCKED · L${item.requireLevel}`;
+            : item.requireCupPongLevel
+              ? `LOCKED · CUP L${item.requireCupPongLevel}`
+              : `LOCKED · L${item.requireLevel}`;
       btn.appendChild(lock);
     } else if (equipped) {
       const b = document.createElement("span");
@@ -3373,7 +3673,11 @@ function renderShop() {
             ? `${item.name} unlocks at Chaos level ${item.requireChaosLevel}. Clear Chaos Mode levels to earn it.`
             : item.requireSurvivalLevel
               ? `${item.name} unlocks at Survival round ${item.requireSurvivalLevel}. Clear Survival Mode rounds to earn it.`
-              : `${item.name} unlocks at player level ${item.requireLevel}. Reach L${item.requireLevel} by clearing bots.`;
+              : item.requireBossLevel
+                ? `${item.name} unlocks at Boss ${item.requireBossLevel}. Clear Boss Battles to earn it.`
+                : item.requireCupPongLevel
+                  ? `${item.name} unlocks at Cup Pong level ${item.requireCupPongLevel}. Clear Cup Pong bots to earn it.`
+                  : `${item.name} unlocks at level ${item.requireLevel}. Earn XP to reach L${item.requireLevel}.`;
         }
         return;
       }
@@ -3711,8 +4015,8 @@ function buildLeaderboardProfileView(entry) {
   return {
     name: entry.name || "Player",
     kind: "Online player",
-    bio: `Public scoreboard profile · Classic L${classic} · XP Level ${getXpProgress(xpTotal).level}.`,
-    rankLabel: `Classic rank L${classic}`,
+    bio: `Public scoreboard profile · Level ${getXpProgress(xpTotal).level} · Classic bots L${classic}.`,
+    rankLabel: `Level ${getXpProgress(xpTotal).level}`,
     xpTotal,
     avatarId: entry.avatar || "default",
     customAvatarUrl: entry.customAvatarUrl || "",
@@ -3724,14 +4028,13 @@ function buildLeaderboardProfileView(entry) {
 
 function buildSelfProfileView() {
   const xp = getXpProgress();
-  const classic = getPlayerLevel();
   return {
     name: getPlayerName() || "You",
     kind: "Player",
     bio: authState.token
       ? `Signed-in player · account ${authState.username}.`
       : "Local player profile.",
-    rankLabel: `Classic rank L${classic}`,
+    rankLabel: `Level ${xp.level}`,
     xpTotal: xp.total,
     avatarId: save.avatar || "default",
     customAvatarUrl: save.customAvatarUrl || "",
@@ -3743,6 +4046,7 @@ function buildSelfProfileView() {
       maxChaosCleared: save.maxChaosCleared || 0,
       maxSurvivalCleared: save.maxSurvivalCleared || 0,
       maxBossCleared: save.maxBossCleared || 0,
+      maxCupPongCleared: save.maxCupPongCleared || 0,
     }),
   };
 }
@@ -3750,13 +4054,17 @@ function buildSelfProfileView() {
 function buildOnlineOpponentProfileView() {
   const p = net.opponentProfile || {};
   const name = net.opponentName || "Opponent";
-  const classic = Math.max(0, Math.floor(net.opponentLevel || p.maxBotCleared || 0));
   const xpTotal = Math.max(0, Math.floor(p.xp || 0));
+  const xpLv = Math.max(
+    1,
+    Math.floor(p.xpLevel || getXpProgress(xpTotal).level || net.opponentLevel || 1)
+  );
+  const classic = Math.max(0, Math.floor(p.maxBotCleared || 0));
   return {
     name,
     kind: "Online opponent",
     bio: "Matched online. Stats shared from their cosmetics profile.",
-    rankLabel: `Classic rank L${classic}`,
+    rankLabel: `Level ${xpLv}`,
     xpTotal,
     avatarId: p.avatar || "default",
     customAvatarUrl: p.customAvatarUrl || "",
@@ -3768,6 +4076,7 @@ function buildOnlineOpponentProfileView() {
       maxChaosCleared: p.maxChaosCleared || 0,
       maxSurvivalCleared: p.maxSurvivalCleared || 0,
       maxBossCleared: p.maxBossCleared || 0,
+      maxCupPongCleared: p.maxCupPongCleared || 0,
     }),
   };
 }
@@ -3988,6 +4297,12 @@ async function authLogin() {
     });
     const data = await res.json();
     if (!data.ok) {
+      if (data.mustSetPassword) {
+        const claimUser = data.username || username;
+        setAuthMsg("Choose a password for this account.");
+        openClaimPasswordPopup(claimUser);
+        return;
+      }
       setAuthMsg(data.error || "Login failed.");
       return;
     }
@@ -4133,6 +4448,7 @@ function openCustomize() {
   hideOverlay(ui.bossHubOverlay);
   hideOverlay(ui.bossShopOverlay);
   hideOverlay(ui.bossLevelOverlay);
+  hideOverlay(ui.cupPongLevelOverlay);
   hideOverlay(ui.botModesOverlay);
   hideOverlay(ui.lobbyOverlay);
   hideOverlay(ui.settingsOverlay);
@@ -4229,6 +4545,7 @@ function openAdmin() {
   hideOverlay(ui.chaosLevelOverlay);
   hideOverlay(ui.survivalLevelOverlay);
   hideOverlay(ui.bossLevelOverlay);
+  hideOverlay(ui.cupPongLevelOverlay);
   hideOverlay(ui.botModesOverlay);
   hideOverlay(ui.customizeOverlay);
   hideOverlay(ui.settingsOverlay);
@@ -4398,17 +4715,32 @@ function adminUnlockAllBossLevels() {
   if (ui.adminMsg) ui.adminMsg.textContent = "All Boss battles unlocked (B10) — Overlord granted.";
 }
 
+function adminUnlockAllCupPongLevels() {
+  if (!isAdmin()) return;
+  save.maxCupPongCleared = CUP_PONG_MAX_LEVEL;
+  if (typeof grantBeerPongCosmeticIfEligible === "function") grantBeerPongCosmeticIfEligible();
+  sanitizeEquippedCosmetics();
+  persistSave();
+  updateNameUI();
+  refreshAdminPanel();
+  if (typeof renderCupPongLevelGrid === "function") renderCupPongLevelGrid();
+  if (ui.adminMsg) ui.adminMsg.textContent = "All Cup Pong levels unlocked (L50) — Beer Pong granted.";
+}
+
 function adminSetPlayerLevel(n) {
   if (!isAdmin()) return;
-  const lv = Math.max(0, Math.min(100, Math.floor(Number(n) || 0)));
-  save.maxBotCleared = lv;
+  const lv = Math.max(1, Math.min(XP_MAX_LEVEL, Math.floor(Number(n) || 1)));
+  const before = getXpLevel();
+  save.xp = xpTotalForLevel(lv);
+  refreshAvatarUnlocks();
   sanitizeEquippedCosmetics();
   persistSave({ force: true });
   updateNameUI();
   refreshAdminPanel();
-  if (ui.botLevelGrid) renderBotLevelGrid();
   if (s.mode === "online" && net.connected) sendCosmetics();
-  if (ui.adminMsg) ui.adminMsg.textContent = `Player level set to L${lv}.`;
+  const after = getXpLevel();
+  if (after > before) scheduleLevelUpCelebration(before, after);
+  if (ui.adminMsg) ui.adminMsg.textContent = `Player level set to L${after} (${save.xp} XP).`;
 }
 
 function setAdminAbility(key, on) {
@@ -5117,6 +5449,24 @@ function openResetPasswordPopup(username) {
   setStagePlaying(false);
 }
 
+/** First-login claim for reserved accounts (mustSetPassword). */
+function openClaimPasswordPopup(username) {
+  const user = String(username || "").trim();
+  if (!user || !ui.resetPasswordOverlay) return;
+  stopPasswordResetPoll();
+  passwordResetPopupShownFor = user;
+  setPendingResetUsername(user);
+  hideOverlay(ui.forgotPasswordOverlay);
+  if (ui.resetPasswordLead) {
+    ui.resetPasswordLead.textContent = `Welcome, ${user}. Choose your password, then save. Please remember your password.`;
+  }
+  if (ui.resetNewPassword) ui.resetNewPassword.value = "";
+  if (ui.resetConfirmPassword) ui.resetConfirmPassword.value = "";
+  if (ui.resetPasswordMsg) ui.resetPasswordMsg.textContent = "Please remember your password.";
+  showOverlay(ui.resetPasswordOverlay);
+  setStagePlaying(false);
+}
+
 function closeResetPasswordPopup({ keepPending = true } = {}) {
   hideOverlay(ui.resetPasswordOverlay);
   if (!keepPending) {
@@ -5183,7 +5533,7 @@ async function submitForgotNewPassword() {
       closeResetPasswordPopup({ keepPending: false });
       showOverlay(ui.profileOverlay);
       refreshProfileUI();
-      setAuthMsg("Password updated — log in with your new password.");
+      setAuthMsg("Password saved — please remember your password, then log in.");
     }, 700);
   } catch {
     if (ui.resetPasswordMsg) ui.resetPasswordMsg.textContent = "Network error.";
@@ -6207,6 +6557,11 @@ const ui = {
   bossLevelGrid: document.getElementById("bossLevelGrid"),
   bossLevelHint: document.getElementById("bossLevelHint"),
   btnBossLevelBack: document.getElementById("btnBossLevelBack"),
+  cupPongLevelOverlay: document.getElementById("cupPongLevelOverlay"),
+  cupPongLevelGrid: document.getElementById("cupPongLevelGrid"),
+  cupPongLevelHint: document.getElementById("cupPongLevelHint"),
+  btnModeCupPong: document.getElementById("btnModeCupPong"),
+  btnCupPongLevelBack: document.getElementById("btnCupPongLevelBack"),
   botLevelOverlay: document.getElementById("botLevelOverlay"),
   botLevelGrid: document.getElementById("botLevelGrid"),
   botLevelHint: document.getElementById("botLevelHint"),
@@ -6435,6 +6790,7 @@ const ui = {
   btnAdminUnlockChaos: document.getElementById("btnAdminUnlockChaos"),
   btnAdminUnlockSurvival: document.getElementById("btnAdminUnlockSurvival"),
   btnAdminUnlockBoss: document.getElementById("btnAdminUnlockBoss"),
+  btnAdminUnlockCupPong: document.getElementById("btnAdminUnlockCupPong"),
   adminLevel: document.getElementById("adminLevel"),
   adminLevelInput: document.getElementById("adminLevelInput"),
   btnAdminSetLevel: document.getElementById("btnAdminSetLevel"),
@@ -6507,6 +6863,18 @@ const MUSIC_TRACKS = {
     bassType: "sawtooth",
     melodyVol: 0.042,
     bassVol: 0.028,
+  },
+  cuplounge: {
+    name: "Cup Lounge",
+    interval: 480,
+    melody: [174.61, 196, 220, 246.94, 220, 196, 164.81, 196],
+    bass: [87.31, 87.31, 98, 82.41],
+    melodyType: "sine",
+    bassType: "triangle",
+    melodyVol: 0.018,
+    bassVol: 0.014,
+    pad: [349.23, 392, 440],
+    padVol: 0.012,
   },
 };
 
@@ -6763,6 +7131,7 @@ const s = {
   botLevel: 1,
   lastT: performance.now(),
   mouseY: table.y + table.h / 2,
+  mouseX: table.x + 40,
   ai: { timer: 0, interval: 0.11, targetY: table.y + table.h / 2, errorPx: 28, speed: 560, track: 0.55 },
   ability: { parries: 0, ready: false, armed: false, smashing: false, breakFx: null, flames: [] },
   fx: { scoreT: 0, who: "p1", particles: [] },
@@ -6814,6 +7183,10 @@ function isSurvivalMode() {
 
 function isBossMode() {
   return s.mode === "local" && s.botMode === "boss";
+}
+
+function isCupPongMode() {
+  return s.mode === "local" && s.botMode === "cuppong";
 }
 
 const BOSS_DEFS = [
@@ -7810,6 +8183,7 @@ function openBossHub() {
   hideOverlay(ui.chaosLevelOverlay);
   hideOverlay(ui.survivalLevelOverlay);
   hideOverlay(ui.bossLevelOverlay);
+  hideOverlay(ui.cupPongLevelOverlay);
   hideOverlay(ui.bossShopOverlay);
   hideOverlay(ui.lobbyOverlay);
   hideOverlay(ui.customizeOverlay);
@@ -7834,6 +8208,7 @@ function closeBossHub() {
 function openBossShop() {
   hideOverlay(ui.bossHubOverlay);
   hideOverlay(ui.bossLevelOverlay);
+  hideOverlay(ui.cupPongLevelOverlay);
   hideOverlay(ui.botModesOverlay);
   showOverlay(ui.bossShopOverlay);
   setStagePlaying(false);
@@ -7927,6 +8302,7 @@ function openBossLevelSelect() {
 
 function closeBossLevelSelect() {
   hideOverlay(ui.bossLevelOverlay);
+  hideOverlay(ui.cupPongLevelOverlay);
   showOverlay(ui.bossHubOverlay);
   startMenuBg();
   updateNameUI();
@@ -8171,11 +8547,13 @@ function survivalRoundLabel(level) {
 }
 
 function openBotModes() {
+  if (typeof stopCupPongMusic === "function") stopCupPongMusic();
   hideOverlay(ui.menuOverlay);
   hideOverlay(ui.botLevelOverlay);
   hideOverlay(ui.chaosLevelOverlay);
   hideOverlay(ui.survivalLevelOverlay);
   hideOverlay(ui.bossLevelOverlay);
+  hideOverlay(ui.cupPongLevelOverlay);
   hideOverlay(ui.modeSoonOverlay);
   hideOverlay(ui.lobbyOverlay);
   hideOverlay(ui.customizeOverlay);
@@ -8293,6 +8671,7 @@ function openBotLevelSelect() {
   hideOverlay(ui.chaosLevelOverlay);
   hideOverlay(ui.survivalLevelOverlay);
   hideOverlay(ui.bossLevelOverlay);
+  hideOverlay(ui.cupPongLevelOverlay);
   hideOverlay(ui.lobbyOverlay);
   hideOverlay(ui.customizeOverlay);
   hideOverlay(ui.settingsOverlay);
@@ -8430,6 +8809,7 @@ function openChaosLevelSelect() {
   hideOverlay(ui.botLevelOverlay);
   hideOverlay(ui.survivalLevelOverlay);
   hideOverlay(ui.bossLevelOverlay);
+  hideOverlay(ui.cupPongLevelOverlay);
   hideOverlay(ui.lobbyOverlay);
   hideOverlay(ui.customizeOverlay);
   hideOverlay(ui.settingsOverlay);
@@ -8508,6 +8888,7 @@ function openSurvivalLevelSelect() {
   hideOverlay(ui.botLevelOverlay);
   hideOverlay(ui.chaosLevelOverlay);
   hideOverlay(ui.bossLevelOverlay);
+  hideOverlay(ui.cupPongLevelOverlay);
   hideOverlay(ui.lobbyOverlay);
   hideOverlay(ui.customizeOverlay);
   hideOverlay(ui.settingsOverlay);
@@ -9201,6 +9582,7 @@ function openSettings() {
   hideOverlay(ui.chaosLevelOverlay);
   hideOverlay(ui.survivalLevelOverlay);
   hideOverlay(ui.bossLevelOverlay);
+  hideOverlay(ui.cupPongLevelOverlay);
   hideOverlay(ui.botModesOverlay);
   hideOverlay(ui.lobbyOverlay);
   hideOverlay(ui.customizeOverlay);
@@ -9415,7 +9797,8 @@ function updateResignButton() {
     overlayBlocking(ui.survivalLevelOverlay) ||
     overlayBlocking(ui.bossLevelOverlay) ||
     overlayBlocking(ui.botModesOverlay) ||
-    overlayBlocking(ui.bossHubOverlay);
+    overlayBlocking(ui.bossHubOverlay) ||
+    overlayBlocking(ui.cupPongLevelOverlay);
   const settingsOpen = overlayBlocking(ui.settingsOverlay);
   const onlineMenuOpen =
     overlayBlocking(ui.onlineHubOverlay) ||
@@ -9533,6 +9916,7 @@ const MENU_STAGE_OVERLAYS = () => [
   ui.bossHubOverlay,
   ui.bossShopOverlay,
   ui.bossLevelOverlay,
+  ui.cupPongLevelOverlay,
   ui.lobbyOverlay,
   ui.onlineHubOverlay,
   ui.onlineSearchOverlay,
@@ -9857,6 +10241,7 @@ function openUpdates() {
   hideOverlay(ui.chaosLevelOverlay);
   hideOverlay(ui.survivalLevelOverlay);
   hideOverlay(ui.bossLevelOverlay);
+  hideOverlay(ui.cupPongLevelOverlay);
   hideOverlay(ui.botModesOverlay);
   hideOverlay(ui.modeSoonOverlay);
   hideOverlay(ui.lobbyOverlay);
@@ -9878,6 +10263,7 @@ function closeUpdates() {
 }
 
 function endGame(winner, opts = {}) {
+  if (typeof stopCupPongMusic === "function" && isCupPongMode()) stopCupPongMusic();
   const justEnded = !s.gameOver;
   s.gameOver = true;
   s.running = false;
@@ -9968,6 +10354,21 @@ function endGame(winner, opts = {}) {
           ui.gameOverTitle.textContent = def ? `${def.name.toUpperCase()} FALLEN` : "YOU WIN";
           setGameOverReward(winPts);
         }
+      } else if (s.botMode === "cuppong") {
+        winPts = POINTS_PER_CUP_PONG_WIN;
+        if (isAdmin() && save.abilities.bonusPts) winPts = Math.max(winPts, 10);
+        save.points += winPts;
+        awardXp(XP_PER_CUP_PONG_WIN);
+        clearBonus = typeof awardCupPongClear === "function" ? awardCupPongClear(s.botLevel) : 0;
+        persistSave();
+        updatePointsUI();
+        if (clearBonus > 0) {
+          ui.gameOverTitle.textContent = `CUP ${s.botLevel} CLEARED`;
+          setGameOverReward(winPts);
+        } else {
+          ui.gameOverTitle.textContent = "YOU WIN";
+          setGameOverReward(winPts);
+        }
       } else {
         winPts = awardWinPoints(winner);
         clearBonus = awardBotClear(s.botLevel);
@@ -10024,7 +10425,9 @@ function endGame(winner, opts = {}) {
           ? SURVIVAL_MAX_ROUND
           : s.botMode === "boss"
             ? BOSS_MAX_LEVEL
-            : 100;
+            : s.botMode === "cuppong"
+              ? CUP_PONG_MAX_LEVEL
+              : 100;
     const showNext =
       s.mode === "local" && youWon && !opts.resigned && !opts.draw && s.botLevel < maxLevel;
     ui.btnNextLevel.classList.toggle("hidden", !showNext);
@@ -10036,7 +10439,9 @@ function endGame(winner, opts = {}) {
             ? `Next round (R${s.botLevel + 1})`
             : s.botMode === "boss"
               ? `Next boss (B${s.botLevel + 1})`
-              : `Next level (L${s.botLevel + 1})`;
+              : s.botMode === "cuppong"
+                ? `Next Cup (L${s.botLevel + 1})`
+                : `Next level (L${s.botLevel + 1})`;
     }
   }
   if (justEnded) {
@@ -10066,11 +10471,19 @@ function endGame(winner, opts = {}) {
     !opts.resigned &&
     s.botLevel === BOSS_MAX_LEVEL &&
     clearBonus > 0;
+  const cupBeerPongUnlock =
+    s.mode === "local" &&
+    s.botMode === "cuppong" &&
+    youWon &&
+    !opts.resigned &&
+    s.botLevel === CUP_PONG_MAX_LEVEL &&
+    clearBonus > 0;
   const masterClear =
     s.mode === "local" &&
     s.botMode !== "chaos" &&
     s.botMode !== "survival" &&
     s.botMode !== "boss" &&
+    s.botMode !== "cuppong" &&
     youWon &&
     !opts.resigned &&
     s.botLevel === 100;
@@ -10096,6 +10509,14 @@ function endGame(winner, opts = {}) {
       title: "OVERLORD UNLOCKED",
       lead: "You cleared Boss Battles — Overlord defeated.",
       msg: "Overlord BOSS cosmetic is now yours in Customize. The climb is complete!",
+      xp: xpGained,
+    });
+  } else if (cupBeerPongUnlock) {
+    hideOverlay(ui.gameOver);
+    openMasterClearCelebration(justEnded ? winPts : 0, {
+      title: "BEER PONG UNLOCKED",
+      lead: "You cleared Cup Pong — Level 50.",
+      msg: "Beer Pong cosmetics are now yours in Customize.",
       xp: xpGained,
     });
   } else if (masterClear) {
@@ -10140,6 +10561,14 @@ function resetLocalMatch() {
     s.survival.active = false;
     setSurvivalTimerVisible(false);
   }
+  if (isCupPongMode() && typeof resetCupPongMatch === "function") {
+    resetCupPongMatch();
+    setStagePlaying(true);
+    startGameMusic();
+    updateResignButton();
+    return;
+  }
+  if (typeof stopCupPongMusic === "function") stopCupPongMusic();
   resetBall(true);
   if (isSurvivalMode()) updateSurvivalHud();
   if (isBossMode()) updateBossHud();
@@ -10233,6 +10662,10 @@ function tryLocalPaddleHit(p, side, ball = s.ball) {
 }
 
 function updateLocal(dt) {
+  if (isCupPongMode()) {
+    if (typeof updateCupPong === "function") updateCupPong(dt);
+    return;
+  }
   const p1h = effectivePaddleH("p1");
   s.p1.y = clamp(s.mouseY - p1h / 2, table.y + 6, table.y + table.h - p1h - 6);
 
@@ -10550,6 +10983,9 @@ function updateFx(dt) {
 }
 
 function draw() {
+  if (isCupPongMode() && typeof drawCupPong === "function" && drawCupPong()) {
+    return;
+  }
   ctx.clearRect(0, 0, W, H);
   const stock = courtStockColor();
   const ink = courtInkColor();
@@ -10809,16 +11245,24 @@ function handleWsMessage(msg) {
   if (msg.type === "oCos") {
     net.opponentCosmetics = { paddle: msg.paddle || "white", table: msg.table || "classic" };
     if (msg.name) net.opponentName = sanitizeName(msg.name) || "Opponent";
-    if (typeof msg.level === "number") net.opponentLevel = Math.max(0, Math.min(100, Math.floor(msg.level)));
+    if (typeof msg.xpLevel === "number") {
+      net.opponentLevel = Math.max(1, Math.min(XP_MAX_LEVEL, Math.floor(msg.xpLevel)));
+    } else if (typeof msg.level === "number") {
+      net.opponentLevel = Math.max(0, Math.min(XP_MAX_LEVEL, Math.floor(msg.level)));
+    }
     net.opponentProfile = {
       xp: typeof msg.xp === "number" ? Math.max(0, Math.floor(msg.xp)) : 0,
+      xpLevel:
+        typeof msg.xpLevel === "number"
+          ? Math.max(1, Math.min(XP_MAX_LEVEL, Math.floor(msg.xpLevel)))
+          : net.opponentLevel || 1,
       avatar: typeof msg.avatar === "string" && msg.avatar ? String(msg.avatar).slice(0, 64) : "default",
       customAvatarUrl:
         typeof msg.customAvatarUrl === "string" ? String(msg.customAvatarUrl).slice(0, 240) : "",
       maxBotCleared:
         typeof msg.maxBotCleared === "number"
           ? Math.max(0, Math.min(100, Math.floor(msg.maxBotCleared)))
-          : net.opponentLevel || 0,
+          : 0,
       maxChaosCleared:
         typeof msg.maxChaosCleared === "number" ? Math.max(0, Math.floor(msg.maxChaosCleared)) : 0,
       maxSurvivalCleared:
@@ -11000,6 +11444,7 @@ function startLocalMode(level = 1) {
   hideOverlay(ui.chaosLevelOverlay);
   hideOverlay(ui.survivalLevelOverlay);
   hideOverlay(ui.bossLevelOverlay);
+  hideOverlay(ui.cupPongLevelOverlay);
   hideOverlay(ui.botModesOverlay);
   hideOverlay(ui.lobbyOverlay);
   hideOverlay(ui.customizeOverlay);
@@ -11033,6 +11478,7 @@ function startChaosMode(level = 1) {
   hideOverlay(ui.chaosLevelOverlay);
   hideOverlay(ui.survivalLevelOverlay);
   hideOverlay(ui.bossLevelOverlay);
+  hideOverlay(ui.cupPongLevelOverlay);
   hideOverlay(ui.botModesOverlay);
   hideOverlay(ui.lobbyOverlay);
   hideOverlay(ui.customizeOverlay);
@@ -11064,6 +11510,7 @@ function startSurvivalMode(round = 1) {
   hideOverlay(ui.chaosLevelOverlay);
   hideOverlay(ui.survivalLevelOverlay);
   hideOverlay(ui.bossLevelOverlay);
+  hideOverlay(ui.cupPongLevelOverlay);
   hideOverlay(ui.botModesOverlay);
   hideOverlay(ui.lobbyOverlay);
   hideOverlay(ui.customizeOverlay);
@@ -11101,6 +11548,7 @@ function startBossMode(level = 1) {
   hideOverlay(ui.bossHubOverlay);
   hideOverlay(ui.bossShopOverlay);
   hideOverlay(ui.bossLevelOverlay);
+  hideOverlay(ui.cupPongLevelOverlay);
   hideOverlay(ui.botModesOverlay);
   hideOverlay(ui.lobbyOverlay);
   hideOverlay(ui.customizeOverlay);
@@ -11127,6 +11575,7 @@ function openOnlineHub() {
   hideOverlay(ui.bossHubOverlay);
   hideOverlay(ui.bossShopOverlay);
   hideOverlay(ui.bossLevelOverlay);
+  hideOverlay(ui.cupPongLevelOverlay);
   hideOverlay(ui.botModesOverlay);
   hideOverlay(ui.modeSoonOverlay);
   hideOverlay(ui.customizeOverlay);
@@ -11305,6 +11754,7 @@ function backToMenu() {
   hideOverlay(ui.bossHubOverlay);
   hideOverlay(ui.bossShopOverlay);
   hideOverlay(ui.bossLevelOverlay);
+  hideOverlay(ui.cupPongLevelOverlay);
   hideOverlay(ui.botModesOverlay);
   hideOverlay(ui.modeSoonOverlay);
   hideOverlay(ui.customizeOverlay);
@@ -11373,6 +11823,7 @@ function bindAdminControls() {
   bind(ui.btnAdminUnlockChaos, adminUnlockAllChaosLevels);
   bind(ui.btnAdminUnlockSurvival, adminUnlockAllSurvivalRounds);
   bind(ui.btnAdminUnlockBoss, adminUnlockAllBossLevels);
+  bind(ui.btnAdminUnlockCupPong, adminUnlockAllCupPongLevels);
   bind(ui.btnAdminSetLevel, () => {
     const n = parseInt(ui.adminLevelInput?.value, 10);
     adminSetPlayerLevel(Number.isFinite(n) ? n : 0);
@@ -11600,6 +12051,12 @@ function bindUi() {
   bind(ui.btnModeChaos, openChaosLevelSelect);
   bind(ui.btnModeSurvival, openSurvivalLevelSelect);
   bind(ui.btnModeBoss, openBossHub);
+  bind(ui.btnModeCupPong, () => {
+    if (typeof openCupPongLevelSelect === "function") openCupPongLevelSelect();
+  });
+  bind(ui.btnCupPongLevelBack, () => {
+    if (typeof closeCupPongLevelSelect === "function") closeCupPongLevelSelect();
+  });
   bind(ui.btnModeSoonBack, closeModeSoon);
   bind(ui.btnModeSoonUpdates, () => {
     hideOverlay(ui.modeSoonOverlay);
@@ -11859,6 +12316,11 @@ function bindUi() {
       resetLocalMatch();
       return;
     }
+    if (s.botMode === "cuppong") {
+      if (typeof applyCupPongBotLevel === "function") applyCupPongBotLevel(s.botLevel);
+      resetLocalMatch();
+      return;
+    }
     applyBotLevel(s.botLevel);
     resetLocalMatch();
   });
@@ -11898,6 +12360,18 @@ function bindUi() {
         return;
       }
       startBossMode(next);
+      return;
+    }
+    if (s.botMode === "cuppong") {
+      const next = Math.min(CUP_PONG_MAX_LEVEL, (s.botLevel || 1) + 1);
+      if (typeof isCupPongLevelUnlocked === "function" && !isCupPongLevelUnlocked(next)) {
+        openCupPongLevelSelect();
+        if (ui.cupPongLevelHint) {
+          ui.cupPongLevelHint.textContent = `Cup ${next} is locked. Clear Cup ${next - 1} first.`;
+        }
+        return;
+      }
+      startCupPongMode(next);
       return;
     }
     const next = Math.min(100, (s.botLevel || 1) + 1);
@@ -11950,36 +12424,120 @@ function bindUi() {
       }
     });
   }
+
+  // #region agent log
+  (function debugColorAnimSeams() {
+    const targets = [];
+    if (ui.titleEl) targets.push({ id: "title", el: ui.titleEl });
+    const pushLvl = (el, id) => {
+      if (el) targets.push({ id, el });
+    };
+    pushLvl(ui.hint?.querySelector?.(".player-level-inline"), "hint-level");
+    pushLvl(ui.p1Label, "p1-label");
+    pushLvl(document.querySelector(".update-secret .update-heading"), "secret-heading");
+    const prev = new Map();
+    let ticks = 0;
+    const timer = setInterval(() => {
+      ticks += 1;
+      for (const t of targets) {
+        if (!t.el || !t.el.isConnected) continue;
+        const cs = getComputedStyle(t.el);
+        const pos = cs.backgroundPosition;
+        const anim = cs.animationName;
+        const size = cs.backgroundSize;
+        const last = prev.get(t.id);
+        let jump = false;
+        let delta = 0;
+        if (last && last.pos) {
+          const a = parseFloat(String(last.pos).split(/\s+/)[0]) || 0;
+          const b = parseFloat(String(pos).split(/\s+/)[0]) || 0;
+          delta = b - a;
+          // Large reverse jump while animation is running = loop seam
+          jump = delta < -20 || (a > 80 && b < 15);
+        }
+        prev.set(t.id, { pos });
+        if (jump || ticks === 1 || ticks % 40 === 0) {
+          fetch("http://127.0.0.1:7263/ingest/7b680789-6fbf-44a7-9704-6ddeb5cf3ed6", {
+            method: "POST",
+            headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "38eb5e" },
+            body: JSON.stringify({
+              sessionId: "38eb5e",
+              runId: "post-fix",
+              hypothesisId: jump ? "A" : "B",
+              location: "game.js:debugColorAnimSeams",
+              message: jump ? "bg-position loop jump detected" : "anim sample",
+              data: {
+                id: t.id,
+                pos,
+                size,
+                anim,
+                delta,
+                jump,
+                ticks,
+                classes: t.el.className,
+                timing: cs.animationTimingFunction,
+                direction: cs.animationDirection,
+              },
+              timestamp: Date.now(),
+            }),
+          }).catch(() => {});
+        }
+      }
+      if (ticks >= 200) clearInterval(timer);
+    }, 250);
+  })();
+  // #endregion
+}
+
+function setPointerFromClient(clientX, clientY) {
+  const r = canvas.getBoundingClientRect();
+  if (typeof clientX === "number") {
+    s.mouseX = ((clientX - r.left) / r.width) * W;
+  }
+  if (typeof clientY === "number") {
+    const y = ((clientY - r.top) / r.height) * H;
+    // Cup Pong uses the full canvas (portrait court); classic modes stay table-clamped.
+    if (typeof isCupPongMode === "function" && isCupPongMode()) {
+      s.mouseY = clamp(y, 0, H);
+    } else {
+      s.mouseY = clamp(y, table.y, table.y + table.h);
+    }
+  }
 }
 
 function setPaddleFromClientY(clientY) {
-  const r = canvas.getBoundingClientRect();
-  const y = ((clientY - r.top) / r.height) * H;
-  s.mouseY = clamp(y, table.y, table.y + table.h);
+  setPointerFromClient(undefined, clientY);
 }
 
 function bindCanvasInput() {
   canvas.style.touchAction = "none";
 
-  canvas.addEventListener("mousemove", (e) => setPaddleFromClientY(e.clientY));
+  canvas.addEventListener("mousemove", (e) => setPointerFromClient(e.clientX, e.clientY));
 
   canvas.addEventListener("pointerdown", (e) => {
     if (e.pointerType === "mouse" && e.button !== 0) return;
-    setPaddleFromClientY(e.clientY);
+    setPointerFromClient(e.clientX, e.clientY);
     if (s.mode !== "local" && s.mode !== "online") return;
+    if (isCupPongMode()) {
+      if (typeof cupPongPointerDown === "function") cupPongPointerDown(s.mouseX, s.mouseY);
+      return;
+    }
     if (s.mode === "local" && s.running && tryActivateFireSmash()) return;
     serve();
   });
 
   canvas.addEventListener("pointermove", (e) => {
     if (e.pointerType === "mouse" && e.buttons === 0) return;
-    setPaddleFromClientY(e.clientY);
+    setPointerFromClient(e.clientX, e.clientY);
+    if (isCupPongMode() && typeof cupPongPointerMove === "function") {
+      cupPongPointerMove(s.mouseX, s.mouseY);
+    }
   });
 
   canvas.addEventListener(
     "touchstart",
     (e) => {
-      if (e.touches[0]) setPaddleFromClientY(e.touches[0].clientY);
+      if (e.touches[0]) setPointerFromClient(e.touches[0].clientX, e.touches[0].clientY);
     },
     { passive: true }
   );
@@ -11989,7 +12547,10 @@ function bindCanvasInput() {
     (e) => {
       if (e.touches[0]) {
         e.preventDefault();
-        setPaddleFromClientY(e.touches[0].clientY);
+        setPointerFromClient(e.touches[0].clientX, e.touches[0].clientY);
+        if (isCupPongMode() && typeof cupPongPointerMove === "function") {
+          cupPongPointerMove(s.mouseX, s.mouseY);
+        }
       }
     },
     { passive: false }

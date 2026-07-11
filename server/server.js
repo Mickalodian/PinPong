@@ -29,6 +29,9 @@ const MIME = {
   ".png": "image/png",
   ".jpg": "image/jpeg",
   ".webp": "image/webp",
+  ".wav": "audio/wav",
+  ".ogg": "audio/ogg",
+  ".mp3": "audio/mpeg",
 };
 
 const rooms = new Map();
@@ -563,14 +566,23 @@ function adminAdjustProfile(playerId, action, amount = 0) {
   return { ok: true, profile: next };
 }
 
+const XP_MAX_LEVEL = 1000;
+
+function xpNeedForLevel(level) {
+  const lv = Math.max(1, Math.floor(Number(level) || 1));
+  if (lv <= 100) return Math.floor(100 * Math.pow(1.14, lv - 1));
+  const at100 = Math.floor(100 * Math.pow(1.14, 99));
+  return Math.floor(at100 * Math.pow(1.015, lv - 100));
+}
+
 function getXpLevelFromTotal(xpTotal) {
   let xp = Math.max(0, Math.floor(Number(xpTotal) || 0));
   let level = 1;
-  let need = 100;
-  while (xp >= need && level < 99) {
+  let need = xpNeedForLevel(1);
+  while (xp >= need && level < XP_MAX_LEVEL) {
     xp -= need;
     level += 1;
-    need = Math.floor(100 * Math.pow(1.14, level - 1));
+    need = xpNeedForLevel(level);
   }
   return level;
 }
@@ -707,15 +719,7 @@ function resetLeaderboard() {
 }
 
 function xpLevelFromTotal(xpTotal) {
-  let xp = Math.max(0, Math.floor(Number(xpTotal) || 0));
-  let level = 1;
-  let need = 100;
-  while (xp >= need && level < 99) {
-    xp -= need;
-    level += 1;
-    need = Math.floor(100 * Math.pow(1.14, level - 1));
-  }
-  return level;
+  return getXpLevelFromTotal(xpTotal);
 }
 
 function sanitizeLeaderboardId(id) {
@@ -797,6 +801,9 @@ function upsertLeaderboardPlayer(patch = {}, { createIfMissing = true } = {}) {
   if (typeof patch.maxBossCleared === "number" && Number.isFinite(patch.maxBossCleared)) {
     next.maxBossCleared = Math.max(0, Math.min(20, Math.floor(patch.maxBossCleared)));
   }
+  if (typeof patch.maxCupPongCleared === "number" && Number.isFinite(patch.maxCupPongCleared)) {
+    next.maxCupPongCleared = Math.max(0, Math.min(50, Math.floor(patch.maxCupPongCleared)));
+  }
   // Stats only grow via deltas — never absolute overwrite from clients
   if (typeof patch.winsDelta === "number") next.wins = Math.max(0, next.wins + Math.floor(patch.winsDelta));
   if (typeof patch.lossesDelta === "number") next.losses = Math.max(0, next.losses + Math.floor(patch.lossesDelta));
@@ -856,6 +863,7 @@ function leaderboardPublicList(limit = 200) {
       maxChaosCleared: e.maxChaosCleared || 0,
       maxSurvivalCleared: e.maxSurvivalCleared || 0,
       maxBossCleared: e.maxBossCleared || 0,
+      maxCupPongCleared: e.maxCupPongCleared || 0,
       wins: e.wins || 0,
       losses: e.losses || 0,
       draws: e.draws || 0,
@@ -891,6 +899,7 @@ function playerSnapshotFromWs(ws) {
     maxChaosCleared: typeof ws.profileMaxChaosCleared === "number" ? ws.profileMaxChaosCleared : 0,
     maxSurvivalCleared: typeof ws.profileMaxSurvivalCleared === "number" ? ws.profileMaxSurvivalCleared : 0,
     maxBossCleared: typeof ws.profileMaxBossCleared === "number" ? ws.profileMaxBossCleared : 0,
+    maxCupPongCleared: typeof ws.profileMaxCupPongCleared === "number" ? ws.profileMaxCupPongCleared : 0,
   };
 }
 
@@ -937,7 +946,11 @@ function mergeBossPowers(prevList, nextList, force = false) {
 function mergeAvatarList(prevList, nextList, force = false) {
   const clean = (list) =>
     [...new Set((Array.isArray(list) ? list : []).map(String).filter(Boolean))];
-  if (force) return clean(nextList.length ? nextList : ["default"]);
+  if (force) {
+    if (Array.isArray(nextList) && nextList.length) return clean(nextList);
+    if (Array.isArray(prevList) && prevList.length) return clean(prevList);
+    return ["default"];
+  }
   const merged = clean([...(prevList || []), ...(nextList || []), "default"]);
   return merged.length ? merged : ["default"];
 }
@@ -951,6 +964,7 @@ function defaultProfile() {
     maxChaosCleared: 0,
     maxSurvivalCleared: 0,
     maxBossCleared: 0,
+    maxCupPongCleared: 0,
     owned: { paddle: ["white"], table: ["classic"] },
     equipped: { paddle: "white", table: "classic" },
     redeemedCodes: [],
@@ -992,6 +1006,8 @@ function mergeProfileRecord(existing, incoming, { force = false } = {}) {
   const prevSurvival = Math.max(0, Math.min(25, Math.floor(Number(prev.maxSurvivalCleared) || 0)));
   const incomingBoss = Math.max(0, Math.min(10, Math.floor(Number(p.maxBossCleared) || 0)));
   const prevBoss = Math.max(0, Math.min(10, Math.floor(Number(prev.maxBossCleared) || 0)));
+  const incomingCup = Math.max(0, Math.min(50, Math.floor(Number(p.maxCupPongCleared) || 0)));
+  const prevCup = Math.max(0, Math.min(50, Math.floor(Number(prev.maxCupPongCleared) || 0)));
   const incomingPoints = Math.max(0, Math.floor(Number(p.points) || 0));
   const prevPoints = Math.max(0, Math.floor(Number(prev.points) || 0));
   const incomingXp = Math.max(0, Math.floor(Number(p.xp) || 0));
@@ -1001,14 +1017,17 @@ function mergeProfileRecord(existing, incoming, { force = false } = {}) {
   const adminSyncedAt = Math.max(prevAdminSynced, incomingAdminSynced);
   // Until the client acknowledges an admin sync, keep server points/xp so removals stick.
   const holdAdminEconomy = !force && prevAdminSynced > 0 && incomingAdminSynced < prevAdminSynced;
+  const incomingName = typeof p.name === "string" ? String(p.name).trim() : "";
+  const mergedName = incomingName || prev.name || "";
   return {
-    name: sanitizeName(p.name || prev.name || ""),
+    name: sanitizeName(mergedName),
     points: force ? incomingPoints : holdAdminEconomy ? prevPoints : Math.max(prevPoints, incomingPoints),
     xp: force ? incomingXp : holdAdminEconomy ? prevXp : Math.max(prevXp, incomingXp),
     maxBotCleared: force ? incomingLevel : Math.max(prevLevel, incomingLevel),
     maxChaosCleared: force ? incomingChaos : Math.max(prevChaos, incomingChaos),
     maxSurvivalCleared: force ? incomingSurvival : Math.max(prevSurvival, incomingSurvival),
     maxBossCleared: force ? incomingBoss : Math.max(prevBoss, incomingBoss),
+    maxCupPongCleared: force ? incomingCup : Math.max(prevCup, incomingCup),
     owned: {
       paddle: ownedPaddle.includes("white") ? ownedPaddle : ["white", ...ownedPaddle],
       table: ownedTable.includes("classic") ? ownedTable : ["classic", ...ownedTable],
@@ -1064,16 +1083,23 @@ function sanitizeCosmetics(cos) {
 function relayCosmetics(room, ws) {
   const other = room.players[ws.playerSlot === 0 ? 1 : 0];
   if (other && other.readyState === 1) {
+    const xpLevel =
+      typeof ws.profileXpLevel === "number"
+        ? ws.profileXpLevel
+        : typeof ws.playerLevel === "number"
+          ? ws.playerLevel
+          : 1;
     other.send(JSON.stringify({
       type: "oCos",
       paddle: ws.cosmetics?.paddle || "white",
       table: ws.cosmetics?.table || "classic",
       name: ws.displayName || "Opponent",
-      level: ws.playerLevel || 0,
+      level: xpLevel,
+      xpLevel,
       xp: ws.profileXp || 0,
       avatar: ws.profileAvatar || "default",
       customAvatarUrl: ws.profileCustomAvatarUrl || "",
-      maxBotCleared: ws.profileMaxBotCleared ?? ws.playerLevel ?? 0,
+      maxBotCleared: ws.profileMaxBotCleared || 0,
       maxChaosCleared: ws.profileMaxChaosCleared || 0,
       maxSurvivalCleared: ws.profileMaxSurvivalCleared || 0,
       maxBossCleared: ws.profileMaxBossCleared || 0,
@@ -1084,20 +1110,29 @@ function relayCosmetics(room, ws) {
 function exchangeCosmetics(room) {
   const p0 = room.players[0];
   const p1 = room.players[1];
-  const pack = (from) => ({
-    type: "oCos",
-    paddle: from.cosmetics?.paddle || "white",
-    table: from.cosmetics?.table || "classic",
-    name: from.displayName || "Opponent",
-    level: from.playerLevel || 0,
-    xp: from.profileXp || 0,
-    avatar: from.profileAvatar || "default",
-    customAvatarUrl: from.profileCustomAvatarUrl || "",
-    maxBotCleared: from.profileMaxBotCleared ?? from.playerLevel ?? 0,
-    maxChaosCleared: from.profileMaxChaosCleared || 0,
-    maxSurvivalCleared: from.profileMaxSurvivalCleared || 0,
-    maxBossCleared: from.profileMaxBossCleared || 0,
-  });
+  const pack = (from) => {
+    const xpLevel =
+      typeof from.profileXpLevel === "number"
+        ? from.profileXpLevel
+        : typeof from.playerLevel === "number"
+          ? from.playerLevel
+          : 1;
+    return {
+      type: "oCos",
+      paddle: from.cosmetics?.paddle || "white",
+      table: from.cosmetics?.table || "classic",
+      name: from.displayName || "Opponent",
+      level: xpLevel,
+      xpLevel,
+      xp: from.profileXp || 0,
+      avatar: from.profileAvatar || "default",
+      customAvatarUrl: from.profileCustomAvatarUrl || "",
+      maxBotCleared: from.profileMaxBotCleared || 0,
+      maxChaosCleared: from.profileMaxChaosCleared || 0,
+      maxSurvivalCleared: from.profileMaxSurvivalCleared || 0,
+      maxBossCleared: from.profileMaxBossCleared || 0,
+    };
+  };
   if (p0?.readyState === 1 && p1) {
     p0.send(JSON.stringify(pack(p1)));
   }
@@ -2454,7 +2489,7 @@ wss.on("connection", (ws) => {
       ws.cosmetics = sanitizeCosmetics({ paddle: String(msg.paddle), table: String(msg.table) });
       if (msg.name) ws.displayName = sanitizeName(msg.name);
       if (typeof msg.level === "number") {
-        ws.playerLevel = Math.max(0, Math.min(100, Math.floor(msg.level)));
+        ws.playerLevel = Math.max(0, Math.min(XP_MAX_LEVEL, Math.floor(msg.level)));
       }
       if (typeof msg.xp === "number") ws.profileXp = Math.max(0, Math.min(1e9, Math.floor(msg.xp)));
       if (typeof msg.xpLevel === "number") {
@@ -2485,6 +2520,9 @@ wss.on("connection", (ws) => {
       }
       if (typeof msg.maxBossCleared === "number") {
         ws.profileMaxBossCleared = Math.max(0, Math.min(20, Math.floor(msg.maxBossCleared)));
+      }
+      if (typeof msg.maxCupPongCleared === "number") {
+        ws.profileMaxCupPongCleared = Math.max(0, Math.min(50, Math.floor(msg.maxCupPongCleared)));
       }
       const snap = playerSnapshotFromWs(ws);
       if (snap) upsertLeaderboardPlayer(snap, { createIfMissing: false });

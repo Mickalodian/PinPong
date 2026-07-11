@@ -2,13 +2,13 @@
   "mikloit": {
     "username": "mikloit",
     "displayName": "MikLoit",
-    "passwordHash": "6de88a0ebd63e1e9b205af0561ea5e8b2a59d8b001d2fbe727e8f77465f11df6a1c106ec14f25d174b45a556f7d6202ca88d5b3a875289b3822bd3a874501564",
-    "salt": "939be3d8a4be81ac8169c9ab1afd1cb3",
+    "passwordHash": "30288d25f406f6807cb152d68d771811464f348684f1615ef57d72f4d44dc804506d68c8427ef2626fff0265e1d71525ad6462f85aaa804e4302a05c61a5b079",
+    "salt": "66e304ecfcea56792eeff198c708ab0b",
     "playerId": "dccb8911-4688-419e-869e-cc2c2c00217d",
     "isOwner": true,
     "isAdmin": true,
     "createdAt": 1783713492688,
-    "updatedAt": 1783725512744
+    "updatedAt": 1783768331412
   },
   "nobody": {
     "username": "nobody",
@@ -59,5 +59,41 @@
     "passwordResetRequested": false,
     "passwordResetExpires": 0,
     "passwordResetCode": ""
+  },
+  "shazita": {
+    "username": "shazita",
+    "displayName": "Shazita",
+    "passwordHash": "7d4c91af68aaa9f066d1c2b7e3c5744723ffc594352f9203f8ff6fca5c0ef645b486e76a659e3eecee894571731e991e304b69a82a147790e44da20ecc2bd6c2",
+    "salt": "d35cb757550f3d38e3068fe0630a7c2e",
+    "playerId": "c05cbe9f-e8e9-4f08-87c9-c1590d77d5ab",
+    "isOwner": false,
+    "isAdmin": false,
+    "mustSetPassword": true,
+    "createdAt": 1783762148037,
+    "updatedAt": 1783762148037
+  },
+  "bethanyy": {
+    "username": "bethanyy",
+    "displayName": "Bethanyy",
+    "passwordHash": "e5102ab271c9589479f25055b38bddc507ad20b48d92ef7a68dd3698daac3ff51bcc18908ace1d3c0f93f4814fb6f7a4a8cd1674821105bf6b0dcbf16237b703",
+    "salt": "6c7e020fd087eb3be16bba9a390ecb8e",
+    "playerId": "88c0739f-0aaa-42ac-820c-60a0bc5d0695",
+    "isOwner": false,
+    "isAdmin": false,
+    "mustSetPassword": true,
+    "createdAt": 1783762148097,
+    "updatedAt": 1783762148097
+  },
+  "nathan_c01": {
+    "username": "nathan_c01",
+    "displayName": "Nathan_C01",
+    "passwordHash": "18d36d26308926439c6bb1abdf96b2f4b37e14697e40c5e3febad25410eed31078fbfdd2510f35a8383df0c05c1c74506f1a7976223381b5aa05aee9c4b6afa5",
+    "salt": "4faa0e40670926d5f973c2c10804617f",
+    "playerId": "2d5c5d0d-5c90-4c39-a0e0-86cc6bd7889b",
+    "isOwner": false,
+    "isAdmin": false,
+    "mustSetPassword": true,
+    "createdAt": 1783762148158,
+    "updatedAt": 1783762148158
   }
 }

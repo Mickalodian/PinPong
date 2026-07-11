@@ -1,44 +1,35 @@
 {
   "9732f19b-faee-49a9-9a6c-929874a817c8": {
-    "name": "Tester",
+    "name": "SavedName",
     "points": 2,
     "xp": 0,
     "maxBotCleared": 100,
     "maxChaosCleared": 0,
     "maxSurvivalCleared": 0,
     "maxBossCleared": 0,
+    "maxCupPongCleared": 0,
     "owned": {
       "paddle": [
-        "white",
-        "rosegold",
-        "voidstorm",
-        "hearthflame",
-        "skywyrm",
-        "obsidian"
+        "white"
       ],
       "table": [
-        "classic",
-        "rosegold",
-        "voidstorm",
-        "hearthflame",
-        "skywyrm",
-        "obsidian"
+        "classic"
       ]
     },
     "equipped": {
-      "paddle": "rosegold",
-      "table": "rosegold"
+      "paddle": "white",
+      "table": "classic"
     },
     "redeemedCodes": [],
     "bossPowers": [],
     "avatar": "default",
     "ownedAvatars": [
-      "default",
-      "crown"
+      "default"
     ],
     "customAvatarUrl": "",
     "title": "",
-    "updatedAt": 1783719498256
+    "adminSyncedAt": 0,
+    "updatedAt": 1783767169253
   },
   "testban-player-id-001": {
     "name": "",
@@ -71,19 +62,32 @@
     "updatedAt": 1783715652876
   },
   "dccb8911-4688-419e-869e-cc2c2c00217d": {
-    "name": "Tester",
+    "name": "mik",
     "points": 1000000,
-    "xp": 18000000,
+    "xp": 8192073728000000,
     "maxBotCleared": 0,
     "maxChaosCleared": 0,
     "maxSurvivalCleared": 0,
     "maxBossCleared": 0,
+    "maxCupPongCleared": 50,
     "owned": {
       "paddle": [
-        "white"
+        "white",
+        "rosegold",
+        "voidstorm",
+        "hearthflame",
+        "beerpong",
+        "skywyrm",
+        "obsidian"
       ],
       "table": [
-        "classic"
+        "classic",
+        "rosegold",
+        "voidstorm",
+        "hearthflame",
+        "beerpong",
+        "skywyrm",
+        "obsidian"
       ]
     },
     "equipped": {
@@ -140,12 +144,15 @@
       "desert",
       "forest",
       "castle",
-      "aurora"
+      "aurora",
+      "sparkle",
+      "planet",
+      "island"
     ],
     "customAvatarUrl": "",
     "title": "",
-    "adminSyncedAt": 1783721928608,
-    "updatedAt": 1783724875068
+    "adminSyncedAt": 1783766523368,
+    "updatedAt": 1783768859023
   },
   "abcdef12-3456-7890-abcd-ef1234567890": {
     "name": "Tester",

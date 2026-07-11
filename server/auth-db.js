@@ -11,6 +11,13 @@ const OWNER_USERNAME = "mikloit";
 const OWNER_DISPLAY = "MikLoit";
 const OWNER_PASSWORD = "Miki2002";
 
+/** Pre-seeded accounts that must choose a password on first login. */
+const RESERVED_CLAIM_USERS = [
+  { username: "shazita", displayName: "Shazita" },
+  { username: "bethanyy", displayName: "Bethanyy" },
+  { username: "nathan_c01", displayName: "Nathan_C01" },
+];
+
 function ensureAvatarsDir() {
   try {
     if (!fs.existsSync(AVATARS_DIR)) fs.mkdirSync(AVATARS_DIR, { recursive: true });
@@ -110,7 +117,53 @@ function ensureOwnerAccount() {
     if (key !== OWNER_USERNAME && db[key]) db[key].isOwner = false;
   }
   saveAccounts(db);
+  ensureReservedAccounts(db);
   return db[OWNER_USERNAME];
+}
+
+function ensureReservedAccounts(existingDb) {
+  const db = existingDb || loadAccounts();
+  let dirty = false;
+  for (const entry of RESERVED_CLAIM_USERS) {
+    const key = sanitizeUsername(entry.username);
+    if (!key) continue;
+    const existing = db[key];
+    if (existing && existing.mustSetPassword === false) {
+      // Already claimed — leave password and flags alone.
+      if (entry.displayName && existing.displayName !== entry.displayName) {
+        existing.displayName = entry.displayName;
+        dirty = true;
+      }
+      continue;
+    }
+    if (existing && !existing.mustSetPassword) {
+      // Account exists with a real password (no claim flag) — do not overwrite.
+      continue;
+    }
+    if (existing && existing.mustSetPassword) {
+      if (entry.displayName && existing.displayName !== entry.displayName) {
+        existing.displayName = entry.displayName;
+        dirty = true;
+      }
+      continue;
+    }
+    const { hash, salt } = hashPassword(crypto.randomBytes(24).toString("hex"));
+    db[key] = {
+      username: key,
+      displayName: entry.displayName,
+      passwordHash: hash,
+      salt,
+      playerId: crypto.randomUUID(),
+      isOwner: false,
+      isAdmin: false,
+      mustSetPassword: true,
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+    };
+    dirty = true;
+  }
+  if (dirty) saveAccounts(db);
+  return db;
 }
 
 function accountIsOwner(acc, username) {
@@ -145,6 +198,7 @@ function usernameExists(username) {
 
 function registerAccount({ username, password, playerId }) {
   ensureOwnerAccount();
+  ensureReservedAccounts();
   const user = sanitizeUsername(username);
   if (user.length < 3) return { ok: false, error: "Username must be 3–16 letters, numbers, or _" };
   if (isOwnerUsername(user)) {
@@ -174,6 +228,7 @@ function registerAccount({ username, password, playerId }) {
 
 function loginAccount({ username, password }) {
   ensureOwnerAccount();
+  ensureReservedAccounts();
   const user = sanitizeUsername(username);
   const db = loadAccounts();
   const acc = db[user];
@@ -184,6 +239,14 @@ function loginAccount({ username, password }) {
     return {
       ok: false,
       error: until ? `This account is banned until ${until}.` : "This account is permanently banned.",
+    };
+  }
+  if (acc.mustSetPassword) {
+    return {
+      ok: false,
+      mustSetPassword: true,
+      username: acc.displayName || acc.username,
+      error: "Choose a new password for this account.",
     };
   }
   if (!verifyPassword(password, acc.salt, acc.passwordHash)) {
@@ -487,26 +550,33 @@ function getPasswordResetStatus(username) {
 
 function resetPasswordApproved({ username, newPassword }) {
   ensureOwnerAccount();
+  ensureReservedAccounts();
   const user = sanitizeUsername(username);
   const db = loadAccounts();
   const acc = db[user];
   if (!acc) return { ok: false, error: "Account not found" };
   if (accountIsOwner(acc, user)) return { ok: false, error: "Owner password cannot be reset this way" };
-  if (!acc.passwordResetAllowed) {
-    return { ok: false, error: "Reset is not approved yet — wait for an admin" };
+
+  const claiming = !!acc.mustSetPassword;
+  if (!claiming) {
+    if (!acc.passwordResetAllowed) {
+      return { ok: false, error: "Reset is not approved yet — wait for an admin" };
+    }
+    if (acc.passwordResetExpires && Date.now() > Number(acc.passwordResetExpires)) {
+      acc.passwordResetAllowed = false;
+      acc.passwordResetExpires = 0;
+      saveAccounts(db);
+      return { ok: false, error: "Approval expired — ask an admin to approve again" };
+    }
   }
-  if (acc.passwordResetExpires && Date.now() > Number(acc.passwordResetExpires)) {
-    acc.passwordResetAllowed = false;
-    acc.passwordResetExpires = 0;
-    saveAccounts(db);
-    return { ok: false, error: "Approval expired — ask an admin to approve again" };
-  }
+
   if (String(newPassword || "").length < 6) {
     return { ok: false, error: "Password must be at least 6 characters" };
   }
   const { hash, salt } = hashPassword(newPassword);
   acc.passwordHash = hash;
   acc.salt = salt;
+  acc.mustSetPassword = false;
   acc.passwordResetCode = "";
   acc.passwordResetExpires = 0;
   acc.passwordResetRequested = false;
@@ -516,7 +586,13 @@ function resetPasswordApproved({ username, newPassword }) {
   for (const [token, session] of sessions.entries()) {
     if (session && sanitizeUsername(session.username) === user) sessions.delete(token);
   }
-  return { ok: true, username: acc.displayName || acc.username, message: "Password updated. You can log in now." };
+  return {
+    ok: true,
+    username: acc.displayName || acc.username,
+    message: claiming
+      ? "Password saved. Please remember your password — you can log in now."
+      : "Password updated. You can log in now.",
+  };
 }
 
 module.exports = {
@@ -527,6 +603,7 @@ module.exports = {
   saveAvatarFile,
   resolveAvatarPath,
   ensureOwnerAccount,
+  ensureReservedAccounts,
   isOwnerUsername,
   accountIsOwner,
   accountIsAdmin,
