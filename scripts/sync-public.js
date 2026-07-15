@@ -10,6 +10,18 @@ for (const file of files) {
   fs.copyFileSync(path.join(root, file), path.join(dest, file));
 }
 
+const assetsSrc = path.join(root, "assets");
+const assetsDest = path.join(dest, "assets");
+if (fs.existsSync(assetsSrc)) {
+  fs.mkdirSync(assetsDest, { recursive: true });
+  for (const name of fs.readdirSync(assetsSrc)) {
+    const from = path.join(assetsSrc, name);
+    if (fs.statSync(from).isFile() && name.endsWith(".svg")) {
+      fs.copyFileSync(from, path.join(assetsDest, name));
+    }
+  }
+}
+
 const packSrc = path.join(root, "avatar-pack");
 const packDest = path.join(dest, "avatar-pack");
 if (fs.existsSync(packSrc)) {
