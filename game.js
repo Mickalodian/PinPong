@@ -3641,7 +3641,6 @@ function renderShop() {
   let epicCount = 0;
   let cantAffordEpic = 0;
   for (const item of SHOP[kind]) {
-    if (item.cuppong) continue;
     const owned = save.owned[kind].includes(item.id);
     if (item.hidden && !owned) continue;
     const equipped = save.equipped[kind] === item.id;
@@ -3653,6 +3652,7 @@ function renderShop() {
     if (item.chaos) btn.classList.add("chaos");
     else if (item.survival) btn.classList.add("survival");
     else if (item.boss) btn.classList.add("boss");
+    else if (item.cuppong) btn.classList.add("cuppong");
     else if (item.legendary) btn.classList.add("legendary");
     if (item.secret) btn.classList.add("secret");
     if (item.limitedEdition) btn.classList.add("limited");
@@ -3661,7 +3661,16 @@ function renderShop() {
     const cantAfford = unlocked && !owned && !free && item.price > 0 && save.points < item.price;
     if (!unlocked) btn.classList.add("level-locked");
     else if (cantAfford) btn.classList.add("cant-afford");
-    if (item.epic || item.legendary || item.chaos || item.survival || item.boss || item.secret || item.limitedEdition) {
+    if (
+      item.epic ||
+      item.legendary ||
+      item.chaos ||
+      item.survival ||
+      item.boss ||
+      item.cuppong ||
+      item.secret ||
+      item.limitedEdition
+    ) {
       epicCount += 1;
       if (cantAfford || !unlocked) cantAffordEpic += 1;
     }
@@ -3671,6 +3680,7 @@ function renderShop() {
     if (item.chaos) swatch.classList.add("chaos-swatch");
     else if (item.survival) swatch.classList.add("survival-swatch");
     else if (item.boss) swatch.classList.add("boss-swatch");
+    else if (item.cuppong) swatch.classList.add("cuppong-swatch");
     else if (item.legendary) swatch.classList.add("legendary-swatch");
     if (item.secret) swatch.classList.add("secret-swatch");
     if (item.limitedEdition) swatch.classList.add("limited-swatch");
@@ -4778,13 +4788,21 @@ function adminUnlockAllBossLevels() {
 function adminUnlockAllCupPongLevels() {
   if (!isAdmin()) return;
   save.maxCupPongCleared = CUP_PONG_MAX_LEVEL;
+  if (!save.owned) save.owned = { paddle: ["white"], table: ["classic"] };
+  if (!Array.isArray(save.owned.paddle)) save.owned.paddle = ["white"];
+  if (!Array.isArray(save.owned.table)) save.owned.table = ["classic"];
+  // Grant Beer Pong paddle + tabletop directly (same as clear L50).
+  for (const kind of ["paddle", "table"]) {
+    if (!save.owned[kind].includes("beerpong")) save.owned[kind].push("beerpong");
+  }
   if (typeof grantBeerPongCosmeticIfEligible === "function") grantBeerPongCosmeticIfEligible();
   sanitizeEquippedCosmetics();
-  persistSave();
+  persistSave({ force: true });
   updateNameUI();
   refreshAdminPanel();
   if (typeof renderCupPongLevelGrid === "function") renderCupPongLevelGrid();
-  if (ui.adminMsg) ui.adminMsg.textContent = "All Cup Pong levels unlocked (L50) — Beer Pong granted.";
+  if (ui.customizeOverlay && !ui.customizeOverlay.classList.contains("hidden")) renderShop();
+  if (ui.adminMsg) ui.adminMsg.textContent = "All Cup Pong levels unlocked (L50) — Beer Pong cosmetics granted.";
 }
 
 function adminSetPlayerLevel(n) {

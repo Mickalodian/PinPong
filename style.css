@@ -4109,6 +4109,24 @@ body.phone-mode .boss-hud {
     0 0 28px rgba(74, 222, 128, 0.4);
 }
 
+.shop-item.cuppong {
+  border-color: #f59e0b;
+  box-shadow:
+    0 0 14px rgba(245, 158, 11, 0.4),
+    0 0 22px rgba(234, 88, 12, 0.25);
+}
+
+.shop-item.cuppong.equipped {
+  box-shadow:
+    0 0 0 2px #fde68a inset,
+    0 0 20px rgba(245, 158, 11, 0.5),
+    0 0 28px rgba(234, 88, 12, 0.35);
+}
+
+.shop-swatch.cuppong-swatch {
+  box-shadow: 0 0 10px rgba(245, 158, 11, 0.45);
+}
+
 @keyframes chaosItemPulse {
   0%,
   100% {

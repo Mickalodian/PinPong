@@ -843,8 +843,10 @@
 
   window.grantBeerPongCosmeticIfEligible = function grantBeerPongCosmeticIfEligible() {
     if ((save.maxCupPongCleared || 0) < CUP_PONG_MAX_LEVEL) return false;
+    if (!save.owned) save.owned = { paddle: ["white"], table: ["classic"] };
     let changed = false;
     for (const kind of ["paddle", "table"]) {
+      if (!Array.isArray(save.owned[kind])) save.owned[kind] = kind === "paddle" ? ["white"] : ["classic"];
       if (!save.owned[kind].includes("beerpong")) {
         save.owned[kind].push("beerpong");
         changed = true;
