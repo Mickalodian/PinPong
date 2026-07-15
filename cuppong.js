@@ -4,12 +4,14 @@
   const POINTS_PER_CUP_PONG_WIN = 4;
   const XP_PER_CUP_PONG_WIN = 50;
   const CUP_ROWS = [4, 3, 2, 1];
-  const CUP_R = 15;
+  const CUP_R_DESKTOP = 15;
+  const CUP_R_PHONE = 22;
   const GRAVITY = 980;
   const BOUNCE_REST = 0.58;
   const FLICK_MIN_SPEED = 220;
   const FLICK_MAX_SPEED = 3200;
-  const PICKUP_RADIUS = 56;
+  const PICKUP_RADIUS_DESKTOP = 56;
+  const PICKUP_RADIUS_PHONE = 78;
   const FLICK_SAMPLE_MS = 90;
 
   let musicRestoreTrack = "";
@@ -18,11 +20,29 @@
   /** Portrait beer-pong court (you at bottom, bot at top). Independent of classic pong `table`. */
   const court = { x: 0, y: 0, w: 0, h: 0 };
 
+  function cupPhoneLayout() {
+    return typeof isPhoneLike === "function"
+      ? isPhoneLike()
+      : !!(typeof document !== "undefined" && document.body?.classList?.contains("phone-mode"));
+  }
+
+  function cupRadius() {
+    return cupPhoneLayout() ? CUP_R_PHONE : CUP_R_DESKTOP;
+  }
+
+  function cupPickupRadius() {
+    return cupPhoneLayout() ? PICKUP_RADIUS_PHONE : PICKUP_RADIUS_DESKTOP;
+  }
+
   function refreshCupCourt() {
-    // Larger portrait table with slim canvas margins for end-name labels
-    const edge = 6;
+    const phone = cupPhoneLayout();
+    // Phone: nearly full canvas width so the table fills the handset when scaled.
+    // Desktop: classic portrait strip with room for side margins.
+    const edge = phone ? 4 : 6;
     const h = H - edge * 2;
-    const w = Math.round(Math.min(386, Math.max(332, h * 0.72)));
+    const w = phone
+      ? Math.round(Math.min(W - 12, Math.max(640, h * 1.55)))
+      : Math.round(Math.min(420, Math.max(340, h * 0.78)));
     court.x = Math.round((W - w) / 2);
     court.y = edge;
     court.w = w;
@@ -115,10 +135,11 @@
     refreshCupCourt();
     const cups = [];
     const midX = court.x + court.w / 2;
-    const spacing = CUP_R * 2.18;
-    const rowGap = CUP_R * 2.05;
+    const r = cupRadius();
+    const spacing = r * 2.18;
+    const rowGap = r * 2.05;
     // Player at bottom (tip toward top); bot at top (tip toward bottom)
-    const baseY = side === "player" ? court.y + court.h - 72 : court.y + 72;
+    const baseY = side === "player" ? court.y + court.h - (cupPhoneLayout() ? 88 : 72) : court.y + (cupPhoneLayout() ? 88 : 72);
     const dir = side === "player" ? -1 : 1;
     let id = 0;
     for (let r = 0; r < CUP_ROWS.length; r++) {
@@ -381,7 +402,7 @@
     const vy = (fromBottom ? -1 : 1) * (280 + power * 420);
     const flight = dist / Math.abs(vy);
     const vz = 220 + power * 340;
-    const aimX = x0 + (forceRim ? (Math.random() > 0.5 ? 1 : -1) * (CUP_R * 0.9) : 0);
+    const aimX = x0 + (forceRim ? (Math.random() > 0.5 ? 1 : -1) * (cupRadius() * 0.9) : 0);
     cp.throw = {
       x: x0,
       y: y0,
@@ -462,11 +483,11 @@
         best = cup;
       }
     }
-    if (!best || bestD > CUP_R * 1.35) return false;
+    if (!best || bestD > cupRadius() * 1.35) return false;
     if (ball.z > 28) return false;
 
-    const rimRoll = Math.random() < cp.rimOutChance * (0.55 + bestD / (CUP_R * 2));
-    if (rimRoll || bestD > CUP_R * 0.92) {
+    const rimRoll = Math.random() < cp.rimOutChance * (0.55 + bestD / (cupRadius() * 2));
+    if (rimRoll || bestD > cupRadius() * 0.92) {
       ball.vx *= -0.35;
       ball.vy += (Math.random() - 0.5) * 160;
       ball.vz = Math.abs(ball.vz) * 0.45 + 40;
@@ -588,7 +609,8 @@
     const x = typeof px === "number" ? px : s.mouseX;
     const y = typeof py === "number" ? py : s.mouseY;
     const hb = cp.handBall;
-    const reach = typeof isTouchDevice !== "undefined" && isTouchDevice ? PICKUP_RADIUS + 18 : PICKUP_RADIUS;
+    const base = cupPickupRadius();
+    const reach = typeof isTouchDevice !== "undefined" && isTouchDevice ? base + 22 : base;
     if (Math.hypot(x - hb.x, y - hb.y) > reach) {
       if (ui.status) ui.status.textContent = "Hold the ball at the bottom, then flick up";
       return true;
@@ -641,22 +663,24 @@
   function drawHandBall(ball, opts = {}) {
     const ghost = !!opts.ghost;
     const highlight = !!opts.highlight;
+    const phone = cupPhoneLayout();
+    const ballR = phone ? 10 : 7;
     const scale = 1 + ball.z / 120;
     const shadow = Math.max(0.15, 0.55 - ball.z / 160);
     ctx.fillStyle = `rgba(0,0,0,${shadow * (ghost ? 0.45 : 1)})`;
     ctx.beginPath();
-    ctx.ellipse(ball.x, ball.y + 4, 7 * scale, 3.5 * scale, 0, 0, Math.PI * 2);
+    ctx.ellipse(ball.x, ball.y + 4, ballR * scale, ballR * 0.5 * scale, 0, 0, Math.PI * 2);
     ctx.fill();
     const ink = typeof courtInkColor === "function" ? courtInkColor() : "#fff";
     ctx.fillStyle = ghost ? "rgba(253, 230, 138, 0.55)" : ink;
     ctx.beginPath();
-    ctx.arc(ball.x, ball.y - ball.z * 0.15, 7 * scale, 0, Math.PI * 2);
+    ctx.arc(ball.x, ball.y - ball.z * 0.15, ballR * scale, 0, Math.PI * 2);
     ctx.fill();
     if (highlight) {
       ctx.strokeStyle = "rgba(125, 211, 252, 0.55)";
-      ctx.lineWidth = 1.5;
+      ctx.lineWidth = phone ? 2 : 1.5;
       ctx.beginPath();
-      ctx.arc(ball.x, ball.y - ball.z * 0.15, 11 * scale, 0, Math.PI * 2);
+      ctx.arc(ball.x, ball.y - ball.z * 0.15, (ballR + 4) * scale, 0, Math.PI * 2);
       ctx.stroke();
     }
   }
@@ -665,7 +689,7 @@
     if (!cup.alive) return;
     const t = typeof cosmeticTime === "function" ? cosmeticTime() : performance.now() * 0.001;
     const bob = Math.sin(t * 2.2 + cup.id) * 0.6;
-    const r = CUP_R;
+    const r = cupRadius();
     const g = ctx.createLinearGradient(cup.x - r, cup.y, cup.x + r, cup.y);
     g.addColorStop(0, "#f97316");
     g.addColorStop(0.45, "#fdba74");
@@ -881,7 +905,8 @@
 
   window.openCupPongLevelSelect = function openCupPongLevelSelect() {
     hideOverlay(ui.menuOverlay);
-    hideOverlay(ui.botModesOverlay);
+    if (typeof hideBotCategoryOverlays === "function") hideBotCategoryOverlays();
+    else hideOverlay(ui.botModesOverlay);
     hideOverlay(ui.modeSoonOverlay);
     hideOverlay(ui.botLevelOverlay);
     hideOverlay(ui.chaosLevelOverlay);
@@ -904,7 +929,7 @@
 
   window.closeCupPongLevelSelect = function closeCupPongLevelSelect() {
     hideOverlay(ui.cupPongLevelOverlay);
-    showOverlay(ui.botModesOverlay);
+    showOverlay(ui.arcadeHubOverlay || ui.botModesOverlay);
     startMenuBg();
     updateNameUI();
   };

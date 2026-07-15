@@ -403,6 +403,7 @@ const save = {
   equipped: { paddle: "white", table: "classic" },
   redeemedCodes: [],
   shopTab: "paddle",
+  shopCatalog: "pong",
   bossPowers: [],
   avatar: "default",
   ownedAvatars: ["default"],
@@ -3545,16 +3546,102 @@ function tickShopSwatches() {
   requestAnimationFrame(tickShopSwatches);
 }
 
+function rebuildShopTabs() {
+  const tabsEl = ui.shopTabs || document.getElementById("shopTabs");
+  if (!tabsEl) return;
+  const catalog = save.shopCatalog === "cup" ? "cup" : "pong";
+  const defs =
+    catalog === "cup"
+      ? [
+          { tab: "cup", label: "Cups" },
+          { tab: "ball", label: "Ball" },
+          { tab: "tabletop", label: "Tabletop" },
+        ]
+      : [
+          { tab: "paddle", label: "Paddles" },
+          { tab: "table", label: "Tabletop" },
+        ];
+  const valid = new Set(defs.map((d) => d.tab));
+  if (!valid.has(save.shopTab)) save.shopTab = defs[0].tab;
+  tabsEl.innerHTML = "";
+  for (const def of defs) {
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = `shop-tab${save.shopTab === def.tab ? " active" : ""}`;
+    btn.dataset.tab = def.tab;
+    btn.textContent = def.label;
+    btn.setAttribute("role", "tab");
+    btn.setAttribute("aria-selected", save.shopTab === def.tab ? "true" : "false");
+    btn.addEventListener("click", () => {
+      playMenuClick();
+      setShopTab(def.tab);
+    });
+    tabsEl.appendChild(btn);
+  }
+  if (ui.customizeOverlay) {
+    ui.customizeOverlay.classList.toggle("shop-catalog-cup", catalog === "cup");
+    ui.customizeOverlay.classList.toggle("shop-catalog-pong", catalog === "pong");
+  }
+}
+
+function applyShopChrome() {
+  const catalog = save.shopCatalog === "cup" ? "cup" : "pong";
+  if (ui.shopTitle) {
+    ui.shopTitle.textContent = catalog === "cup" ? "CUP LOUNGE SHOP" : "PING PONG EMPORIUM";
+  }
+  if (ui.shopHint) {
+    ui.shopHint.textContent =
+      catalog === "cup"
+        ? "(Cup Pong wins · cosmetics coming soon)"
+        : "(+2 per win · synced online)";
+  }
+}
+
+function renderShopUnderConstruction(sectionLabel) {
+  if (!ui.shopGrid) return;
+  ui.shopGrid.innerHTML = "";
+  ui.shopGrid.classList.add("shop-grid-wip");
+  const panel = document.createElement("div");
+  panel.className = "shop-under-construction";
+  const badge = document.createElement("div");
+  badge.className = "shop-wip-badge";
+  badge.textContent = "Under construction";
+  const title = document.createElement("h3");
+  title.className = "shop-wip-title";
+  title.textContent = `${sectionLabel} colours`;
+  const copy = document.createElement("p");
+  copy.className = "shop-wip-copy";
+  copy.textContent = "This Cup Lounge aisle is still being stocked. More cosmetics arriving soon.";
+  panel.append(badge, title, copy);
+  ui.shopGrid.appendChild(panel);
+  if (ui.shopMsg) {
+    ui.shopMsg.textContent = `${sectionLabel} — under construction. Check back soon.`;
+  }
+}
+
 function renderShop() {
   if (!ui.shopGrid) return;
   shopAnimSwatches.length = 0;
   tickShopSwatches._logged = false;
   tickShopSwatches._errLogged = false;
-  const kind = save.shopTab;
+  ui.shopGrid.classList.remove("shop-grid-wip");
+
+  const catalog = save.shopCatalog === "cup" ? "cup" : "pong";
+  if (catalog === "cup") {
+    const labels = { cup: "Cups", ball: "Ball", tabletop: "Tabletop" };
+    const tab = labels[save.shopTab] ? save.shopTab : "cup";
+    save.shopTab = tab;
+    renderShopUnderConstruction(labels[tab] || "Cups");
+    return;
+  }
+
+  const kind = save.shopTab === "table" ? "table" : "paddle";
+  save.shopTab = kind;
   ui.shopGrid.innerHTML = "";
   let epicCount = 0;
   let cantAffordEpic = 0;
   for (const item of SHOP[kind]) {
+    if (item.cuppong) continue;
     const owned = save.owned[kind].includes(item.id);
     if (item.hidden && !owned) continue;
     const equipped = save.equipped[kind] === item.id;
@@ -3734,11 +3821,71 @@ function renderShop() {
 }
 
 function setShopTab(tab) {
-  save.shopTab = tab;
-  document.querySelectorAll(".shop-tab").forEach((el) => {
-    el.classList.toggle("active", el.dataset.tab === tab);
+  save.shopTab = String(tab || "");
+  document.querySelectorAll("#shopTabs .shop-tab, .shop-tabs .shop-tab").forEach((el) => {
+    const on = el.dataset.tab === save.shopTab;
+    el.classList.toggle("active", on);
+    el.setAttribute("aria-selected", on ? "true" : "false");
   });
   renderShop();
+}
+
+function openShopHub() {
+  hideOverlay(ui.menuOverlay);
+  hideOverlay(ui.profileOverlay);
+  hideOverlay(ui.customizeOverlay);
+  hideOverlay(ui.settingsOverlay);
+  hideOverlay(ui.updatesOverlay);
+  hideBotCategoryOverlays();
+  hideOverlay(ui.adminOverlay);
+  showOverlay(ui.shopHubOverlay);
+  setStagePlaying(false);
+  startMenuBg();
+  ui.hint.textContent = "Cosmetics Boutique — Ping Pong or Cup Lounge.";
+}
+
+function closeShopHub() {
+  hideOverlay(ui.shopHubOverlay);
+  showOverlay(ui.profileOverlay || ui.menuOverlay);
+  setStagePlaying(false);
+  if (ui.profileOverlay && !ui.profileOverlay.classList.contains("hidden")) refreshProfileUI();
+}
+
+function openCustomize(opts = {}) {
+  const catalog = opts.catalog === "cup" ? "cup" : "pong";
+  save.shopCatalog = catalog;
+  save.shopTab = catalog === "cup" ? "cup" : "paddle";
+  hideOverlay(ui.menuOverlay);
+  hideOverlay(ui.profileOverlay);
+  hideOverlay(ui.shopHubOverlay);
+  hideOverlay(ui.botLevelOverlay);
+  hideOverlay(ui.chaosLevelOverlay);
+  hideOverlay(ui.survivalLevelOverlay);
+  hideOverlay(ui.bossHubOverlay);
+  hideOverlay(ui.bossShopOverlay);
+  hideOverlay(ui.bossLevelOverlay);
+  hideOverlay(ui.cupPongLevelOverlay);
+  hideBotCategoryOverlays();
+  hideOverlay(ui.lobbyOverlay);
+  hideOverlay(ui.settingsOverlay);
+  hideOverlay(ui.updatesOverlay);
+  showOverlay(ui.customizeOverlay);
+  setStagePlaying(false);
+  updatePointsUI();
+  applyShopChrome();
+  rebuildShopTabs();
+  setShopTab(save.shopTab);
+  if (ui.shopMsg && catalog === "pong") {
+    ui.shopMsg.textContent =
+      "Buy or equip a colour. Legendaries: Rose Gold L20 · Void Storm L40 · Hearthflame L60 · Skywyrm L80 · Obsidian L100. Chaos Rift (Chaos L25). Endurance (Survival R25). Overlord (Boss B10).";
+  }
+}
+
+function closeCustomize() {
+  shopAnimSwatches.length = 0;
+  hideOverlay(ui.customizeOverlay);
+  showOverlay(ui.shopHubOverlay || ui.profileOverlay || ui.menuOverlay);
+  setStagePlaying(false);
 }
 
 function loadAuthState() {
@@ -3940,9 +4087,10 @@ function refreshProfileUI() {
 function openProfile() {
   hideOverlay(ui.menuOverlay);
   hideOverlay(ui.customizeOverlay);
+  hideOverlay(ui.shopHubOverlay);
   hideOverlay(ui.settingsOverlay);
   hideOverlay(ui.updatesOverlay);
-  hideOverlay(ui.botModesOverlay);
+  hideBotCategoryOverlays();
   hideOverlay(ui.adminOverlay);
   hideOverlay(ui.contactOverlay);
   hideOverlay(ui.inboxOverlay);
@@ -4328,6 +4476,7 @@ async function authLogin() {
     refreshProfileUI();
     updateAdminVisibility();
     startTicketNoticePolling();
+    ensurePresence();
   } catch {
     setAuthMsg("Network error — try again.");
   }
@@ -4389,6 +4538,7 @@ async function restoreAuthSession() {
       }
     }
     if (data.profile) applyProfile(data.profile);
+    ensurePresence();
   } catch {
     /* offline — keep signed-in UI but no admin until server confirms */
     authState.isOwner = false;
@@ -4439,97 +4589,6 @@ function uploadProfileAvatar(file) {
   reader.readAsDataURL(file);
 }
 
-function openCustomize() {
-  hideOverlay(ui.menuOverlay);
-  hideOverlay(ui.profileOverlay);
-  hideOverlay(ui.botLevelOverlay);
-  hideOverlay(ui.chaosLevelOverlay);
-  hideOverlay(ui.survivalLevelOverlay);
-  hideOverlay(ui.bossHubOverlay);
-  hideOverlay(ui.bossShopOverlay);
-  hideOverlay(ui.bossLevelOverlay);
-  hideOverlay(ui.cupPongLevelOverlay);
-  hideOverlay(ui.botModesOverlay);
-  hideOverlay(ui.lobbyOverlay);
-  hideOverlay(ui.settingsOverlay);
-  hideOverlay(ui.updatesOverlay);
-  showOverlay(ui.customizeOverlay);
-  setStagePlaying(false);
-  updatePointsUI();
-  agentLog("E", "game.js:openCustomize", "customize opened", {
-    mode: s.mode,
-    points: save.points,
-    ownedPaddle: save.owned.paddle.length,
-    overlayHidden: ui.customizeOverlay.classList.contains("hidden"),
-  });
-  setShopTab(save.shopTab);
-  if (ui.shopMsg) ui.shopMsg.textContent = "Buy or equip a colour. Legendaries: Rose Gold L20 · Void Storm L40 · Hearthflame L60 · Skywyrm L80 · Obsidian L100. Chaos Rift (Chaos L25). Endurance (Survival R25). Overlord (Boss B10).";
-  // #region agent log
-  requestAnimationFrame(() => {
-    const overlay = ui.customizeOverlay;
-    const card = overlay?.querySelector(".shop-card");
-    const body = overlay?.querySelector(".shop-body");
-    const grid = overlay?.querySelector(".shop-grid");
-    const firstItem = grid?.querySelector(".shop-item");
-    if (!card || !grid) return;
-    const or = overlay.getBoundingClientRect();
-    const cr = card.getBoundingClientRect();
-    const gr = grid.getBoundingClientRect();
-    const ir = firstItem?.getBoundingClientRect();
-    const cs = getComputedStyle(card);
-    const gs = getComputedStyle(grid);
-    const data = {
-      vw: window.innerWidth,
-      vh: window.innerHeight,
-      phoneMode: document.body.classList.contains("phone-mode"),
-      landscape: document.body.classList.contains("phone-landscape"),
-      overlayH: Math.round(or.height),
-      cardH: Math.round(cr.height),
-      cardClientH: card.clientHeight,
-      cardScrollH: card.scrollHeight,
-      cardOverflowY: cs.overflowY,
-      cardMaxH: cs.maxHeight,
-      bodyClientH: body?.clientHeight ?? null,
-      bodyScrollH: body?.scrollHeight ?? null,
-      gridH: Math.round(gr.height),
-      gridClientH: grid.clientHeight,
-      gridScrollH: grid.scrollHeight,
-      gridOverflowY: gs.overflowY,
-      gridMaxH: gs.maxHeight,
-      gridTouchAction: gs.touchAction,
-      itemCount: grid.querySelectorAll(".shop-item").length,
-      firstItemH: ir ? Math.round(ir.height) : null,
-      firstItemVisibleH: ir ? Math.round(Math.min(ir.bottom, gr.bottom) - Math.max(ir.top, gr.top)) : null,
-      itemClipped: !!(ir && (ir.bottom > gr.bottom + 1 || ir.top < gr.top - 1)),
-      gridScrollNeeded: grid.scrollHeight > grid.clientHeight + 1,
-      cardScrollNeeded: card.scrollHeight > card.clientHeight + 1,
-      cssHref: [...document.styleSheets].map((s) => s.href).filter(Boolean).slice(-1)[0] || null,
-    };
-    fetch("http://127.0.0.1:7263/ingest/7b680789-6fbf-44a7-9704-6ddeb5cf3ed6", {
-      method: "POST",
-      headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "38eb5e" },
-      body: JSON.stringify({
-        sessionId: "38eb5e",
-        runId: "post-fix",
-        hypothesisId: "A-E",
-        location: "game.js:openCustomize",
-        message: "customize shop geometry",
-        data,
-        timestamp: Date.now(),
-      }),
-    }).catch(() => {});
-  });
-  // #endregion
-}
-
-function closeCustomize() {
-  shopAnimSwatches.length = 0;
-  hideOverlay(ui.customizeOverlay);
-  showOverlay(ui.profileOverlay || ui.menuOverlay);
-  setStagePlaying(false);
-  if (ui.profileOverlay && !ui.profileOverlay.classList.contains("hidden")) refreshProfileUI();
-}
-
 function openAdmin() {
   if (!isAdmin()) {
     updateAdminVisibility();
@@ -4546,8 +4605,9 @@ function openAdmin() {
   hideOverlay(ui.survivalLevelOverlay);
   hideOverlay(ui.bossLevelOverlay);
   hideOverlay(ui.cupPongLevelOverlay);
-  hideOverlay(ui.botModesOverlay);
+  hideBotCategoryOverlays();
   hideOverlay(ui.customizeOverlay);
+  hideOverlay(ui.shopHubOverlay);
   hideOverlay(ui.settingsOverlay);
   hideOverlay(ui.lobbyOverlay);
   showOverlay(ui.adminOverlay);
@@ -4826,7 +4886,8 @@ function renderAdminPlayersList(players) {
     return;
   }
   if (ui.adminPlayersMsg) {
-    ui.adminPlayersMsg.textContent = `${rows.length} account${rows.length === 1 ? "" : "s"} · tap to manage.`;
+    const onlineCount = rows.filter((p) => p.online).length;
+    ui.adminPlayersMsg.textContent = `${rows.length} account${rows.length === 1 ? "" : "s"} · ${onlineCount} online · tap to manage.`;
   }
   rows.forEach((p) => {
     const btn = document.createElement("button");
@@ -4838,23 +4899,24 @@ function renderAdminPlayersList(players) {
     title.textContent = p.username || p.name || "Player";
     const meta = document.createElement("div");
     meta.className = "admin-list-meta";
-    const parts = [];
-    parts.push(document.createTextNode(p.online ? "Online" : "Offline"));
+    const status = document.createElement("span");
+    status.className = `presence-pill ${p.online ? "is-online" : "is-offline"}`;
+    status.textContent = p.online ? "Online" : "Offline";
+    meta.appendChild(status);
     if (p.banned) {
-      parts.push(document.createTextNode(" · "));
+      meta.appendChild(document.createTextNode(" · "));
       const ban = document.createElement("span");
       ban.className = "ban-label";
       ban.textContent = "Banned";
-      parts.push(ban);
+      meta.appendChild(ban);
     }
-    if (p.isOwner) parts.push(document.createTextNode(" · Owner"));
-    else if (p.isAdmin) parts.push(document.createTextNode(" · Admin"));
-    parts.push(
+    if (p.isOwner) meta.appendChild(document.createTextNode(" · Owner"));
+    else if (p.isAdmin) meta.appendChild(document.createTextNode(" · Admin"));
+    meta.appendChild(
       document.createTextNode(
         ` · ${p.points || 0} pts · XP L${p.xpLevel || getXpProgress(p.xp || 0).level} (${p.xp || 0})`
       )
     );
-    parts.forEach((node) => meta.appendChild(node));
     btn.append(title, meta);
     btn.addEventListener("click", () => {
       playMenuClick();
@@ -4901,7 +4963,9 @@ function openAdminPlayerDetail(player) {
     if (player.banned) {
       ui.adminPlayerSub.innerHTML = `<span class="ban-label">${formatBanMeta(player) || "Banned"}</span>`;
     } else {
-      ui.adminPlayerSub.textContent = player.online ? "Currently online" : "Registered account";
+      ui.adminPlayerSub.innerHTML = player.online
+        ? `<span class="presence-pill is-online">Online</span> · Currently active`
+        : `<span class="presence-pill is-offline">Offline</span> · Registered account`;
     }
   }
   if (ui.adminPlayerName) ui.adminPlayerName.textContent = player.name || player.username || "Player";
@@ -6208,7 +6272,7 @@ function resetAbility() {
 
 function updateAbilityUI() {
   if (!ui.abilityBar) return;
-  const show = s.mode === "local" && !s.gameOver;
+  const show = s.mode === "local" && !s.gameOver && !isCupPongMode();
   ui.abilityBar.classList.toggle("hidden", !show);
   if (!show) return;
   const pct = Math.min(100, (s.ability.parries / PARRY_CHARGE_NEED) * 100);
@@ -6480,6 +6544,25 @@ const ui = {
   bossPowerMetaReflect: document.getElementById("bossPowerMetaReflect"),
   menuOverlay: document.getElementById("menuOverlay"),
   botModesOverlay: document.getElementById("botModesOverlay"),
+  classicGamesOverlay: document.getElementById("classicGamesOverlay"),
+  campaignHubOverlay: document.getElementById("campaignHubOverlay"),
+  arcadeHubOverlay: document.getElementById("arcadeHubOverlay"),
+  challengeMapOverlay: document.getElementById("challengeMapOverlay"),
+  btnCatClassicGames: document.getElementById("btnCatClassicGames"),
+  btnCatCampaign: document.getElementById("btnCatCampaign"),
+  btnCatArcade: document.getElementById("btnCatArcade"),
+  btnClassicGamesBack: document.getElementById("btnClassicGamesBack"),
+  btnCampaignHubBack: document.getElementById("btnCampaignHubBack"),
+  btnArcadeHubBack: document.getElementById("btnArcadeHubBack"),
+  btnModeChallenge: document.getElementById("btnModeChallenge"),
+  btnChallengeMapBack: document.getElementById("btnChallengeMapBack"),
+  btnChallengeRegionBack: document.getElementById("btnChallengeRegionBack"),
+  challengeWorldView: document.getElementById("challengeWorldView"),
+  challengeRegionView: document.getElementById("challengeRegionView"),
+  challengeRegionDots: document.getElementById("challengeRegionDots"),
+  challengeRegionTitle: document.getElementById("challengeRegionTitle"),
+  challengeRegionRoster: document.getElementById("challengeRegionRoster"),
+  challengeMapLead: document.getElementById("challengeMapLead"),
   btnModeClassic: document.getElementById("btnModeClassic"),
   btnModeChaos: document.getElementById("btnModeChaos"),
   btnModeSurvival: document.getElementById("btnModeSurvival"),
@@ -6618,6 +6701,16 @@ const ui = {
   btnCustomize: document.getElementById("btnCustomize"),
   btnCustomizeBack: document.getElementById("btnCustomizeBack"),
   customizeOverlay: document.getElementById("customizeOverlay"),
+  shopHubOverlay: document.getElementById("shopHubOverlay"),
+  btnShopHubPong: document.getElementById("btnShopHubPong"),
+  btnShopHubCup: document.getElementById("btnShopHubCup"),
+  btnShopHubBack: document.getElementById("btnShopHubBack"),
+  shopTitle: document.getElementById("shopTitle"),
+  shopHint: document.getElementById("shopHint"),
+  shopTabs: document.getElementById("shopTabs"),
+  shopPoints: document.getElementById("shopPoints"),
+  shopGrid: document.getElementById("shopGrid"),
+  shopMsg: document.getElementById("shopMsg"),
   btnSettings: document.getElementById("btnSettings"),
   btnSettingsBack: document.getElementById("btnSettingsBack"),
   settingsOverlay: document.getElementById("settingsOverlay"),
@@ -6651,9 +6744,6 @@ const ui = {
   redeemInput: document.getElementById("redeemInput"),
   btnRedeemSubmit: document.getElementById("btnRedeemSubmit"),
   redeemMsg: document.getElementById("redeemMsg"),
-  shopPoints: document.getElementById("shopPoints"),
-  shopGrid: document.getElementById("shopGrid"),
-  shopMsg: document.getElementById("shopMsg"),
   btnAdmin: document.getElementById("btnAdmin"),
   btnAdminBack: document.getElementById("btnAdminBack"),
   btnAdminTools: document.getElementById("btnAdminTools"),
@@ -6971,6 +7061,9 @@ function courtInkColor() {
 }
 
 let ws = null;
+let presenceHeartbeatTimer = null;
+let presenceReconnectTimer = null;
+let presenceConnecting = false;
 
 const net = {
   player: 0,
@@ -7065,7 +7158,7 @@ function stopSearchUI() {
 }
 
 function startMatchSearch() {
-  connectWs(() => sendWs({ type: "search" }));
+  connectWs(() => sendWs({ type: "search", ...presencePayload("search") }));
 }
 
 function cancelMatchSearch() {
@@ -8177,7 +8270,7 @@ function activateBossPower(id) {
 
 function openBossHub() {
   hideOverlay(ui.menuOverlay);
-  hideOverlay(ui.botModesOverlay);
+  hideBotCategoryOverlays();
   hideOverlay(ui.modeSoonOverlay);
   hideOverlay(ui.botLevelOverlay);
   hideOverlay(ui.chaosLevelOverlay);
@@ -8187,6 +8280,7 @@ function openBossHub() {
   hideOverlay(ui.bossShopOverlay);
   hideOverlay(ui.lobbyOverlay);
   hideOverlay(ui.customizeOverlay);
+  hideOverlay(ui.shopHubOverlay);
   hideOverlay(ui.settingsOverlay);
   hideOverlay(ui.adminOverlay);
   hideOverlay(ui.passkeyOverlay);
@@ -8200,7 +8294,7 @@ function openBossHub() {
 
 function closeBossHub() {
   hideOverlay(ui.bossHubOverlay);
-  showOverlay(ui.botModesOverlay);
+  showOverlay(ui.campaignHubOverlay);
   startMenuBg();
   updateNameUI();
 }
@@ -8209,7 +8303,7 @@ function openBossShop() {
   hideOverlay(ui.bossHubOverlay);
   hideOverlay(ui.bossLevelOverlay);
   hideOverlay(ui.cupPongLevelOverlay);
-  hideOverlay(ui.botModesOverlay);
+  hideBotCategoryOverlays();
   showOverlay(ui.bossShopOverlay);
   setStagePlaying(false);
   startMenuBg();
@@ -8279,7 +8373,7 @@ function buyBossPower(id) {
 
 function openBossLevelSelect() {
   hideOverlay(ui.menuOverlay);
-  hideOverlay(ui.botModesOverlay);
+  hideBotCategoryOverlays();
   hideOverlay(ui.modeSoonOverlay);
   hideOverlay(ui.botLevelOverlay);
   hideOverlay(ui.chaosLevelOverlay);
@@ -8288,6 +8382,7 @@ function openBossLevelSelect() {
   hideOverlay(ui.bossShopOverlay);
   hideOverlay(ui.lobbyOverlay);
   hideOverlay(ui.customizeOverlay);
+  hideOverlay(ui.shopHubOverlay);
   hideOverlay(ui.settingsOverlay);
   hideOverlay(ui.adminOverlay);
   hideOverlay(ui.passkeyOverlay);
@@ -8546,6 +8641,58 @@ function survivalRoundLabel(level) {
   return "Final stretch";
 }
 
+function hideBotCategoryOverlays() {
+  hideOverlay(ui.botModesOverlay);
+  hideOverlay(ui.classicGamesOverlay);
+  hideOverlay(ui.campaignHubOverlay);
+  hideOverlay(ui.arcadeHubOverlay);
+  hideOverlay(ui.challengeMapOverlay);
+}
+window.hideBotCategoryOverlays = hideBotCategoryOverlays;
+
+function logMenuTileAlignment(overlay, label) {
+  // #region agent log
+  requestAnimationFrame(() => {
+    const card = overlay?.querySelector(".overlay-card, .menu-card");
+    const tiles = [...(overlay?.querySelectorAll(".menu-tile, .online-menu-tile") || [])];
+    const back = overlay?.querySelector(".menu-panel-footer .link-btn, .online-panel-footer .link-btn");
+    const title = overlay?.querySelector(".overlay-title");
+    const widths = tiles.map((t) => Math.round(t.getBoundingClientRect().width));
+    const cardR = card?.getBoundingClientRect();
+    const backR = back?.getBoundingClientRect();
+    const titleR = title?.getBoundingClientRect();
+    fetch("http://127.0.0.1:7263/ingest/7b680789-6fbf-44a7-9704-6ddeb5cf3ed6", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "38eb5e" },
+      body: JSON.stringify({
+        sessionId: "38eb5e",
+        runId: "menu-align",
+        hypothesisId: "MENU-A",
+        location: "game.js:logMenuTileAlignment",
+        message: "menu tile/back button alignment",
+        data: {
+          label,
+          tileCount: tiles.length,
+          widths,
+          widthsEqual: widths.length ? widths.every((w) => w === widths[0]) : null,
+          cardW: cardR ? Math.round(cardR.width) : null,
+          titleCenterOffset:
+            titleR && cardR
+              ? Math.round(titleR.left + titleR.width / 2 - (cardR.left + cardR.width / 2))
+              : null,
+          backCenterOffset:
+            backR && cardR
+              ? Math.round(backR.left + backR.width / 2 - (cardR.left + cardR.width / 2))
+              : null,
+          sampleHint: tiles[0]?.querySelector(".menu-tile-hint, .online-menu-tile-hint")?.textContent || null,
+        },
+        timestamp: Date.now(),
+      }),
+    }).catch(() => {});
+  });
+  // #endregion
+}
+
 function openBotModes() {
   if (typeof stopCupPongMusic === "function") stopCupPongMusic();
   hideOverlay(ui.menuOverlay);
@@ -8557,28 +8704,870 @@ function openBotModes() {
   hideOverlay(ui.modeSoonOverlay);
   hideOverlay(ui.lobbyOverlay);
   hideOverlay(ui.customizeOverlay);
+  hideOverlay(ui.shopHubOverlay);
   hideOverlay(ui.settingsOverlay);
   hideOverlay(ui.updatesOverlay);
   hideOverlay(ui.adminOverlay);
   hideOverlay(ui.passkeyOverlay);
   hideOverlay(ui.gameOver);
+  hideBotCategoryOverlays();
   showOverlay(ui.botModesOverlay);
   setStagePlaying(false);
   startMenuBg();
-  ui.hint.textContent = "Choose a bot game mode.";
+  ui.hint.textContent = "Choose Classic Games, Campaign, or Arcade.";
   updateNameUI();
+  logMenuTileAlignment(ui.botModesOverlay, "botModes");
 }
 
 function closeBotModes() {
-  hideOverlay(ui.botModesOverlay);
+  hideBotCategoryOverlays();
   hideOverlay(ui.modeSoonOverlay);
   showOverlay(ui.menuOverlay);
   startMenuBg();
   updateNameUI();
 }
 
+function openClassicGamesHub() {
+  hideBotCategoryOverlays();
+  hideOverlay(ui.menuOverlay);
+  hideOverlay(ui.botLevelOverlay);
+  hideOverlay(ui.chaosLevelOverlay);
+  hideOverlay(ui.survivalLevelOverlay);
+  hideOverlay(ui.modeSoonOverlay);
+  showOverlay(ui.classicGamesOverlay);
+  setStagePlaying(false);
+  startMenuBg();
+  ui.hint.textContent = "Classic Games — levels, Chaos, or Survival.";
+  updateNameUI();
+  logMenuTileAlignment(ui.classicGamesOverlay, "classicGames");
+}
+
+function closeClassicGamesHub() {
+  hideOverlay(ui.classicGamesOverlay);
+  showOverlay(ui.botModesOverlay);
+  startMenuBg();
+  updateNameUI();
+}
+
+function openCampaignHub() {
+  hideBotCategoryOverlays();
+  hideOverlay(ui.menuOverlay);
+  hideOverlay(ui.bossHubOverlay);
+  hideOverlay(ui.bossLevelOverlay);
+  hideOverlay(ui.bossShopOverlay);
+  hideOverlay(ui.modeSoonOverlay);
+  showOverlay(ui.campaignHubOverlay);
+  setStagePlaying(false);
+  startMenuBg();
+  ui.hint.textContent = "Campaign — Boss Battles or Challenge map.";
+  updateNameUI();
+  logMenuTileAlignment(ui.campaignHubOverlay, "campaign");
+}
+
+function closeCampaignHub() {
+  hideOverlay(ui.campaignHubOverlay);
+  showOverlay(ui.botModesOverlay);
+  startMenuBg();
+  updateNameUI();
+}
+
+function openArcadeHub() {
+  hideBotCategoryOverlays();
+  hideOverlay(ui.menuOverlay);
+  hideOverlay(ui.cupPongLevelOverlay);
+  hideOverlay(ui.modeSoonOverlay);
+  showOverlay(ui.arcadeHubOverlay);
+  setStagePlaying(false);
+  startMenuBg();
+  ui.hint.textContent = "Arcade — Cup Pong and party modes.";
+  updateNameUI();
+  logMenuTileAlignment(ui.arcadeHubOverlay, "arcade");
+}
+
+function closeArcadeHub() {
+  hideOverlay(ui.arcadeHubOverlay);
+  showOverlay(ui.botModesOverlay);
+  startMenuBg();
+  updateNameUI();
+}
+
+let challengeMapLoadPromise = null;
+let challengeActiveRegionId = null;
+let challengeOpenTauntBotId = null;
+
+const CHALLENGE_REGIONS = {
+  america: {
+    id: "america",
+    label: "America",
+    lon: -97,
+    lat: 39,
+    bots: [
+      { id: "am-jordan", name: "Jordan Blake", stars: 2 },
+      { id: "am-sofia", name: "Sofia Reyes", stars: 3 },
+      { id: "am-marcus", name: "Marcus Cole", stars: 1 },
+      { id: "am-avery", name: "Avery Quinn", stars: 4 },
+      { id: "am-devon", name: "Devon Hart", stars: 3 },
+      { id: "am-nina", name: "Nina Vasquez", stars: 5 },
+      { id: "am-caleb", name: "Caleb Brooks", stars: 2 },
+    ],
+  },
+  europe: {
+    id: "europe",
+    label: "Europe",
+    lon: 10,
+    lat: 50,
+    bots: [
+      { id: "eu-luca", name: "Luca Moretti", stars: 3 },
+      { id: "eu-elise", name: "Elise Laurent", stars: 4 },
+      { id: "eu-jonas", name: "Jonas Berg", stars: 2 },
+      { id: "eu-anya", name: "Anya Kowalski", stars: 5 },
+      { id: "eu-felix", name: "Felix Hartmann", stars: 3 },
+      { id: "eu-isla", name: "Isla MacLeod", stars: 1 },
+      { id: "eu-mateo", name: "Mateo Ruiz", stars: 4 },
+    ],
+  },
+  asia: {
+    id: "asia",
+    label: "Asia",
+    lon: 105,
+    lat: 35,
+    bots: [
+      { id: "as-mei", name: "Mei Nakamura", stars: 4 },
+      { id: "as-arjun", name: "Arjun Patel", stars: 3 },
+      { id: "as-yuna", name: "Yuna Choi", stars: 5 },
+      { id: "as-kenji", name: "Kenji Sato", stars: 2 },
+      { id: "as-priya", name: "Priya Sharma", stars: 3 },
+      { id: "as-hao", name: "Hao Chen", stars: 4 },
+      { id: "as-rina", name: "Rina Wijaya", stars: 1 },
+    ],
+  },
+  africa: {
+    id: "africa",
+    label: "Africa",
+    lon: 20,
+    lat: 5,
+    bots: [
+      { id: "af-amara", name: "Amara Okonkwo", stars: 4 },
+      { id: "af-kwame", name: "Kwame Mensah", stars: 3 },
+      { id: "af-zahra", name: "Zahra Hassan", stars: 5 },
+      { id: "af-tumi", name: "Tumi Ndlovu", stars: 2 },
+      { id: "af-aisha", name: "Aisha Diallo", stars: 3 },
+      { id: "af-jabari", name: "Jabari Okello", stars: 4 },
+      { id: "af-nia", name: "Nia Abara", stars: 1 },
+    ],
+  },
+};
+
+const CHALLENGE_TAUNTS = [
+  "Hope you packed a spare paddle.",
+  "Cute serve. I’ll still own the table.",
+  "Don’t blink — you’ll miss the point.",
+  "I’ve practiced against better ghosts than you.",
+  "Ready to lose politely?",
+  "Your backhand looks nervous already.",
+  "I don’t do warm-ups. I do wipeouts.",
+  "Bring confidence. Leave with a lesson.",
+  "That scoreboard’s about to get lonely.",
+  "I read your spin like last week’s news.",
+  "Try harder. I’m bored already.",
+  "One rally and you’ll want a rematch.",
+  "Keep talking — my paddle does the talking.",
+  "You swing. I decide.",
+  "Champions don’t flinch. You will.",
+  "Save the excuses for after game point.",
+  "I eat soft serves for breakfast.",
+  "Your legend ends at this table.",
+  "Relax. This won’t take long.",
+  "Is that your A-game? Adorable.",
+  "I don’t lose. I collect highlights.",
+  "Aim carefully. I’m not.",
+  "Your paddle’s shaking. Or is that you?",
+  "Come on — make me break a sweat.",
+  "I’ve seen tougher lobbies than this.",
+  "Don’t worry. I’ll keep the score tasteful.",
+  "Step up or step aside.",
+  "That serve has tourist written all over it.",
+  "I’m not trash-talking. I’m forecasting.",
+  "Blink twice if you need a timeout already.",
+  "Your confidence just checked out.",
+  "I play clean. You play catch-up.",
+  "Nice form. Shame about the results.",
+  "I’ll let you touch the ball. Once.",
+  "This table remembers winners. Guess which one.",
+  "You’re one edge short of interesting.",
+  "Save the victory dance. You’ll need the energy.",
+  "My worst day still clears your best rally.",
+  "Go ahead — serve. I’ll handle the rest.",
+  "You’re not late. You’re already behind.",
+  "I don’t chase points. Points chase me.",
+  "That was cute. Now watch how it’s done.",
+  "Bring friends. You’ll need witnesses.",
+  "I’m allergic to easy wins… almost.",
+  "Your spin is loud. Mine is lethal.",
+  "Keep the receipts. You’ll want them later.",
+  "I came for sport. You’ll leave for practice.",
+  "Don’t clutch the paddle so hard. Clutch the hope.",
+  "If style points counted, you’d still lose.",
+  "I’m the final boss of polite disrespect.",
+  "You talk game. I am game.",
+  "Sit down, stand up — either way, I’m scoring.",
+  "Your highlight reel starts after mine ends.",
+  "I don’t need luck. You do.",
+  "That edge? Mine. That point? Also mine.",
+  "Smile for the scoreboard.",
+  "You’re not warming up. You’re warning me you’re soft.",
+  "I’ve beaten louder egos with quieter shots.",
+  "Call it a challenge. I’ll call it a tutorial.",
+  "When I miss, it’s strategy. When you miss, it’s destiny.",
+];
+
+function challengeStarsHtml(stars) {
+  const filled = Math.max(1, Math.min(5, Number(stars) || 1));
+  let html = "";
+  for (let i = 1; i <= 5; i += 1) {
+    html += i <= filled ? "★" : '<span class="star-empty">☆</span>';
+  }
+  return html;
+}
+
+function clearChallengeTaunt() {
+  challengeOpenTauntBotId = null;
+  const roster = ui.challengeRegionRoster;
+  if (!roster) return;
+  roster.querySelectorAll(".challenge-bot-row.is-taunting").forEach((row) => {
+    row.classList.remove("is-taunting");
+  });
+  roster.querySelectorAll(".challenge-bot-taunt").forEach((el) => el.remove());
+}
+
+function dismissChallengeTaunt() {
+  clearChallengeTaunt();
+}
+
+function showChallengeTaunt(row, bot) {
+  if (!row || !bot) return;
+  clearChallengeTaunt();
+  challengeOpenTauntBotId = bot.id;
+  row.classList.add("is-taunting");
+  const taunt =
+    CHALLENGE_TAUNTS[Math.floor(Math.random() * CHALLENGE_TAUNTS.length)] ||
+    CHALLENGE_TAUNTS[0];
+  const bubble = document.createElement("div");
+  bubble.className = "challenge-bot-taunt";
+  bubble.setAttribute("role", "status");
+  bubble.innerHTML = `<span class="challenge-bot-taunt-text"></span><button type="button" class="challenge-bot-taunt-close" aria-label="Dismiss taunt">×</button>`;
+  bubble.querySelector(".challenge-bot-taunt-text").textContent = taunt;
+  bubble.querySelector(".challenge-bot-taunt-close").addEventListener("click", (e) => {
+    e.stopPropagation();
+    dismissChallengeTaunt();
+  });
+  row.appendChild(bubble);
+  requestAnimationFrame(() => {
+    bubble.classList.add("is-open");
+    // #region agent log
+    requestAnimationFrame(() => {
+      const card = ui.challengeMapOverlay?.querySelector(".challenge-map-card");
+      const roster = ui.challengeRegionRoster;
+      const view = ui.challengeRegionView;
+      const cardR = card?.getBoundingClientRect();
+      const rosterR = roster?.getBoundingClientRect();
+      const rowR = row.getBoundingClientRect();
+      const bubbleR = bubble.getBoundingClientRect();
+      const viewR = view?.getBoundingClientRect();
+      const rosterCs = roster ? getComputedStyle(roster) : null;
+      const cardCs = card ? getComputedStyle(card) : null;
+      const bubbleCs = getComputedStyle(bubble);
+      fetch("http://127.0.0.1:7263/ingest/7b680789-6fbf-44a7-9704-6ddeb5cf3ed6", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "38eb5e" },
+        body: JSON.stringify({
+          sessionId: "38eb5e",
+          runId: "layout-fit",
+          hypothesisId: "A-B-E",
+          location: "game.js:showChallengeTaunt",
+          message: "taunt bubble layout vs card/roster clip",
+          data: {
+            vw: window.innerWidth,
+            mediaBelow720: window.matchMedia("(max-width: 720px)").matches,
+            botId: bot.id,
+            card: cardR
+              ? { w: Math.round(cardR.width), r: Math.round(cardR.right), overflow: cardCs?.overflow }
+              : null,
+            roster: rosterR
+              ? {
+                  w: Math.round(rosterR.width),
+                  r: Math.round(rosterR.right),
+                  overflowX: rosterCs?.overflowX,
+                  overflowY: rosterCs?.overflowY,
+                  scrollbarGutter: rosterCs?.scrollbarGutter,
+                  padL: rosterCs?.paddingLeft,
+                  padR: rosterCs?.paddingRight,
+                }
+              : null,
+            view: viewR
+              ? { w: Math.round(viewR.width), overflow: view ? getComputedStyle(view).overflow : null }
+              : null,
+            row: { w: Math.round(rowR.width), r: Math.round(rowR.right), l: Math.round(rowR.left) },
+            bubble: {
+              w: Math.round(bubbleR.width),
+              h: Math.round(bubbleR.height),
+              l: Math.round(bubbleR.left),
+              r: Math.round(bubbleR.right),
+              t: Math.round(bubbleR.top),
+              b: Math.round(bubbleR.bottom),
+              leftCss: bubbleCs.left,
+              topCss: bubbleCs.top,
+              opacity: bubbleCs.opacity,
+            },
+            clippedRightOfCard: cardR ? bubbleR.right > cardR.right + 1 : null,
+            clippedRightOfRoster: rosterR ? bubbleR.right > rosterR.right + 1 : null,
+            clippedBottomOfRoster: rosterR ? bubbleR.bottom > rosterR.bottom + 1 : null,
+            spaceRightOfRowInCard: cardR ? Math.round(cardR.right - rowR.right) : null,
+          },
+          timestamp: Date.now(),
+        }),
+      }).catch(() => {});
+    });
+    // #endregion
+  });
+}
+
+function showChallengeWorldView() {
+  challengeActiveRegionId = null;
+  clearChallengeTaunt();
+  ui.challengeWorldView?.classList.remove("hidden");
+  ui.challengeRegionView?.classList.add("hidden");
+  if (ui.challengeRegionView) ui.challengeRegionView.setAttribute("aria-hidden", "true");
+  if (ui.challengeMapLead) ui.challengeMapLead.textContent = "Pick a region on the map.";
+  if (ui.hint) ui.hint.textContent = "Challenge — pick a region.";
+  mountChallengeRegionDots();
+}
+
+function isChallengeRegionOpen() {
+  return (
+    !!challengeActiveRegionId ||
+    (ui.challengeRegionView && !ui.challengeRegionView.classList.contains("hidden"))
+  );
+}
+
+function onChallengeMapBack() {
+  if (isChallengeRegionOpen()) {
+    showChallengeWorldView();
+    return;
+  }
+  closeChallengeMap();
+}
+
+function openChallengeRegion(regionId) {
+  const region = CHALLENGE_REGIONS[regionId];
+  if (!region || !ui.challengeRegionRoster) return;
+  challengeActiveRegionId = regionId;
+  clearChallengeTaunt();
+  ui.challengeWorldView?.classList.add("hidden");
+  ui.challengeRegionView?.classList.remove("hidden");
+  if (ui.challengeRegionView) ui.challengeRegionView.setAttribute("aria-hidden", "false");
+  if (ui.challengeRegionTitle) ui.challengeRegionTitle.textContent = region.label.toUpperCase();
+  if (ui.challengeMapLead) {
+    ui.challengeMapLead.textContent = `${region.label} — pick a rival.`;
+  }
+  if (ui.hint) ui.hint.textContent = `Challenge — ${region.label}.`;
+  ui.challengeRegionRoster.innerHTML = "";
+  region.bots.forEach((bot) => {
+    const row = document.createElement("button");
+    row.type = "button";
+    row.className = "challenge-bot-row";
+    row.setAttribute("role", "listitem");
+    row.dataset.botId = bot.id;
+    row.innerHTML = `<span class="challenge-bot-name"></span><span class="challenge-bot-stars" aria-label="${bot.stars} of 5 difficulty"></span>`;
+    row.querySelector(".challenge-bot-name").textContent = bot.name;
+    row.querySelector(".challenge-bot-stars").innerHTML = challengeStarsHtml(bot.stars);
+    row.addEventListener("click", () => showChallengeTaunt(row, bot));
+    ui.challengeRegionRoster.appendChild(row);
+  });
+}
+
+function challengeLonLatToViewBox(lon, lat) {
+  const ox = ((Number(lon) + 180) / 360) * 1000;
+  const oy = ((90 - Number(lat)) / 180) * 500;
+  return {
+    x: 8 + ox * 0.984,
+    y: 14 + oy * 0.984,
+  };
+}
+
+function challengeViewBoxToFramePercent(pt, frameEl, mediaEl) {
+  const frame = frameEl?.getBoundingClientRect();
+  const media = mediaEl?.getBoundingClientRect();
+  if (!frame || !media || frame.width < 1 || frame.height < 1 || media.width < 1 || media.height < 1) {
+    return { left: 50, top: 50 };
+  }
+  const vb = { x: -20, y: -28, w: 1040, h: 556 };
+  const vbAspect = vb.w / vb.h;
+  const elAspect = media.width / media.height;
+  let drawW;
+  let drawH;
+  let offX;
+  let offY;
+  if (elAspect > vbAspect) {
+    drawH = media.height;
+    drawW = drawH * vbAspect;
+    offX = (media.width - drawW) / 2;
+    offY = 0;
+  } else {
+    drawW = media.width;
+    drawH = drawW / vbAspect;
+    offX = 0;
+    offY = (media.height - drawH) / 2;
+  }
+  const px = media.left - frame.left + offX + ((pt.x - vb.x) / vb.w) * drawW;
+  const py = media.top - frame.top + offY + ((pt.y - vb.y) / vb.h) * drawH;
+  return {
+    left: (px / frame.width) * 100,
+    top: (py / frame.height) * 100,
+  };
+}
+
+function mountChallengeRegionDotsHtml(mediaEl) {
+  const host = ui.challengeRegionDots;
+  const frame = host?.closest(".challenge-map-frame") || mediaEl?.closest(".challenge-map-frame");
+  if (!host || !frame || !mediaEl) return;
+  host.innerHTML = "";
+  host.dataset.ready = "html";
+  host.removeAttribute("aria-hidden");
+  host.style.display = "block";
+  Object.values(CHALLENGE_REGIONS).forEach((region) => {
+    const pt = challengeLonLatToViewBox(region.lon, region.lat);
+    const pos = challengeViewBoxToFramePercent(pt, frame, mediaEl);
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "challenge-region-dot";
+    btn.dataset.region = region.id;
+    btn.style.left = `${pos.left}%`;
+    btn.style.top = `${pos.top}%`;
+    btn.setAttribute("aria-label", `Open ${region.label}`);
+    btn.title = region.label;
+    const label = document.createElement("span");
+    label.className = "challenge-region-dot-label";
+    label.textContent = region.label;
+    btn.appendChild(label);
+    btn.addEventListener("click", () => openChallengeRegion(region.id));
+    host.appendChild(btn);
+  });
+}
+
+function mountChallengeRegionDots() {
+  const mapHost =
+    document.getElementById("challengeWorldMapHost") ||
+    ui.challengeMapOverlay?.querySelector(".challenge-world-map");
+  const svg = mapHost?.querySelector("svg");
+  const img = mapHost?.querySelector("img.challenge-world-map-img");
+  const htmlHost = ui.challengeRegionDots;
+
+  if (img && !svg) {
+    const place = () => mountChallengeRegionDotsHtml(img);
+    if (img.complete && img.naturalWidth) place();
+    else img.addEventListener("load", place, { once: true });
+    return;
+  }
+
+  if (htmlHost) {
+    htmlHost.innerHTML = "";
+    htmlHost.dataset.ready = "";
+    htmlHost.setAttribute("aria-hidden", "true");
+    htmlHost.style.display = "none";
+  }
+  if (!svg) return;
+
+  svg.querySelector("#challengeRegionDotsSvg")?.remove();
+  const NS = "http://www.w3.org/2000/svg";
+  const layer = document.createElementNS(NS, "g");
+  layer.setAttribute("id", "challengeRegionDotsSvg");
+  layer.setAttribute("class", "challenge-region-dots-svg");
+
+  const placed = [];
+  Object.values(CHALLENGE_REGIONS).forEach((region) => {
+    const pt = challengeLonLatToViewBox(region.lon, region.lat);
+    const hit = document.createElementNS(NS, "g");
+    hit.setAttribute("class", "challenge-region-dot-svg");
+    hit.dataset.region = region.id;
+    hit.setAttribute("role", "button");
+    hit.setAttribute("tabindex", "0");
+    hit.setAttribute("aria-label", `Open ${region.label}`);
+    hit.style.cursor = "pointer";
+
+    const pulse = document.createElementNS(NS, "circle");
+    pulse.setAttribute("class", "challenge-region-dot-pulse");
+    pulse.setAttribute("cx", String(pt.x));
+    pulse.setAttribute("cy", String(pt.y));
+    pulse.setAttribute("r", "14");
+    pulse.setAttribute("fill", "rgba(255,255,255,0.12)");
+    pulse.setAttribute("stroke", "none");
+
+    const ring = document.createElementNS(NS, "circle");
+    ring.setAttribute("cx", String(pt.x));
+    ring.setAttribute("cy", String(pt.y));
+    ring.setAttribute("r", "8");
+    ring.setAttribute("fill", "rgba(255,255,255,0.18)");
+    ring.setAttribute("stroke", "#fff");
+    ring.setAttribute("stroke-width", "2");
+
+    const core = document.createElementNS(NS, "circle");
+    core.setAttribute("cx", String(pt.x));
+    core.setAttribute("cy", String(pt.y));
+    core.setAttribute("r", "3.2");
+    core.setAttribute("fill", "#fff");
+    core.setAttribute("stroke", "none");
+
+    const label = document.createElementNS(NS, "text");
+    label.setAttribute("class", "challenge-region-dot-svg-label");
+    label.setAttribute("x", String(pt.x));
+    label.setAttribute("y", String(pt.y + 22));
+    label.setAttribute("text-anchor", "middle");
+    label.textContent = region.label;
+
+    hit.append(pulse, ring, core, label);
+    const open = () => openChallengeRegion(region.id);
+    hit.addEventListener("click", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      open();
+    });
+    hit.addEventListener("keydown", (e) => {
+      if (e.key === "Enter" || e.key === " ") {
+        e.preventDefault();
+        open();
+      }
+    });
+    layer.appendChild(hit);
+    placed.push({
+      id: region.id,
+      lon: region.lon,
+      lat: region.lat,
+      vbX: Math.round(pt.x * 10) / 10,
+      vbY: Math.round(pt.y * 10) / 10,
+    });
+  });
+  svg.appendChild(layer);
+
+  // #region agent log
+  requestAnimationFrame(() => {
+    const frame = mapHost?.closest(".challenge-map-frame");
+    const fr = frame?.getBoundingClientRect();
+    const sr = svg.getBoundingClientRect();
+    const vb = svg.viewBox?.baseVal;
+    fetch("http://127.0.0.1:7263/ingest/7b680789-6fbf-44a7-9704-6ddeb5cf3ed6", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "38eb5e" },
+      body: JSON.stringify({
+        sessionId: "38eb5e",
+        runId: "map-load",
+        hypothesisId: "DOT-A",
+        location: "game.js:mountChallengeRegionDots",
+        message: "region dots placed in svg viewBox space",
+        data: {
+          mode: "inline-svg",
+          frameAspect: fr ? Math.round((fr.width / fr.height) * 100) / 100 : null,
+          svgAspect: sr.width && sr.height ? Math.round((sr.width / sr.height) * 100) / 100 : null,
+          vbAspect: vb ? Math.round((vb.width / vb.height) * 100) / 100 : null,
+          placed,
+        },
+        timestamp: Date.now(),
+      }),
+    }).catch(() => {});
+  });
+  // #endregion
+}
+
+function applyChallengeWorldSvg(host, svgMarkup, mapVersion) {
+  host.innerHTML = svgMarkup;
+  host.dataset.mapVersion = mapVersion;
+  host.dataset.mapMode = "inline-svg";
+  const svg = host.querySelector("svg");
+  if (svg) {
+    svg.setAttribute("viewBox", "-20 -28 1040 556");
+    svg.setAttribute("preserveAspectRatio", "xMidYMid meet");
+    svg.removeAttribute("width");
+    svg.removeAttribute("height");
+    const land = svg.querySelector("g");
+    if (land && !land.getAttribute("transform")) {
+      land.setAttribute("transform", "translate(8 14) scale(0.984)");
+    }
+    svg.querySelectorAll("circle").forEach((c) => c.remove());
+  }
+  mountChallengeRegionDots();
+  return { ok: true, mode: "inline-svg", pathCount: host.querySelectorAll("path").length };
+}
+
+function loadChallengeWorldMapImgFallback(host, url, mapVersion) {
+  return new Promise((resolve) => {
+    host.innerHTML = "";
+    const img = document.createElement("img");
+    img.className = "challenge-world-map-img";
+    img.alt = "Equirectangular world map";
+    img.decoding = "async";
+    img.src = url;
+    img.addEventListener(
+      "load",
+      () => {
+        host.dataset.mapVersion = mapVersion;
+        host.dataset.mapMode = "img-fallback";
+        mountChallengeRegionDots();
+        // #region agent log
+        fetch("http://127.0.0.1:7263/ingest/7b680789-6fbf-44a7-9704-6ddeb5cf3ed6", {
+          method: "POST",
+          headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "38eb5e" },
+          body: JSON.stringify({
+            sessionId: "38eb5e",
+            runId: "map-load",
+            hypothesisId: "A-FILE",
+            location: "game.js:loadChallengeWorldMapImgFallback",
+            message: "map loaded via img fallback",
+            data: {
+              protocol: location.protocol,
+              href: location.href.slice(0, 120),
+              naturalW: img.naturalWidth,
+              naturalH: img.naturalHeight,
+              url,
+            },
+            timestamp: Date.now(),
+          }),
+        }).catch(() => {});
+        // #endregion
+        resolve({ ok: true, mode: "img-fallback", cached: false });
+      },
+      { once: true }
+    );
+    img.addEventListener(
+      "error",
+      () => {
+        host.dataset.mapVersion = "";
+        host.dataset.mapMode = "failed";
+        host.innerHTML =
+          '<p class="challenge-map-missing">Map asset missing. Open via the local server (http://localhost:3000) or keep assets/world-map.svg next to index.html.</p>';
+        // #region agent log
+        fetch("http://127.0.0.1:7263/ingest/7b680789-6fbf-44a7-9704-6ddeb5cf3ed6", {
+          method: "POST",
+          headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "38eb5e" },
+          body: JSON.stringify({
+            sessionId: "38eb5e",
+            runId: "map-load",
+            hypothesisId: "B-PATH",
+            location: "game.js:loadChallengeWorldMapImgFallback",
+            message: "map img fallback failed",
+            data: { protocol: location.protocol, href: location.href.slice(0, 120), url },
+            timestamp: Date.now(),
+          }),
+        }).catch(() => {});
+        // #endregion
+        resolve({ ok: false, reason: "img-error", mode: "img-fallback" });
+      },
+      { once: true }
+    );
+    host.appendChild(img);
+  });
+}
+
+function ensureChallengeWorldMap() {
+  const host =
+    document.getElementById("challengeWorldMapHost") ||
+    ui.challengeMapOverlay?.querySelector(".challenge-world-map");
+  if (!host) return Promise.resolve({ ok: false, reason: "no-host" });
+  const mapVersion = "20260712t";
+  const url = `assets/world-map.svg?v=${mapVersion}`;
+  if (
+    host.dataset.mapVersion === mapVersion &&
+    (host.querySelector("svg") || host.querySelector("img.challenge-world-map-img"))
+  ) {
+    mountChallengeRegionDots();
+    return Promise.resolve({ ok: true, cached: true, mode: host.dataset.mapMode || "cached" });
+  }
+  host.innerHTML = "";
+  host.dataset.mapVersion = "";
+  host.dataset.mapMode = "";
+  // #region agent log
+  fetch("http://127.0.0.1:7263/ingest/7b680789-6fbf-44a7-9704-6ddeb5cf3ed6", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "38eb5e" },
+    body: JSON.stringify({
+      sessionId: "38eb5e",
+      runId: "map-load",
+      hypothesisId: "A-FILE",
+      location: "game.js:ensureChallengeWorldMap:start",
+      message: "challenge map load start",
+      data: {
+        protocol: location.protocol,
+        href: location.href.slice(0, 160),
+        isFile: location.protocol === "file:",
+        url,
+      },
+      timestamp: Date.now(),
+    }),
+  }).catch(() => {});
+  // #endregion
+  challengeMapLoadPromise = fetch(url)
+    .then(async (r) => {
+      const text = await r.text();
+      if (!r.ok) throw new Error(`status ${r.status}`);
+      const svgMatch = text.match(/<svg[\s\S]*<\/svg>/i);
+      if (!svgMatch) throw new Error("no-svg-markup");
+      const result = applyChallengeWorldSvg(host, svgMatch[0], mapVersion);
+      // #region agent log
+      fetch("http://127.0.0.1:7263/ingest/7b680789-6fbf-44a7-9704-6ddeb5cf3ed6", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "38eb5e" },
+        body: JSON.stringify({
+          sessionId: "38eb5e",
+          runId: "map-load",
+          hypothesisId: "C-HTTP",
+          location: "game.js:ensureChallengeWorldMap:fetch-ok",
+          message: "challenge map fetch succeeded",
+          data: {
+            protocol: location.protocol,
+            status: r.status,
+            pathCount: result.pathCount,
+            mode: result.mode,
+          },
+          timestamp: Date.now(),
+        }),
+      }).catch(() => {});
+      // #endregion
+      return { ok: true, cached: false, mode: result.mode };
+    })
+    .catch((err) => {
+      // #region agent log
+      fetch("http://127.0.0.1:7263/ingest/7b680789-6fbf-44a7-9704-6ddeb5cf3ed6", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "38eb5e" },
+        body: JSON.stringify({
+          sessionId: "38eb5e",
+          runId: "map-load",
+          hypothesisId: "A-FILE",
+          location: "game.js:ensureChallengeWorldMap:fetch-fail",
+          message: "challenge map fetch failed; trying img fallback",
+          data: {
+            protocol: location.protocol,
+            href: location.href.slice(0, 160),
+            reason: String(err && err.message ? err.message : err),
+          },
+          timestamp: Date.now(),
+        }),
+      }).catch(() => {});
+      // #endregion
+      return loadChallengeWorldMapImgFallback(host, url, mapVersion);
+    });
+  return challengeMapLoadPromise;
+}
+
+function openChallengeMap() {
+  hideBotCategoryOverlays();
+  hideOverlay(ui.menuOverlay);
+  hideOverlay(ui.bossHubOverlay);
+  hideOverlay(ui.modeSoonOverlay);
+  showChallengeWorldView();
+  showOverlay(ui.challengeMapOverlay);
+  setStagePlaying(false);
+  startMenuBg();
+  updateNameUI();
+  ensureChallengeWorldMap().then(() => {
+    // #region agent log
+    requestAnimationFrame(() => {
+      const overlay = ui.challengeMapOverlay;
+      const card = overlay?.querySelector(".challenge-map-card");
+      const body = card?.querySelector(".challenge-map-body");
+      const world = ui.challengeWorldView;
+      const frame = world?.querySelector(".challenge-map-frame");
+      const banner = world?.querySelector(".challenge-map-banner");
+      const header = card?.querySelector(".menu-panel-header");
+      const footer = card?.querySelector(".menu-panel-footer");
+      const oR = overlay?.getBoundingClientRect();
+      const cR = card?.getBoundingClientRect();
+      const bR = body?.getBoundingClientRect();
+      const fR = frame?.getBoundingClientRect();
+      const bnR = banner?.getBoundingClientRect();
+      const hR = header?.getBoundingClientRect();
+      const ftR = footer?.getBoundingClientRect();
+      const frameCs = frame ? getComputedStyle(frame) : null;
+      const host = document.getElementById("challengeWorldMapHost");
+      const hostR = host?.getBoundingClientRect();
+      const svg = host?.querySelector("svg");
+      const svgR = svg?.getBoundingClientRect();
+      fetch("http://127.0.0.1:7263/ingest/7b680789-6fbf-44a7-9704-6ddeb5cf3ed6", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "38eb5e" },
+        body: JSON.stringify({
+          sessionId: "38eb5e",
+          runId: "map-restore",
+          hypothesisId: "F-G-L-M",
+          location: "game.js:openChallengeMap",
+          message: "challenge world view viewport fit",
+          data: {
+            vw: window.innerWidth,
+            vh: window.innerHeight,
+            overlayH: oR ? Math.round(oR.height) : null,
+            overlayClientH: overlay ? overlay.clientHeight : null,
+            overlayScrollH: overlay ? overlay.scrollHeight : null,
+            card: cR
+              ? {
+                  w: Math.round(cR.width),
+                  h: Math.round(cR.height),
+                  t: Math.round(cR.top),
+                  b: Math.round(cR.bottom),
+                }
+              : null,
+            bodyH: bR ? Math.round(bR.height) : null,
+            headerH: hR ? Math.round(hR.height) : null,
+            footerH: ftR ? Math.round(ftR.height) : null,
+            frame: fR
+              ? {
+                  w: Math.round(fR.width),
+                  h: Math.round(fR.height),
+                  minH: frameCs?.minHeight,
+                  maxH: frameCs?.maxHeight,
+                  aspect: frameCs?.aspectRatio,
+                }
+              : null,
+            host: hostR
+              ? { w: Math.round(hostR.width), h: Math.round(hostR.height) }
+              : null,
+            svg: svgR
+              ? {
+                  w: Math.round(svgR.width),
+                  h: Math.round(svgR.height),
+                  pathCount: host ? host.querySelectorAll("path").length : 0,
+                  hasSvg: !!svg,
+                }
+              : { hasSvg: !!svg, pathCount: host ? host.querySelectorAll("path").length : 0 },
+            bannerH: bnR ? Math.round(bnR.height) : null,
+            cardOverflowsOverlay: cR && oR ? cR.height > oR.height + 1 : null,
+            cardOverflowsViewportBottom: cR ? cR.bottom > window.innerHeight + 1 : null,
+            cardOverflowsViewportRight: cR ? cR.right > window.innerWidth + 1 : null,
+            overlayScrollable: overlay ? overlay.scrollHeight > overlay.clientHeight + 1 : null,
+            frameVisibleInOverlay:
+              fR && oR
+                ? fR.top < oR.bottom - 8 && fR.bottom > oR.top + 8 && fR.height > 40
+                : null,
+            sumChromePlusFrame: hR && fR && bnR && ftR
+              ? Math.round(hR.height + fR.height + bnR.height + ftR.height)
+              : null,
+          },
+          timestamp: Date.now(),
+        }),
+      }).catch(() => {});
+    });
+    // #endregion
+  });
+}
+
+function closeChallengeMap() {
+  showChallengeWorldView();
+  hideOverlay(ui.challengeMapOverlay);
+  showOverlay(ui.campaignHubOverlay);
+  startMenuBg();
+  updateNameUI();
+}
+
 function openModeSoon(modeName) {
-  hideOverlay(ui.botModesOverlay);
+  hideBotCategoryOverlays();
   if (ui.modeSoonLead) {
     ui.modeSoonLead.textContent = `Sorry — ${modeName || "this mode"} is under construction.`;
   }
@@ -8666,7 +9655,7 @@ function closeModeSoon() {
 
 function openBotLevelSelect() {
   hideOverlay(ui.menuOverlay);
-  hideOverlay(ui.botModesOverlay);
+  hideBotCategoryOverlays();
   hideOverlay(ui.modeSoonOverlay);
   hideOverlay(ui.chaosLevelOverlay);
   hideOverlay(ui.survivalLevelOverlay);
@@ -8674,6 +9663,7 @@ function openBotLevelSelect() {
   hideOverlay(ui.cupPongLevelOverlay);
   hideOverlay(ui.lobbyOverlay);
   hideOverlay(ui.customizeOverlay);
+  hideOverlay(ui.shopHubOverlay);
   hideOverlay(ui.settingsOverlay);
   hideOverlay(ui.adminOverlay);
   hideOverlay(ui.passkeyOverlay);
@@ -8748,7 +9738,7 @@ function openBotLevelSelect() {
 
 function closeBotLevelSelect() {
   hideOverlay(ui.botLevelOverlay);
-  showOverlay(ui.botModesOverlay);
+  showOverlay(ui.classicGamesOverlay);
   startMenuBg();
   updateNameUI();
 }
@@ -8804,7 +9794,7 @@ function renderBotLevelGrid() {
 
 function openChaosLevelSelect() {
   hideOverlay(ui.menuOverlay);
-  hideOverlay(ui.botModesOverlay);
+  hideBotCategoryOverlays();
   hideOverlay(ui.modeSoonOverlay);
   hideOverlay(ui.botLevelOverlay);
   hideOverlay(ui.survivalLevelOverlay);
@@ -8812,6 +9802,7 @@ function openChaosLevelSelect() {
   hideOverlay(ui.cupPongLevelOverlay);
   hideOverlay(ui.lobbyOverlay);
   hideOverlay(ui.customizeOverlay);
+  hideOverlay(ui.shopHubOverlay);
   hideOverlay(ui.settingsOverlay);
   hideOverlay(ui.adminOverlay);
   hideOverlay(ui.passkeyOverlay);
@@ -8826,7 +9817,7 @@ function openChaosLevelSelect() {
 
 function closeChaosLevelSelect() {
   hideOverlay(ui.chaosLevelOverlay);
-  showOverlay(ui.botModesOverlay);
+  showOverlay(ui.classicGamesOverlay);
   startMenuBg();
   updateNameUI();
 }
@@ -8883,7 +9874,7 @@ function renderChaosLevelGrid() {
 
 function openSurvivalLevelSelect() {
   hideOverlay(ui.menuOverlay);
-  hideOverlay(ui.botModesOverlay);
+  hideBotCategoryOverlays();
   hideOverlay(ui.modeSoonOverlay);
   hideOverlay(ui.botLevelOverlay);
   hideOverlay(ui.chaosLevelOverlay);
@@ -8891,6 +9882,7 @@ function openSurvivalLevelSelect() {
   hideOverlay(ui.cupPongLevelOverlay);
   hideOverlay(ui.lobbyOverlay);
   hideOverlay(ui.customizeOverlay);
+  hideOverlay(ui.shopHubOverlay);
   hideOverlay(ui.settingsOverlay);
   hideOverlay(ui.adminOverlay);
   hideOverlay(ui.passkeyOverlay);
@@ -8905,7 +9897,7 @@ function openSurvivalLevelSelect() {
 
 function closeSurvivalLevelSelect() {
   hideOverlay(ui.survivalLevelOverlay);
-  showOverlay(ui.botModesOverlay);
+  showOverlay(ui.classicGamesOverlay);
   startMenuBg();
   updateNameUI();
 }
@@ -9254,7 +10246,8 @@ function fitGameStage() {
     ? (parseFloat(wrapStyle.paddingLeft) || 0) + (parseFloat(wrapStyle.paddingRight) || 0)
     : 0;
   // Court border (2px each side) + stage padding must stay inside the viewport.
-  const BORDER_PAD = 8;
+  const cupMode = typeof isCupPongMode === "function" && isCupPongMode();
+  const BORDER_PAD = cupMode ? 2 : 8;
   const availW = Math.max(
     120,
     (wrap ? wrap.clientWidth : window.innerWidth) - padX - BORDER_PAD
@@ -9271,9 +10264,16 @@ function fitGameStage() {
     gap * 2 +
     padY +
     BORDER_PAD +
-    8;
+    (cupMode ? 2 : 8);
   const availH = Math.max(100, window.innerHeight - chromeH);
-  const scale = Math.min(availW / W, availH / H);
+  // Cup Pong: fill the phone width hard — table is now nearly full-canvas wide.
+  let scale = Math.min(availW / W, availH / H);
+  if (cupMode) {
+    scale = Math.min(availW / W, availH / H);
+    // Prefer width fill; allow slight height crop only if it still fits comfortably.
+    const widthFill = availW / W;
+    if (widthFill * H <= availH * 1.02) scale = widthFill;
+  }
   const drawW = Math.max(1, Math.floor(W * scale));
   const drawH = Math.max(1, Math.floor(H * scale));
   canvas.style.boxSizing = "border-box";
@@ -9583,9 +10583,10 @@ function openSettings() {
   hideOverlay(ui.survivalLevelOverlay);
   hideOverlay(ui.bossLevelOverlay);
   hideOverlay(ui.cupPongLevelOverlay);
-  hideOverlay(ui.botModesOverlay);
+  hideBotCategoryOverlays();
   hideOverlay(ui.lobbyOverlay);
   hideOverlay(ui.customizeOverlay);
+  hideOverlay(ui.shopHubOverlay);
   hideOverlay(ui.adminOverlay);
   hideOverlay(ui.updatesOverlay);
   showOverlay(ui.settingsOverlay);
@@ -9797,6 +10798,10 @@ function updateResignButton() {
     overlayBlocking(ui.survivalLevelOverlay) ||
     overlayBlocking(ui.bossLevelOverlay) ||
     overlayBlocking(ui.botModesOverlay) ||
+    overlayBlocking(ui.classicGamesOverlay) ||
+    overlayBlocking(ui.campaignHubOverlay) ||
+    overlayBlocking(ui.arcadeHubOverlay) ||
+    overlayBlocking(ui.challengeMapOverlay) ||
     overlayBlocking(ui.bossHubOverlay) ||
     overlayBlocking(ui.cupPongLevelOverlay);
   const settingsOpen = overlayBlocking(ui.settingsOverlay);
@@ -9806,6 +10811,7 @@ function updateResignButton() {
     overlayBlocking(ui.scoreboardOverlay);
   const otherMenuOpen =
     overlayBlocking(ui.customizeOverlay) ||
+    overlayBlocking(ui.shopHubOverlay) ||
     overlayBlocking(ui.profileOverlay) ||
     overlayBlocking(ui.updatesOverlay) ||
     overlayBlocking(ui.inboxOverlay) ||
@@ -9862,6 +10868,7 @@ function openNameOverlay(fromMenu = false) {
   hideOverlay(ui.botLevelOverlay);
   hideOverlay(ui.lobbyOverlay);
   hideOverlay(ui.customizeOverlay);
+  hideOverlay(ui.shopHubOverlay);
   hideOverlay(ui.settingsOverlay);
   hideOverlay(ui.adminOverlay);
   hideOverlay(ui.passkeyOverlay);
@@ -9909,6 +10916,10 @@ const MENU_STAGE_OVERLAYS = () => [
   ui.nameOverlay,
   ui.menuOverlay,
   ui.botModesOverlay,
+  ui.classicGamesOverlay,
+  ui.campaignHubOverlay,
+  ui.arcadeHubOverlay,
+  ui.challengeMapOverlay,
   ui.modeSoonOverlay,
   ui.botLevelOverlay,
   ui.chaosLevelOverlay,
@@ -9922,6 +10933,7 @@ const MENU_STAGE_OVERLAYS = () => [
   ui.onlineSearchOverlay,
   ui.scoreboardOverlay,
   ui.customizeOverlay,
+  ui.shopHubOverlay,
   ui.profileOverlay,
   ui.settingsOverlay,
   ui.updatesOverlay,
@@ -10242,10 +11254,11 @@ function openUpdates() {
   hideOverlay(ui.survivalLevelOverlay);
   hideOverlay(ui.bossLevelOverlay);
   hideOverlay(ui.cupPongLevelOverlay);
-  hideOverlay(ui.botModesOverlay);
+  hideBotCategoryOverlays();
   hideOverlay(ui.modeSoonOverlay);
   hideOverlay(ui.lobbyOverlay);
   hideOverlay(ui.customizeOverlay);
+  hideOverlay(ui.shopHubOverlay);
   hideOverlay(ui.profileOverlay);
   hideOverlay(ui.settingsOverlay);
   hideOverlay(ui.adminOverlay);
@@ -11125,11 +12138,24 @@ function wsURL() {
   return `${proto}//${location.host}`;
 }
 
-function closeWs() {
+function closeWs({ allowPresenceReconnect = true } = {}) {
+  if (presenceHeartbeatTimer) {
+    clearInterval(presenceHeartbeatTimer);
+    presenceHeartbeatTimer = null;
+  }
   if (net.searching) sendWs({ type: "cancelSearch" });
   stopSearchUI();
   if (ws) {
-    ws.close();
+    try {
+      ws.onclose = null;
+    } catch {
+      /* ignore */
+    }
+    try {
+      ws.close();
+    } catch {
+      /* ignore */
+    }
     ws = null;
   }
   net.connected = false;
@@ -11145,6 +12171,103 @@ function closeWs() {
   net.opponentLevel = 0;
   net.opponentProfile = null;
   net.rematchReady = [false, false];
+  if (allowPresenceReconnect) schedulePresenceReconnect();
+}
+
+function presencePayload(kind = "presence") {
+  return {
+    type: kind,
+    playerId: getPlayerId(),
+    name: getPlayerName(),
+    level: getPlayerLevel(),
+    xp: Math.max(0, Math.floor(save.xp || 0)),
+    xpLevel: getXpLevel(),
+    avatar: String(save.avatar || "default").slice(0, 64),
+    customAvatarUrl: String(save.customAvatarUrl || "").slice(0, 240),
+  };
+}
+
+function sendPresence(kind = "presence") {
+  sendWs(presencePayload(kind));
+}
+
+function startPresenceHeartbeat() {
+  if (presenceHeartbeatTimer) clearInterval(presenceHeartbeatTimer);
+  presenceHeartbeatTimer = setInterval(() => {
+    if (ws && ws.readyState === 1) sendPresence("presencePing");
+  }, 20000);
+}
+
+function schedulePresenceReconnect() {
+  if (!location.host) return;
+  if (presenceReconnectTimer) clearTimeout(presenceReconnectTimer);
+  presenceReconnectTimer = setTimeout(() => {
+    presenceReconnectTimer = null;
+    ensurePresence();
+  }, 600);
+}
+
+function ensurePresence() {
+  if (!location.host) return;
+  if (ws && ws.readyState === 1) {
+    sendPresence();
+    startPresenceHeartbeat();
+    return;
+  }
+  if (ws && ws.readyState === 0) return;
+  if (presenceConnecting) return;
+  presenceConnecting = true;
+  const url = wsURL();
+  if (!url) {
+    presenceConnecting = false;
+    return;
+  }
+  try {
+    if (ws) {
+      try {
+        ws.onclose = null;
+      } catch {
+        /* ignore */
+      }
+      try {
+        ws.close();
+      } catch {
+        /* ignore */
+      }
+      ws = null;
+    }
+    ws = new WebSocket(url);
+    ws.onopen = () => {
+      presenceConnecting = false;
+      net.connected = true;
+      sendPresence();
+      startPresenceHeartbeat();
+    };
+    ws.onmessage = (event) => {
+      let msg;
+      try {
+        msg = JSON.parse(event.data);
+      } catch {
+        return;
+      }
+      handleWsMessage(msg);
+    };
+    ws.onclose = () => {
+      presenceConnecting = false;
+      net.connected = false;
+      stopSearchUI();
+      if (presenceHeartbeatTimer) {
+        clearInterval(presenceHeartbeatTimer);
+        presenceHeartbeatTimer = null;
+      }
+      if (s.mode === "online" && !s.gameOver) {
+        ui.status.textContent = "Disconnected";
+      }
+      schedulePresenceReconnect();
+    };
+  } catch {
+    presenceConnecting = false;
+  }
 }
 
 function sendCosmetics() {
@@ -11163,6 +12286,7 @@ function sendCosmetics() {
     maxChaosCleared: Math.max(0, Math.floor(save.maxChaosCleared || 0)),
     maxSurvivalCleared: Math.max(0, Math.floor(save.maxSurvivalCleared || 0)),
     maxBossCleared: Math.max(0, Math.floor(save.maxBossCleared || 0)),
+    maxCupPongCleared: Math.max(0, Math.floor(save.maxCupPongCleared || 0)),
   });
 }
 
@@ -11176,10 +12300,19 @@ function connectWs(onOpen) {
     setOnlineStatus("Online mode needs the game server. Run Start Server.bat first.");
     return;
   }
-  closeWs();
+  if (presenceReconnectTimer) {
+    clearTimeout(presenceReconnectTimer);
+    presenceReconnectTimer = null;
+  }
+  closeWs({ allowPresenceReconnect: false });
+  presenceConnecting = true;
   ws = new WebSocket(url);
   ws.onopen = () => {
+    presenceConnecting = false;
     net.connected = true;
+    sendPresence();
+    sendCosmetics();
+    startPresenceHeartbeat();
     onOpen();
   };
   ws.onmessage = (event) => {
@@ -11192,11 +12325,17 @@ function connectWs(onOpen) {
     handleWsMessage(msg);
   };
   ws.onclose = () => {
+    presenceConnecting = false;
     net.connected = false;
     stopSearchUI();
+    if (presenceHeartbeatTimer) {
+      clearInterval(presenceHeartbeatTimer);
+      presenceHeartbeatTimer = null;
+    }
     if (s.mode === "online" && !s.gameOver) {
       ui.status.textContent = "Disconnected";
     }
+    schedulePresenceReconnect();
   };
 }
 
@@ -11445,9 +12584,10 @@ function startLocalMode(level = 1) {
   hideOverlay(ui.survivalLevelOverlay);
   hideOverlay(ui.bossLevelOverlay);
   hideOverlay(ui.cupPongLevelOverlay);
-  hideOverlay(ui.botModesOverlay);
+  hideBotCategoryOverlays();
   hideOverlay(ui.lobbyOverlay);
   hideOverlay(ui.customizeOverlay);
+  hideOverlay(ui.shopHubOverlay);
   hideOverlay(ui.settingsOverlay);
   hideOverlay(ui.adminOverlay);
   hideOverlay(ui.gameOver);
@@ -11479,9 +12619,10 @@ function startChaosMode(level = 1) {
   hideOverlay(ui.survivalLevelOverlay);
   hideOverlay(ui.bossLevelOverlay);
   hideOverlay(ui.cupPongLevelOverlay);
-  hideOverlay(ui.botModesOverlay);
+  hideBotCategoryOverlays();
   hideOverlay(ui.lobbyOverlay);
   hideOverlay(ui.customizeOverlay);
+  hideOverlay(ui.shopHubOverlay);
   hideOverlay(ui.settingsOverlay);
   hideOverlay(ui.adminOverlay);
   hideOverlay(ui.gameOver);
@@ -11511,9 +12652,10 @@ function startSurvivalMode(round = 1) {
   hideOverlay(ui.survivalLevelOverlay);
   hideOverlay(ui.bossLevelOverlay);
   hideOverlay(ui.cupPongLevelOverlay);
-  hideOverlay(ui.botModesOverlay);
+  hideBotCategoryOverlays();
   hideOverlay(ui.lobbyOverlay);
   hideOverlay(ui.customizeOverlay);
+  hideOverlay(ui.shopHubOverlay);
   hideOverlay(ui.settingsOverlay);
   hideOverlay(ui.adminOverlay);
   hideOverlay(ui.gameOver);
@@ -11549,9 +12691,10 @@ function startBossMode(level = 1) {
   hideOverlay(ui.bossShopOverlay);
   hideOverlay(ui.bossLevelOverlay);
   hideOverlay(ui.cupPongLevelOverlay);
-  hideOverlay(ui.botModesOverlay);
+  hideBotCategoryOverlays();
   hideOverlay(ui.lobbyOverlay);
   hideOverlay(ui.customizeOverlay);
+  hideOverlay(ui.shopHubOverlay);
   hideOverlay(ui.settingsOverlay);
   hideOverlay(ui.adminOverlay);
   hideOverlay(ui.gameOver);
@@ -11576,9 +12719,10 @@ function openOnlineHub() {
   hideOverlay(ui.bossShopOverlay);
   hideOverlay(ui.bossLevelOverlay);
   hideOverlay(ui.cupPongLevelOverlay);
-  hideOverlay(ui.botModesOverlay);
+  hideBotCategoryOverlays();
   hideOverlay(ui.modeSoonOverlay);
   hideOverlay(ui.customizeOverlay);
+  hideOverlay(ui.shopHubOverlay);
   hideOverlay(ui.settingsOverlay);
   hideOverlay(ui.adminOverlay);
   hideOverlay(ui.gameOver);
@@ -11636,7 +12780,8 @@ function renderOnlineScoreboard(entries) {
     return;
   }
   if (ui.onlineScoreboardMsg) {
-    ui.onlineScoreboardMsg.textContent = `${rows.length} player${rows.length === 1 ? "" : "s"} · tap a row to view profile.`;
+    const onlineCount = rows.filter((e) => e.online).length;
+    ui.onlineScoreboardMsg.textContent = `${rows.length} player${rows.length === 1 ? "" : "s"} · ${onlineCount} online · tap a row to view profile.`;
   }
   rows.forEach((entry) => {
     const placeNum = Math.max(1, Math.floor(entry.place || 0));
@@ -11663,13 +12808,20 @@ function renderOnlineScoreboard(entries) {
     const name = document.createElement("div");
     name.className = "online-score-name";
     name.textContent = entry.name || "Player";
-    applyLevelClass(name, entry.rank || 0);
+    applyLevelClass(name, entry.rank || entry.xpLevel || 0);
+    const status = document.createElement("span");
+    status.className = `presence-pill presence-pill-inline ${entry.online ? "is-online" : "is-offline"}`;
+    status.textContent = entry.online ? "Online" : "Offline";
+    status.title = entry.online ? "Player is active now" : "Player is offline";
+    const nameRow = document.createElement("div");
+    nameRow.className = "online-score-name-row";
+    nameRow.append(name, status);
     const stats = document.createElement("div");
     stats.className = "online-score-stats";
     stats.textContent = `L${entry.rank || 0} · XP ${entry.xpLevel || 1} · ${entry.matches || 0} played${
       entry.bestWinStreak > 0 ? ` · best ${entry.bestWinStreak} streak` : ""
     }${entry.winStreak > 1 ? ` · 🔥${entry.winStreak}` : ""}`;
-    meta.append(name, stats);
+    meta.append(nameRow, stats);
     player.append(avatar, meta);
 
     const record = document.createElement("div");
@@ -11755,9 +12907,10 @@ function backToMenu() {
   hideOverlay(ui.bossShopOverlay);
   hideOverlay(ui.bossLevelOverlay);
   hideOverlay(ui.cupPongLevelOverlay);
-  hideOverlay(ui.botModesOverlay);
+  hideBotCategoryOverlays();
   hideOverlay(ui.modeSoonOverlay);
   hideOverlay(ui.customizeOverlay);
+  hideOverlay(ui.shopHubOverlay);
   hideOverlay(ui.settingsOverlay);
   hideOverlay(ui.updatesOverlay);
   hideOverlay(ui.adminOverlay);
@@ -12005,7 +13158,10 @@ function bindUi() {
   bind(ui.btnProfileBack, closeProfile);
   bind(ui.btnProfileViewBack, closeProfileView);
   bind(ui.btnLevelUpContinue, closeLevelUpOverlay);
-  bind(ui.btnProfileCustomize, () => requireName(openCustomize));
+  bind(ui.btnProfileCustomize, () => requireName(openShopHub));
+  bind(ui.btnShopHubPong, () => requireName(() => openCustomize({ catalog: "pong" })));
+  bind(ui.btnShopHubCup, () => requireName(() => openCustomize({ catalog: "cup" })));
+  bind(ui.btnShopHubBack, closeShopHub);
   if (ui.p1Label) {
     ui.p1Label.addEventListener("click", () => {
       playMenuClick();
@@ -12047,6 +13203,15 @@ function bindUi() {
   bind(ui.btnUpdates, openUpdates);
   bind(ui.btnUpdatesBack, closeUpdates);
   bind(ui.btnBotModesBack, closeBotModes);
+  bind(ui.btnCatClassicGames, openClassicGamesHub);
+  bind(ui.btnCatCampaign, openCampaignHub);
+  bind(ui.btnCatArcade, openArcadeHub);
+  bind(ui.btnClassicGamesBack, closeClassicGamesHub);
+  bind(ui.btnCampaignHubBack, closeCampaignHub);
+  bind(ui.btnArcadeHubBack, closeArcadeHub);
+  bind(ui.btnModeChallenge, openChallengeMap);
+  bind(ui.btnChallengeMapBack, onChallengeMapBack);
+  bind(ui.btnChallengeRegionBack, showChallengeWorldView);
   bind(ui.btnModeClassic, openBotLevelSelect);
   bind(ui.btnModeChaos, openChaosLevelSelect);
   bind(ui.btnModeSurvival, openSurvivalLevelSelect);
@@ -12060,7 +13225,7 @@ function bindUi() {
   bind(ui.btnModeSoonBack, closeModeSoon);
   bind(ui.btnModeSoonUpdates, () => {
     hideOverlay(ui.modeSoonOverlay);
-    hideOverlay(ui.botModesOverlay);
+    hideBotCategoryOverlays();
     openUpdates();
   });
   bind(ui.btnChaosLevelBack, closeChaosLevelSelect);
@@ -12285,7 +13450,7 @@ function bindUi() {
   });
   bind(ui.btnTicketNoticeOk, dismissTicketNotice);
   bind(ui.backToMenu, backToMenu);
-  bind(ui.btnCreateRoom, () => connectWs(() => sendWs({ type: "create" })));
+  bind(ui.btnCreateRoom, () => connectWs(() => sendWs({ type: "create", ...presencePayload("create") })));
   bind(ui.btnSearch, startMatchSearch);
   bind(ui.btnCancelSearch, cancelMatchSearch);
   bind(ui.btnJoinRoom, () => {
@@ -12294,7 +13459,7 @@ function bindUi() {
       ui.lobbyStatus.textContent = "Enter a 4-letter room code.";
       return;
     }
-    connectWs(() => sendWs({ type: "join", code }));
+    connectWs(() => sendWs({ type: "join", code, ...presencePayload("join") }));
   });
   bind(ui.playAgain, () => {
     if (s.mode === "online") {
@@ -12387,13 +13552,6 @@ function bindUi() {
 
   bind(ui.btnResign, resignMatch);
 
-  document.querySelectorAll(".shop-tab").forEach((tab) => {
-    tab.addEventListener("click", () => {
-      playMenuClick();
-      setShopTab(tab.dataset.tab);
-    });
-  });
-
   bindAdminControls();
 
   bind(ui.btnPasskeySubmit, submitPasskey);
@@ -12425,68 +13583,6 @@ function bindUi() {
     });
   }
 
-  // #region agent log
-  (function debugColorAnimSeams() {
-    const targets = [];
-    if (ui.titleEl) targets.push({ id: "title", el: ui.titleEl });
-    const pushLvl = (el, id) => {
-      if (el) targets.push({ id, el });
-    };
-    pushLvl(ui.hint?.querySelector?.(".player-level-inline"), "hint-level");
-    pushLvl(ui.p1Label, "p1-label");
-    pushLvl(document.querySelector(".update-secret .update-heading"), "secret-heading");
-    const prev = new Map();
-    let ticks = 0;
-    const timer = setInterval(() => {
-      ticks += 1;
-      for (const t of targets) {
-        if (!t.el || !t.el.isConnected) continue;
-        const cs = getComputedStyle(t.el);
-        const pos = cs.backgroundPosition;
-        const anim = cs.animationName;
-        const size = cs.backgroundSize;
-        const last = prev.get(t.id);
-        let jump = false;
-        let delta = 0;
-        if (last && last.pos) {
-          const a = parseFloat(String(last.pos).split(/\s+/)[0]) || 0;
-          const b = parseFloat(String(pos).split(/\s+/)[0]) || 0;
-          delta = b - a;
-          // Large reverse jump while animation is running = loop seam
-          jump = delta < -20 || (a > 80 && b < 15);
-        }
-        prev.set(t.id, { pos });
-        if (jump || ticks === 1 || ticks % 40 === 0) {
-          fetch("http://127.0.0.1:7263/ingest/7b680789-6fbf-44a7-9704-6ddeb5cf3ed6", {
-            method: "POST",
-            headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "38eb5e" },
-            body: JSON.stringify({
-              sessionId: "38eb5e",
-              runId: "post-fix",
-              hypothesisId: jump ? "A" : "B",
-              location: "game.js:debugColorAnimSeams",
-              message: jump ? "bg-position loop jump detected" : "anim sample",
-              data: {
-                id: t.id,
-                pos,
-                size,
-                anim,
-                delta,
-                jump,
-                ticks,
-                classes: t.el.className,
-                timing: cs.animationTimingFunction,
-                direction: cs.animationDirection,
-              },
-              timestamp: Date.now(),
-            }),
-          }).catch(() => {});
-        }
-      }
-      if (ticks >= 200) clearInterval(timer);
-    }, 250);
-  })();
-  // #endregion
 }
 
 function setPointerFromClient(clientX, clientY) {
@@ -12766,6 +13862,7 @@ async function boot() {
   if (stageEl) stageEl.classList.add("menu-open");
   updatePhoneLayout();
   if (getPendingResetUsername()) startPasswordResetPoll(getPendingResetUsername());
+  ensurePresence();
   requestAnimationFrame(frame);
 }
 
