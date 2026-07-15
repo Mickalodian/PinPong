@@ -25,6 +25,7 @@ const MIME = {
   ".css": "text/css",
   ".js": "text/javascript",
   ".json": "application/json",
+  ".svg": "image/svg+xml",
   ".ico": "image/x-icon",
   ".png": "image/png",
   ".jpg": "image/jpeg",
@@ -606,11 +607,47 @@ function notifyPlayerProfileForce(playerId, profile) {
   }
 }
 
+function isPlayerOnline(playerId) {
+  const pid = String(playerId || "").trim();
+  if (!pid) return false;
+  return [...connectedClients].some(
+    (ws) => ws && ws.readyState === 1 && String(ws.playerId || "") === pid
+  );
+}
+
+function bindWsPresence(ws, msg = {}) {
+  if (!ws) return;
+  if (typeof msg.playerId === "string") {
+    const id = sanitizeLeaderboardId(msg.playerId);
+    if (id) ws.playerId = id;
+  }
+  if (typeof msg.name === "string" && msg.name.trim()) {
+    ws.displayName = sanitizeName(msg.name);
+  }
+  if (typeof msg.level === "number") {
+    ws.playerLevel = Math.max(0, Math.min(XP_MAX_LEVEL, Math.floor(msg.level)));
+  }
+  if (typeof msg.xp === "number") ws.profileXp = Math.max(0, Math.min(1e12, Math.floor(msg.xp)));
+  if (typeof msg.xpLevel === "number") {
+    ws.profileXpLevel = Math.max(1, Math.min(XP_MAX_LEVEL, Math.floor(msg.xpLevel)));
+  } else if (typeof msg.xp === "number") {
+    ws.profileXpLevel = xpLevelFromTotal(ws.profileXp);
+  }
+  if (typeof msg.avatar === "string" && msg.avatar) {
+    ws.profileAvatar = String(msg.avatar).slice(0, 64);
+  }
+  if (typeof msg.customAvatarUrl === "string") {
+    const url = String(msg.customAvatarUrl).slice(0, 240);
+    ws.profileCustomAvatarUrl =
+      url.startsWith("/avatars/") || url.startsWith("http://") || url.startsWith("https://") ? url : "";
+  }
+  ws.lastSeenAt = Date.now();
+  ws.presence = true;
+}
+
 function buildAdminPlayerRow(acc) {
   const profile = loadProfiles()[acc.playerId] || defaultProfile();
-  const online = [...connectedClients].some(
-    (ws) => ws && ws.readyState === 1 && String(ws.playerId || "") === String(acc.playerId)
-  );
+  const online = isPlayerOnline(acc.playerId);
   const isOwner = !!acc.isOwner;
   const isAdmin = !!(acc.isAdmin || isOwner);
   const banned = !!acc.banned;
@@ -875,6 +912,7 @@ function leaderboardPublicList(limit = 200) {
       bestWinStreak: e.bestWinStreak || 0,
       lastPlayed: e.lastPlayed || 0,
       createdAt: e.createdAt || 0,
+      online: isPlayerOnline(e.playerId),
     }));
 }
 
@@ -1547,7 +1585,13 @@ async function handleApi(req, res, urlPath) {
       res.end(JSON.stringify({ ok: false, error: "Admin account required" }));
       return true;
     }
-    const players = authDb.listAccountsPublic().map(buildAdminPlayerRow);
+    const players = authDb
+      .listAccountsPublic()
+      .map(buildAdminPlayerRow)
+      .sort((a, b) => {
+        if (!!b.online !== !!a.online) return b.online ? 1 : -1;
+        return String(a.username || "").localeCompare(String(b.username || ""));
+      });
     res.writeHead(200, { "Content-Type": "application/json" });
     res.end(JSON.stringify({ ok: true, players }));
     return true;
@@ -2397,6 +2441,7 @@ const wss = new WebSocketServer({ server, perMessageDeflate: false });
 
 wss.on("connection", (ws) => {
   connectedClients.add(ws);
+  ws.lastSeenAt = Date.now();
   ws.on("message", (raw) => {
     let msg;
     try {
@@ -2405,7 +2450,21 @@ wss.on("connection", (ws) => {
       return;
     }
 
+    if (msg.type === "presence" || msg.type === "presencePing") {
+      bindWsPresence(ws, msg);
+      if (msg.type === "presence") {
+        try {
+          ws.send(JSON.stringify({ type: "presenceOk", online: !!ws.playerId }));
+        } catch {
+          /* ignore */
+        }
+      }
+      return;
+    }
+
     if (msg.type === "search") {
+      // Identify before queueing so admin/scoreboard see them as online while searching.
+      bindWsPresence(ws, msg);
       if (ws.roomCode) {
         ws.send(JSON.stringify({ type: "error", message: "Already in a room" }));
         return;
@@ -2422,6 +2481,7 @@ wss.on("connection", (ws) => {
 
     if (msg.type === "create") {
       removeFromQueue(ws);
+      bindWsPresence(ws, msg);
       const code = makeCode();
       const room = {
         code,
@@ -2443,6 +2503,7 @@ wss.on("connection", (ws) => {
 
     if (msg.type === "join") {
       removeFromQueue(ws);
+      bindWsPresence(ws, msg);
       const code = String(msg.code || "").toUpperCase();
       const room = rooms.get(code);
       if (!room) {
@@ -2487,28 +2548,7 @@ wss.on("connection", (ws) => {
 
     if (msg.type === "cosmetics" && msg.paddle && msg.table) {
       ws.cosmetics = sanitizeCosmetics({ paddle: String(msg.paddle), table: String(msg.table) });
-      if (msg.name) ws.displayName = sanitizeName(msg.name);
-      if (typeof msg.level === "number") {
-        ws.playerLevel = Math.max(0, Math.min(XP_MAX_LEVEL, Math.floor(msg.level)));
-      }
-      if (typeof msg.xp === "number") ws.profileXp = Math.max(0, Math.min(1e9, Math.floor(msg.xp)));
-      if (typeof msg.xpLevel === "number") {
-        ws.profileXpLevel = Math.max(1, Math.min(99, Math.floor(msg.xpLevel)));
-      } else if (typeof msg.xp === "number") {
-        ws.profileXpLevel = xpLevelFromTotal(ws.profileXp);
-      }
-      if (typeof msg.avatar === "string" && msg.avatar) {
-        ws.profileAvatar = String(msg.avatar).slice(0, 64);
-      }
-      if (typeof msg.customAvatarUrl === "string") {
-        const url = String(msg.customAvatarUrl).slice(0, 240);
-        ws.profileCustomAvatarUrl = url.startsWith("/avatars/") || url.startsWith("http://") || url.startsWith("https://")
-          ? url
-          : "";
-      }
-      if (typeof msg.playerId === "string") {
-        ws.playerId = sanitizeLeaderboardId(msg.playerId);
-      }
+      bindWsPresence(ws, msg);
       if (typeof msg.maxBotCleared === "number") {
         ws.profileMaxBotCleared = Math.max(0, Math.min(100, Math.floor(msg.maxBotCleared)));
       }

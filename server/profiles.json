@@ -78,7 +78,8 @@
         "hearthflame",
         "beerpong",
         "skywyrm",
-        "obsidian"
+        "obsidian",
+        "interstellar"
       ],
       "table": [
         "classic",
@@ -87,12 +88,13 @@
         "hearthflame",
         "beerpong",
         "skywyrm",
-        "obsidian"
+        "obsidian",
+        "solarflare"
       ]
     },
     "equipped": {
-      "paddle": "white",
-      "table": "classic"
+      "paddle": "interstellar",
+      "table": "solarflare"
     },
     "redeemedCodes": [],
     "bossPowers": [],
@@ -152,7 +154,7 @@
     "customAvatarUrl": "",
     "title": "",
     "adminSyncedAt": 1783766523368,
-    "updatedAt": 1783768859023
+    "updatedAt": 1783790130969
   },
   "abcdef12-3456-7890-abcd-ef1234567890": {
     "name": "Tester",
@@ -184,5 +186,37 @@
     "title": "",
     "adminSyncedAt": 1783721928608,
     "updatedAt": 1783723279851
+  },
+  "9bb85586-2f0a-4a1b-8db6-5d0638bda23d": {
+    "name": "MapTest",
+    "points": 0,
+    "xp": 0,
+    "maxBotCleared": 0,
+    "maxChaosCleared": 0,
+    "maxSurvivalCleared": 0,
+    "maxBossCleared": 0,
+    "maxCupPongCleared": 0,
+    "owned": {
+      "paddle": [
+        "white"
+      ],
+      "table": [
+        "classic"
+      ]
+    },
+    "equipped": {
+      "paddle": "white",
+      "table": "classic"
+    },
+    "redeemedCodes": [],
+    "bossPowers": [],
+    "avatar": "default",
+    "ownedAvatars": [
+      "default"
+    ],
+    "customAvatarUrl": "",
+    "title": "",
+    "adminSyncedAt": 0,
+    "updatedAt": 1783792335368
   }
 }

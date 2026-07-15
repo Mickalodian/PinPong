@@ -16,6 +16,7 @@ const RESERVED_CLAIM_USERS = [
   { username: "shazita", displayName: "Shazita" },
   { username: "bethanyy", displayName: "Bethanyy" },
   { username: "nathan_c01", displayName: "Nathan_C01" },
+  { username: "orchardd", displayName: "Orchardd" },
 ];
 
 function ensureAvatarsDir() {
